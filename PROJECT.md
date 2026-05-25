@@ -70,6 +70,8 @@
 │   ├── page.tsx             # 首页（工具网格 + 分类导航）
 │   ├── api/generate/
 │   │   └── route.ts         # DeepSeek API 调用（爆款开头生成器）
+│   ├── api/video-parse/
+│   │   └── route.ts         # 视频去水印解析 API（抖音/B站/西瓜）
 │   └── tools/
 │       ├── bmi/             # BMI 计算器
 │       ├── calculator/      # 专业计算器
@@ -87,6 +89,7 @@
 │       ├── qrcode/          # 二维码生成
 │       ├── random-generator/# 随机数生成器
 │       ├── unit-converter/  # 单位换算
+│       ├── video-unwatermark/ # 视频去水印
 │       ├── wheel/           # 大转盘
 │       ├── word-count/      # 字数统计
 │       ├── site/[slug]/     # 网站工具详情页（动态路由）
@@ -124,7 +127,7 @@
 | `document` | 文档工具 | 📄 | PDF 系列 + 字数统计（原"文本工具"已合并至此） |
 | `dev` | 开发工具 | 🔧 | （暂无工具，预留分类） |
 | `life` | 生活工具 | 🎯 | BMI 计算器、单位换算、专业计算器 |
-| `entertainment` | 娱乐工具 | 🎮 | 大转盘、二维码生成、随机数生成器、爆款开头生成器 |
+| `entertainment` | 娱乐工具 | 🎮 | 大转盘、二维码生成、随机数生成器、爆款开头生成器、视频去水印 |
 | `website` | 网站工具 | 🌐 | Excalidraw, Carbon, JSON, CodeSandbox, Photopea, KMS, PDF24, S7资源库, FMHY, 便民查询网, 爱看机器人, Steam 下载 |
 
 ### 工具归属规则
@@ -222,6 +225,15 @@ const backUrl = `/?category=${tool.category}`;
 ### 7.3 专业计算器 (calculator)
 - 四种模式：标准 / 科学 / 程序员 / 日期
 - 程序员模式自带进制转换功能（替代了原来的独立进制转换工具）
+
+### 7.4 视频去水印 (video-unwatermark)
+- 混合模式：服务端解析 + 第三方工具 Fallback
+- **服务端解析**: 抖音、B站、西瓜视频（通过各平台 API 直接解析）
+- **Fallback**: 快手、TikTok 等不支持的平台跳转第三方工具
+- API 路由: `/api/video-parse`，支持 IP 速率限制（每 IP 每分钟 10 次）
+- 抖音解析流程: 短链重定向 → 提取 aweme_id → 调用详情 API → 获取无水印视频 URL
+- Bilibili 解析: 提取 BV ID → 获取视频信息 → 获取播放地址（DASH 格式）
+- 解析失败时推荐第三方去水印网站
 
 ---
 

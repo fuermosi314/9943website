@@ -131,7 +131,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '主题内容不能超过100个字' }, { status: 400 });
   }
 
-  const baseURL = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
+  const rawBase = process.env.DEEPSEEK_BASE_URL;
+  const baseURL =
+    rawBase && /^https?:\/\//i.test(rawBase) ? rawBase : 'https://api.deepseek.com';
   const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
   const prompt = buildPrompt(topic, platform, contentType);
 
@@ -147,6 +149,7 @@ export async function POST(request: NextRequest) {
         max_tokens: 2048,
         messages: [{ role: 'user', content: prompt }],
       }),
+      signal: AbortSignal.timeout(25000),
     });
 
     if (!res.ok) {
@@ -154,7 +157,7 @@ export async function POST(request: NextRequest) {
       if (res.status === 401) {
         return NextResponse.json({ error: 'API Key 无效，请检查 .env.local 配置' }, { status: 401 });
       }
-      return NextResponse.json({ error: `AI 服务调用失败（${res.status}）` }, { status: 502 });
+      return NextResponse.json({ error: `AI 服务调用失败（${res.status}）: ${errBody.slice(0, 200)}` }, { status: 502 });
     }
 
     const data = await res.json();

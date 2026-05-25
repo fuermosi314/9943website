@@ -183,6 +183,15 @@ export const tools: Tool[] = [
     tags: ['AI', 'hook', '开头', '爆款', '文案', '小红书', '抖音'],
   },
   {
+    id: 'video-unwatermark',
+    name: '视频去水印',
+    description: '抖音/B站/西瓜视频无水印下载，支持多平台',
+    icon: '🎬',
+    category: 'entertainment',
+    path: '/tools/video-unwatermark',
+    tags: ['视频', '去水印', '抖音', 'bilibili', '下载', '无水印', '短视频'],
+  },
+  {
     id: 'steam',
     name: 'Steam 下载',
     description: 'Steam 客户端官方下载地址，支持 Windows/Mac/Linux',
