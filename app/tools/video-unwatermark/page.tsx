@@ -26,27 +26,6 @@ const PLATFORM_NAMES: Record<string, string> = {
   unknown: '未知平台',
 };
 
-const FALLBACK_SITES = [
-  {
-    name: 'Douyin TikTok 下载',
-    url: 'https://douyin.wtf/',
-    desc: '抖音/TikTok 视频无水印下载',
-    icon: '📱',
-  },
-  {
-    name: 'SnapVID',
-    url: 'https://snapvid.ai/',
-    desc: '支持多平台短视频去水印',
-    icon: '⚡',
-  },
-  {
-    name: 'TikTok 下载器',
-    url: 'https://tiktokdownloader.com/',
-    desc: 'TikTok 无水印视频下载',
-    icon: '🎵',
-  },
-];
-
 export default function VideoUnwatermarkPage() {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
@@ -284,34 +263,13 @@ export default function VideoUnwatermarkPage() {
                   </div>
                 </div>
 
-                {/* 推荐第三方工具 */}
-                <div className="mt-4">
-                  <p className="text-sm text-white/50 mb-3">试试以下第三方工具：</p>
-                  <div className="space-y-2">
-                    {FALLBACK_SITES.map((site) => (
-                      <a
-                        key={site.name}
-                        href={site.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-3 p-3 bg-white/5 rounded-xl hover:bg-white/10 hover:border-[#fb6400]/20 border border-transparent transition-all group"
-                      >
-                        <span className="text-xl">{site.icon}</span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-white font-medium">{site.name}</p>
-                          <p className="text-xs text-white/30">{site.desc}</p>
-                        </div>
-                        <svg
-                          className="w-4 h-4 text-white/20 group-hover:text-[#fb6400] transition-colors shrink-0"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                      </a>
-                    ))}
-                  </div>
+                {/* 提示信息 */}
+                <div className="mt-4 bg-white/5 rounded-xl p-4">
+                  <p className="text-sm text-white/60">
+                    {result.platform === 'kuaishou' || result.platform === 'tiktok'
+                      ? '该平台暂不支持自动解析，请在 APP 内直接保存无水印原图/视频。'
+                      : '解析遇到问题，请检查链接是否正确，或换个链接重试。'}
+                  </p>
                 </div>
               </div>
             )}
