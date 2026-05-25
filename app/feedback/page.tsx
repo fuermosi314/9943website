@@ -62,14 +62,14 @@ export default function FeedbackPage() {
       <main className="max-w-lg mx-auto px-6 pt-24 pb-16">
         <div className="text-center mb-8">
           <h2 className="text-2xl font-bold text-white mb-2">你的建议很重要</h2>
-          <p className="text-white/40 text-sm">有任何建议、反馈或需求，欢迎告诉我们</p>
+          <p className="text-white/40 text-sm">有任何建议、反馈或需求，欢迎告诉帅气的作者</p>
         </div>
 
         {status === 'success' ? (
           <div className="glass-card p-8 text-center">
             <div className="text-5xl mb-4">🎉</div>
             <h3 className="text-xl font-semibold text-white mb-2">感谢你的反馈！</h3>
-            <p className="text-white/40 text-sm mb-6">我们会认真阅读你的建议</p>
+            <p className="text-white/40 text-sm mb-6">帅气的作者会认真阅读你的建议</p>
             <Link
               href="/"
               className="inline-block px-6 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white font-medium rounded-xl hover:shadow-lg hover:shadow-orange-500/30 transition-all"
@@ -96,7 +96,7 @@ export default function FeedbackPage() {
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                placeholder="方便我们联系你"
+                placeholder="方便帅气的作者联系你"
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-[#fb6400] transition-colors"
               />
             </div>
@@ -106,7 +106,7 @@ export default function FeedbackPage() {
               <textarea
                 value={formData.message}
                 onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                placeholder="告诉我们你的想法..."
+                placeholder="告诉帅气的作者你的想法..."
                 required
                 rows={5}
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-[#fb6400] transition-colors resize-none"
