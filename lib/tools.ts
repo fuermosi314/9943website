@@ -182,6 +182,15 @@ export const tools: Tool[] = [
     path: '/tools/hook-generator',
     tags: ['AI', 'hook', '开头', '爆款', '文案', '小红书', '抖音'],
   },
+  {
+    id: 'steam',
+    name: 'Steam 下载',
+    description: 'Steam 客户端官方下载地址，支持 Windows/Mac/Linux',
+    icon: '🎮',
+    category: 'website',
+    path: '/tools/steam',
+    tags: ['steam', '下载', '游戏', '客户端', '平台'],
+  },
   // ===== 网站工具 =====
   {
     id: 'excalidraw',
