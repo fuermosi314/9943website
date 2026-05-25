@@ -3,8 +3,10 @@ import { NextRequest, NextResponse } from 'next/server';
 interface ParseResult {
   success: boolean;
   platform: string;
+  type?: 'video' | 'images';
   title?: string;
   videoUrl?: string;
+  imageUrls?: string[];
   coverUrl?: string;
   author?: string;
   error?: string;
@@ -59,8 +61,11 @@ async function parseDouyin(url: string): Promise<ParseResult> {
       finalUrl = resp.headers.get('location') || url;
     }
 
-    // 从 URL 中提取 aweme_id
-    const idMatch = finalUrl.match(/\/video\/(\d+)/) || finalUrl.match(/aweme_id=(\d+)/);
+    // 从 URL 中提取 aweme_id（支持 /video/{id} 和 /note/{id}）
+    const idMatch =
+      finalUrl.match(/\/video\/(\d+)/) ||
+      finalUrl.match(/\/note\/(\d+)/) ||
+      finalUrl.match(/aweme_id=(\d+)/);
     if (!idMatch) {
       return {
         success: false,
@@ -72,40 +77,78 @@ async function parseDouyin(url: string): Promise<ParseResult> {
 
     const awemeId = idMatch[1];
 
-    // 2. 调用抖音详情 API
-    const detailUrl = `https://www.douyin.com/aweme/v1/web/aweme/detail/?aweme_id=${awemeId}&aid=6383&cookie_enabled=true`;
-    const detailResp = await fetch(detailUrl, {
+    // 2. 获取分享页 HTML，解析内嵌的 _ROUTER_DATA
+    const shareUrl = `https://www.iesdouyin.com/share/note/${awemeId}/`;
+    const pageResp = await fetch(shareUrl, {
       headers: {
         ...HEADERS,
-        Referer: 'https://www.douyin.com/',
+        'User-Agent':
+          'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
       },
       signal: AbortSignal.timeout(10000),
     });
 
-    if (!detailResp.ok) {
+    const html = await pageResp.text();
+
+    // 提取 _ROUTER_DATA JSON
+    const routerMatch = html.match(/window\._ROUTER_DATA\s*=\s*(\{.*?\})\s*<\/script>/s);
+    if (!routerMatch) {
       return {
         success: false,
         platform: 'douyin',
-        error: `抖音 API 返回 ${detailResp.status}`,
+        error: '无法解析抖音页面数据',
         fallbackUrl: 'https://www.douyin.com',
       };
     }
 
-    const data = await detailResp.json();
-    const aweme = data.aweme_detail;
-    if (!aweme) {
+    const routerData = JSON.parse(routerMatch[1]);
+    const pageData = routerData?.loaderData?.['note_(id)/page'];
+    const item = pageData?.videoInfoRes?.item_list?.[0];
+
+    if (!item) {
       return {
         success: false,
         platform: 'douyin',
-        error: '未找到视频信息',
+        error: '未找到作品信息',
         fallbackUrl: 'https://www.douyin.com',
       };
     }
 
-    // 获取无水印视频 URL
+    const desc = item.desc || '抖音作品';
+    const author = item.author?.nickname;
+    const awemeType = item.aweme_type;
+
+    // type 2 = 图文作品，其他为视频
+    if (awemeType === 2 && item.images?.length > 0) {
+      // 图文作品：提取图片
+      const imageUrls = item.images
+        .map((img: { url_list?: string[] }) => img.url_list?.[0])
+        .filter(Boolean);
+
+      if (imageUrls.length === 0) {
+        return {
+          success: false,
+          platform: 'douyin',
+          error: '无法获取图片地址',
+          fallbackUrl: 'https://www.douyin.com',
+        };
+      }
+
+      return {
+        success: true,
+        platform: 'douyin',
+        type: 'images',
+        title: desc,
+        imageUrls,
+        coverUrl: imageUrls[0],
+        author,
+      };
+    }
+
+    // 视频作品：提取无水印视频 URL
     const videoUrl =
-      aweme.video?.play_addr?.url_list?.[0] ||
-      aweme.video?.bit_rate?.[0]?.play_addr?.url_list?.[0];
+      item.video?.play_addr?.url_list?.[0] ||
+      item.video?.bit_rate?.[0]?.play_addr?.url_list?.[0];
 
     if (!videoUrl) {
       return {
@@ -119,10 +162,11 @@ async function parseDouyin(url: string): Promise<ParseResult> {
     return {
       success: true,
       platform: 'douyin',
-      title: aweme.desc || '抖音视频',
+      type: 'video',
+      title: desc,
       videoUrl: videoUrl.replace('playwm', 'play'),
-      coverUrl: aweme.video?.cover?.url_list?.[0],
-      author: aweme.author?.nickname,
+      coverUrl: item.video?.cover?.url_list?.[0],
+      author,
     };
   } catch (err) {
     return {

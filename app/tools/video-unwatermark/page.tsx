@@ -6,8 +6,10 @@ import BackButton from '@/components/BackButton';
 interface ParseResult {
   success: boolean;
   platform: string;
+  type?: 'video' | 'images';
   title?: string;
   videoUrl?: string;
+  imageUrls?: string[];
   coverUrl?: string;
   author?: string;
   error?: string;
@@ -186,13 +188,33 @@ export default function VideoUnwatermarkPage() {
                 {/* 视频标题 */}
                 {result.title && (
                   <div className="bg-white/5 rounded-xl p-4 mb-4">
-                    <p className="text-sm text-white/60">视频标题</p>
+                    <p className="text-sm text-white/60">
+                      {result.type === 'images' ? '图文标题' : '视频标题'}
+                    </p>
                     <p className="text-white mt-1">{result.title}</p>
                   </div>
                 )}
 
-                {/* 视频封面 */}
-                {result.coverUrl && (
+                {/* 图文作品：显示所有图片 */}
+                {result.type === 'images' && result.imageUrls && result.imageUrls.length > 0 && (
+                  <div className="mb-4 space-y-2">
+                    {result.imageUrls.map((imgUrl, i) => (
+                      <div key={i} className="rounded-xl overflow-hidden">
+                        <img
+                          src={imgUrl}
+                          alt={`图片 ${i + 1}`}
+                          className="w-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 视频作品：显示封面 */}
+                {result.type !== 'images' && result.coverUrl && (
                   <div className="mb-4 rounded-xl overflow-hidden">
                     <img
                       src={result.coverUrl}
@@ -207,20 +229,36 @@ export default function VideoUnwatermarkPage() {
 
                 {/* 下载按钮 */}
                 <div className="flex gap-2">
-                  <a
-                    href={result.videoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white font-medium rounded-xl text-center shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all"
-                  >
-                    🎬 下载无水印视频
-                  </a>
-                  <button
-                    onClick={handleCopyUrl}
-                    className="px-4 py-3 bg-white/5 border border-white/10 text-white/60 hover:text-[#fb6400] hover:border-[#fb6400]/30 rounded-xl transition-all"
-                  >
-                    {copied ? '✓' : '📋'}
-                  </button>
+                  {result.type === 'images' && result.imageUrls ? (
+                    result.imageUrls.map((imgUrl, i) => (
+                      <a
+                        key={i}
+                        href={imgUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white font-medium rounded-xl text-center shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all"
+                      >
+                        🖼️ 下载图片 {result.imageUrls!.length > 1 ? `${i + 1}` : ''}
+                      </a>
+                    ))
+                  ) : (
+                    <>
+                      <a
+                        href={result.videoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white font-medium rounded-xl text-center shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all"
+                      >
+                        🎬 下载无水印视频
+                      </a>
+                      <button
+                        onClick={handleCopyUrl}
+                        className="px-4 py-3 bg-white/5 border border-white/10 text-white/60 hover:text-[#fb6400] hover:border-[#fb6400]/30 rounded-xl transition-all"
+                      >
+                        {copied ? '✓' : '📋'}
+                      </button>
+                    </>
+                  )}
                 </div>
 
                 <p className="text-xs text-white/30 mt-3 text-center">
