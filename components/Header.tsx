@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 
 interface HeaderProps {
   onSearch: (query: string) => void;
@@ -32,8 +33,8 @@ export default function Header({ onSearch }: HeaderProps) {
       }`}
     >
       <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
-        <a
-          href="/"
+        <Link
+          href="/feedback"
           className="flex items-center space-x-3 group"
         >
           {/* Logo - 模仿 4399 风格 */}
@@ -49,7 +50,7 @@ export default function Header({ onSearch }: HeaderProps) {
             </span>
             <div className="text-[10px] text-orange-300/60 tracking-widest">TOOLS COLLECTION</div>
           </div>
-        </a>
+        </Link>
 
         <form onSubmit={handleSearch} className="flex-1 max-w-sm ml-12">
           <div className="relative group">
