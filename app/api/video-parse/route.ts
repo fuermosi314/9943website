@@ -91,7 +91,7 @@ async function parseDouyin(url: string): Promise<ParseResult> {
     const html = await pageResp.text();
 
     // 提取 _ROUTER_DATA JSON
-    const routerMatch = html.match(/window\._ROUTER_DATA\s*=\s*(\{.*?\})\s*<\/script>/s);
+    const routerMatch = html.match(/window\._ROUTER_DATA\s*=\s*(\{[\s\S]*?\})\s*<\/script>/);
     if (!routerMatch) {
       return {
         success: false,
