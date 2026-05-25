@@ -234,6 +234,11 @@ export default function CalculatorPage() {
     setProgWaiting(false);
   }, []);
 
+  const progBackspace = useCallback(() => {
+    if (progWaiting) return;
+    setProgDisplay(progDisplay.length > 1 ? progDisplay.slice(0, -1) : '0');
+  }, [progDisplay, progWaiting]);
+
   const progCalculate = useCallback((left: number, right: number, op: string): number => {
     switch (op) {
       case '+': return (left + right) | 0;
@@ -298,6 +303,9 @@ export default function CalculatorPage() {
     setProgDisplay(formatProgValue(current, newBase));
   }, [progDisplay, progBase, parseProgInput, formatProgValue]);
 
+  // Helper: which digit keys are available in current base
+  const isDigitEnabled = useCallback((d: number) => d < progBase, [progBase]);
+
   // ---- Date mode ----
   const dateDiff = useMemo(() => {
     if (!dateFrom || !dateTo) return null;
@@ -308,7 +316,6 @@ export default function CalculatorPage() {
     const diffMs = Math.abs(to.getTime() - from.getTime());
     const totalDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-    // Calculate years, months, days
     let earlier = from < to ? from : to;
     let later = from < to ? to : from;
     let years = later.getFullYear() - earlier.getFullYear();
@@ -333,17 +340,20 @@ export default function CalculatorPage() {
   }, [dateFrom, dateTo]);
 
   // ---- Button components ----
-  const CalcButton = ({ label, onClick, className = '', span = 1 }: {
+  const CalcButton = ({ label, onClick, className = '', span = 1, disabled = false }: {
     label: string;
     onClick: () => void;
     className?: string;
     span?: number;
+    disabled?: boolean;
   }) => (
     <button
       onClick={onClick}
+      disabled={disabled}
       className={`
         h-12 sm:h-14 rounded-xl text-sm sm:text-base font-medium transition-all active:scale-95
         ${span === 2 ? 'col-span-2' : ''}
+        ${disabled ? 'opacity-20 cursor-not-allowed' : ''}
         ${className || 'bg-white/5 hover:bg-white/10 text-white'}
       `}
     >
@@ -353,6 +363,7 @@ export default function CalculatorPage() {
 
   const opClass = 'bg-[#fb6400]/20 hover:bg-[#fb6400]/30 text-[#fb6400]';
   const funcClass = 'bg-white/10 hover:bg-white/15 text-white/80';
+  const hexClass = 'bg-purple-500/15 hover:bg-purple-500/25 text-purple-300';
 
   return (
     <div className="min-h-screen relative z-10">
@@ -394,7 +405,6 @@ export default function CalculatorPage() {
           {/* ========== Standard Mode ========== */}
           {mode === 'standard' && (
             <div className="glass-card p-5 animate-fade-in">
-              {/* Display */}
               <div className="mb-4 text-right">
                 <div className="text-sm text-white/40 h-6 truncate">{expression}</div>
                 <div className="text-4xl font-light text-white truncate">{display}</div>
@@ -435,7 +445,6 @@ export default function CalculatorPage() {
           {/* ========== Scientific Mode ========== */}
           {mode === 'scientific' && (
             <div className="glass-card p-5 animate-fade-in">
-              {/* Angle mode toggle */}
               <div className="flex items-center justify-between mb-3">
                 <button
                   onClick={() => setIsRadian(!isRadian)}
@@ -446,12 +455,10 @@ export default function CalculatorPage() {
                 <div className="text-sm text-white/40 truncate ml-4 flex-1 text-right">{expression}</div>
               </div>
 
-              {/* Display */}
               <div className="mb-4 text-right">
                 <div className="text-4xl font-light text-white truncate">{display}</div>
               </div>
 
-              {/* Scientific buttons row 1 */}
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 mb-2">
                 <CalcButton label="sin" onClick={() => applySciFunc('sin')} className={funcClass} />
                 <CalcButton label="cos" onClick={() => applySciFunc('cos')} className={funcClass} />
@@ -460,7 +467,6 @@ export default function CalculatorPage() {
                 <CalcButton label="e" onClick={() => applySciFunc('e')} className={funcClass} />
               </div>
 
-              {/* Scientific buttons row 2 */}
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 mb-2">
                 <CalcButton label="log" onClick={() => applySciFunc('log')} className={funcClass} />
                 <CalcButton label="ln" onClick={() => applySciFunc('ln')} className={funcClass} />
@@ -469,7 +475,6 @@ export default function CalculatorPage() {
                 <CalcButton label="xⁿ" onClick={handlePowerN} className={funcClass} />
               </div>
 
-              {/* Scientific buttons row 3 */}
               <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 mb-2">
                 <CalcButton label="√" onClick={() => applySciFunc('√')} className={funcClass} />
                 <CalcButton label="∛" onClick={() => applySciFunc('∛')} className={funcClass} />
@@ -478,7 +483,6 @@ export default function CalculatorPage() {
                 <CalcButton label="←" onClick={backspace} className={funcClass} />
               </div>
 
-              {/* Standard layout */}
               <div className="grid grid-cols-4 gap-2">
                 <CalcButton label="C" onClick={clearAll} className={funcClass} />
                 <CalcButton label="±" onClick={toggleSign} className={funcClass} />
@@ -509,9 +513,9 @@ export default function CalculatorPage() {
 
           {/* ========== Programmer Mode ========== */}
           {mode === 'programmer' && (
-            <div className="glass-card p-5 animate-fade-in">
+            <div className="glass-card p-4 sm:p-5 animate-fade-in">
               {/* Base selector */}
-              <div className="grid grid-cols-4 gap-2 mb-4">
+              <div className="grid grid-cols-4 gap-1.5 mb-4">
                 {([2, 8, 10, 16] as Base[]).map((b) => (
                   <button
                     key={b}
@@ -529,110 +533,76 @@ export default function CalculatorPage() {
               </div>
 
               {/* Display */}
-              <div className="mb-4 text-right">
-                <div className="text-sm text-white/40 h-5 truncate">
+              <div className="mb-3 text-right">
+                <div className="text-xs text-white/40 h-4 truncate">
                   {progOperator && progPrevValue !== null ? `${formatProgValue(progPrevValue, progBase)} ${progOperator}` : ''}
                 </div>
-                <div className="text-3xl font-light text-white truncate font-mono">{progDisplay}</div>
+                <div className="text-2xl sm:text-3xl font-light text-white truncate font-mono">{progDisplay}</div>
               </div>
 
-              {/* Base representations */}
-              <div className="grid grid-cols-2 gap-2 mb-4 text-xs">
-                <div className="bg-white/5 rounded-lg px-3 py-2">
+              {/* All base representations */}
+              <div className="grid grid-cols-2 gap-1.5 mb-4 text-xs">
+                <div className="bg-white/5 rounded-lg px-2 py-1.5 overflow-hidden">
                   <span className="text-white/40">二进制 </span>
-                  <span className="text-white/80 font-mono truncate block">{progValueDisplay.bin}</span>
+                  <span className="text-white/80 font-mono truncate block text-[10px]">{progValueDisplay.bin}</span>
                 </div>
-                <div className="bg-white/5 rounded-lg px-3 py-2">
+                <div className="bg-white/5 rounded-lg px-2 py-1.5 overflow-hidden">
                   <span className="text-white/40">八进制 </span>
                   <span className="text-white/80 font-mono truncate block">{progValueDisplay.oct}</span>
                 </div>
-                <div className="bg-white/5 rounded-lg px-3 py-2">
+                <div className="bg-white/5 rounded-lg px-2 py-1.5 overflow-hidden">
                   <span className="text-white/40">十进制 </span>
                   <span className="text-white/80 font-mono truncate block">{progValueDisplay.dec}</span>
                 </div>
-                <div className="bg-white/5 rounded-lg px-3 py-2">
+                <div className="bg-white/5 rounded-lg px-2 py-1.5 overflow-hidden">
                   <span className="text-white/40">十六进制 </span>
                   <span className="text-white/80 font-mono truncate block">{progValueDisplay.hex}</span>
                 </div>
               </div>
 
               {/* Bitwise operations */}
-              <div className="grid grid-cols-4 gap-1.5 mb-2">
+              <div className="grid grid-cols-4 gap-1.5 mb-1.5">
                 <CalcButton label="AND" onClick={() => handleProgOperator('AND')} className={funcClass} />
                 <CalcButton label="OR" onClick={() => handleProgOperator('OR')} className={funcClass} />
                 <CalcButton label="XOR" onClick={() => handleProgOperator('XOR')} className={funcClass} />
                 <CalcButton label="NOT" onClick={handleProgNOT} className={funcClass} />
               </div>
-              <div className="grid grid-cols-4 gap-1.5 mb-2">
+              <div className="grid grid-cols-4 gap-1.5 mb-3">
                 <CalcButton label="<<" onClick={() => handleProgOperator('<<')} className={funcClass} />
                 <CalcButton label=">>" onClick={() => handleProgOperator('>>')} className={funcClass} />
                 <CalcButton label="C" onClick={progClear} className={funcClass} />
-                <CalcButton label="←" onClick={() => setProgDisplay(progDisplay.length > 1 ? progDisplay.slice(0, -1) : '0')} className={funcClass} />
+                <CalcButton label="←" onClick={progBackspace} className={funcClass} />
               </div>
 
-              {/* Number pad - conditional based on base */}
-              <div className="grid grid-cols-4 gap-2">
-                {progBase >= 10 && <CalcButton label="A" onClick={() => progInputDigit('A')} className={funcClass} />}
-                {progBase >= 10 && <CalcButton label="B" onClick={() => progInputDigit('B')} className={funcClass} />}
-                {progBase >= 10 && <CalcButton label="C" onClick={() => progInputDigit('C')} className={funcClass} />}
-                {progBase >= 10 && <CalcButton label="D" onClick={() => progInputDigit('D')} className={funcClass} />}
-                {progBase >= 10 && <CalcButton label="E" onClick={() => progInputDigit('E')} className={funcClass} />}
-                {progBase >= 10 && <CalcButton label="F" onClick={() => progInputDigit('F')} className={funcClass} />}
-                {progBase < 10 && <CalcButton label="÷" onClick={() => handleProgOperator('÷')} className={opClass} />}
-                {progBase < 10 && <CalcButton label="×" onClick={() => handleProgOperator('×')} className={opClass} />}
-                {progBase < 10 && <CalcButton label="-" onClick={() => handleProgOperator('-')} className={opClass} />}
-                {progBase < 10 && <CalcButton label="+" onClick={() => handleProgOperator('+')} className={opClass} />}
-                {progBase < 10 && <CalcButton label="=" onClick={handleProgEquals} className="bg-[#fb6400] hover:bg-[#fb6400]/80 text-white shadow-lg shadow-orange-500/30" />}
-                {progBase < 10 && <CalcButton label="0" onClick={() => progInputDigit('0')} />}
+              {/* Hex digits row (only when base >= 16) */}
+              {progBase === 16 && (
+                <div className="grid grid-cols-6 gap-1.5 mb-1.5">
+                  {['A', 'B', 'C', 'D', 'E', 'F'].map((d) => (
+                    <CalcButton key={d} label={d} onClick={() => progInputDigit(d)} className={hexClass} />
+                  ))}
+                </div>
+              )}
 
-                {/* Digits available based on base */}
-                {(progBase >= 8 ? [7, 6, 5, 4] : progBase >= 2 ? [1] : []).map((d) => (
-                  <CalcButton key={d} label={String(d)} onClick={() => progInputDigit(String(d))} />
-                ))}
-                {(progBase >= 8 ? [] : progBase >= 2 ? [0] : []).map((d) => (
-                  <CalcButton key={d} label={String(d)} onClick={() => progInputDigit(String(d))} span={2} />
-                ))}
+              {/* Number pad */}
+              <div className="grid grid-cols-4 gap-1.5">
+                <CalcButton label="7" onClick={() => progInputDigit('7')} disabled={!isDigitEnabled(7)} />
+                <CalcButton label="8" onClick={() => progInputDigit('8')} disabled={!isDigitEnabled(8)} />
+                <CalcButton label="9" onClick={() => progInputDigit('9')} disabled={!isDigitEnabled(9)} />
+                <CalcButton label="÷" onClick={() => handleProgOperator('÷')} className={opClass} />
 
-                {progBase >= 10 && (
-                  <>
-                    <CalcButton label="7" onClick={() => progInputDigit('7')} />
-                    <CalcButton label="8" onClick={() => progInputDigit('8')} />
-                    <CalcButton label="9" onClick={() => progInputDigit('9')} />
-                    <CalcButton label="÷" onClick={() => handleProgOperator('÷')} className={opClass} />
-                    <CalcButton label="4" onClick={() => progInputDigit('4')} />
-                    <CalcButton label="5" onClick={() => progInputDigit('5')} />
-                    <CalcButton label="6" onClick={() => progInputDigit('6')} />
-                    <CalcButton label="×" onClick={() => handleProgOperator('×')} className={opClass} />
-                    <CalcButton label="1" onClick={() => progInputDigit('1')} />
-                    <CalcButton label="2" onClick={() => progInputDigit('2')} />
-                    <CalcButton label="3" onClick={() => progInputDigit('3')} />
-                    <CalcButton label="-" onClick={() => handleProgOperator('-')} className={opClass} />
-                    <CalcButton label="0" onClick={() => progInputDigit('0')} span={2} />
-                    <CalcButton label="+" onClick={() => handleProgOperator('+')} className={opClass} />
-                    <CalcButton label="=" onClick={handleProgEquals} className="bg-[#fb6400] hover:bg-[#fb6400]/80 text-white shadow-lg shadow-orange-500/30" />
-                  </>
-                )}
+                <CalcButton label="4" onClick={() => progInputDigit('4')} disabled={!isDigitEnabled(4)} />
+                <CalcButton label="5" onClick={() => progInputDigit('5')} disabled={!isDigitEnabled(5)} />
+                <CalcButton label="6" onClick={() => progInputDigit('6')} disabled={!isDigitEnabled(6)} />
+                <CalcButton label="×" onClick={() => handleProgOperator('×')} className={opClass} />
 
-                {progBase === 2 && (
-                  <>
-                    <CalcButton label="0" onClick={() => progInputDigit('0')} />
-                    <CalcButton label="=" onClick={handleProgEquals} className="bg-[#fb6400] hover:bg-[#fb6400]/80 text-white shadow-lg shadow-orange-500/30" span={2} />
-                  </>
-                )}
+                <CalcButton label="1" onClick={() => progInputDigit('1')} disabled={!isDigitEnabled(1)} />
+                <CalcButton label="2" onClick={() => progInputDigit('2')} disabled={!isDigitEnabled(2)} />
+                <CalcButton label="3" onClick={() => progInputDigit('3')} disabled={!isDigitEnabled(3)} />
+                <CalcButton label="-" onClick={() => handleProgOperator('-')} className={opClass} />
 
-                {progBase === 8 && (
-                  <>
-                    <CalcButton label="3" onClick={() => progInputDigit('3')} />
-                    <CalcButton label="÷" onClick={() => handleProgOperator('÷')} className={opClass} />
-                    <CalcButton label="0" onClick={() => progInputDigit('0')} />
-                    <CalcButton label="1" onClick={() => progInputDigit('1')} />
-                    <CalcButton label="2" onClick={() => progInputDigit('2')} />
-                    <CalcButton label="×" onClick={() => handleProgOperator('×')} className={opClass} />
-                    <CalcButton label="=" onClick={handleProgEquals} className="bg-[#fb6400] hover:bg-[#fb6400]/80 text-white shadow-lg shadow-orange-500/30" span={2} />
-                    <CalcButton label="-" onClick={() => handleProgOperator('-')} className={opClass} />
-                    <CalcButton label="+" onClick={() => handleProgOperator('+')} className={opClass} />
-                  </>
-                )}
+                <CalcButton label="0" onClick={() => progInputDigit('0')} span={2} />
+                <CalcButton label="+" onClick={() => handleProgOperator('+')} className={opClass} />
+                <CalcButton label="=" onClick={handleProgEquals} className="bg-[#fb6400] hover:bg-[#fb6400]/80 text-white shadow-lg shadow-orange-500/30" />
               </div>
             </div>
           )}

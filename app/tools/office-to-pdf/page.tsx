@@ -120,7 +120,21 @@ export default function OfficeToPdf() {
       const text = extractReadableText(arrayBuffer);
 
       const pdfDoc = await PDFDocument.create();
-      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+      // 检测是否包含中文字符，按需加载中文字体
+      const hasChinese = /[一-鿿]/.test(text);
+      let font;
+      if (hasChinese) {
+        try {
+          const fontRes = await fetch('https://cdn.jsdelivr.net/gh/lxgw/LxgwWenKai/fonts/TTF/LXGWWenKai-Regular.ttf');
+          if (fontRes.ok) {
+            font = await pdfDoc.embedFont(new Uint8Array(await fontRes.arrayBuffer()));
+          }
+        } catch { /* 字体加载失败，降级为 ASCII */ }
+      }
+      if (!font) {
+        font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      }
       const fontSize = 11;
       const lineHeight = 14;
       const margin = 50;
@@ -178,9 +192,9 @@ export default function OfficeToPdf() {
           y = pageHeight - margin;
           pageNum++;
         }
-        // Encode only ASCII-safe characters for Helvetica
-        const safeText = line.replace(/[^\x20-\x7E]/g, '?');
-        page.drawText(safeText, {
+        // 中文字体可直接渲染，Helvetica 需过滤非 ASCII
+        const useText = hasChinese && font !== undefined ? line : line.replace(/[^\x20-\x7E]/g, '?');
+        page.drawText(useText, {
           x: margin,
           y,
           size: fontSize,
