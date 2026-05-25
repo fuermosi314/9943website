@@ -28,15 +28,9 @@ const PLATFORM_NAMES: Record<string, string> = {
 
 const FALLBACK_SITES = [
   {
-    name: '去水印助手',
-    url: 'https://www.qushuiyin.cc/',
-    desc: '支持抖音、快手、B站等国内平台',
-    icon: '🎬',
-  },
-  {
     name: 'Douyin TikTok 下载',
     url: 'https://douyin.wtf/',
-    desc: '抖音/TikTok 视频无水印下载 API',
+    desc: '抖音/TikTok 视频无水印下载',
     icon: '📱',
   },
   {
@@ -44,6 +38,12 @@ const FALLBACK_SITES = [
     url: 'https://snapvid.ai/',
     desc: '支持多平台短视频去水印',
     icon: '⚡',
+  },
+  {
+    name: 'TikTok 下载器',
+    url: 'https://tiktokdownloader.com/',
+    desc: 'TikTok 无水印视频下载',
+    icon: '🎵',
   },
 ];
 
