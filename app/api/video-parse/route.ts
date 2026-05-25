@@ -43,15 +43,42 @@ const HEADERS = {
   Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
 };
 
-// ===== 抖音解析 =====
+// ===== 抖音解析（多策略） =====
 async function parseDouyin(url: string): Promise<ParseResult> {
+  // 策略 1: 尝试通过移动端 API 获取
   try {
-    // 1. 跟随短链重定向，获取完整 URL
     const resp = await fetch(url, {
       headers: {
         ...HEADERS,
-        Accept: 'text/html',
+        'User-Agent':
+          'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
       },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(10000),
+    });
+
+    const finalUrl = resp.url || url;
+
+    // 从 URL 中提取 aweme_id（支持 /video/{id}、/note/{id}、/discover?... 等）
+    const idMatch =
+      finalUrl.match(/\/video\/(\d+)/) ||
+      finalUrl.match(/\/note\/(\d+)/) ||
+      finalUrl.match(/aweme_id=(\d+)/) ||
+      finalUrl.match(/\/(\d{15,})/); // 15+位数字通常是 aweme_id
+    if (idMatch) {
+      const awemeId = idMatch[1];
+      // 尝试通过 aweme_id 直接调用详情 API
+      const detailResult = await fetchDouyinDetail(awemeId);
+      if (detailResult.success) return detailResult;
+    }
+  } catch {
+    // 策略 1 失败，继续尝试
+  }
+
+  // 策略 2: 通过分享页解析
+  try {
+    const resp = await fetch(url, {
+      headers: HEADERS,
       redirect: 'manual',
       signal: AbortSignal.timeout(10000),
     });
@@ -61,79 +88,82 @@ async function parseDouyin(url: string): Promise<ParseResult> {
       finalUrl = resp.headers.get('location') || url;
     }
 
-    // 从 URL 中提取 aweme_id（支持 /video/{id} 和 /note/{id}）
     const idMatch =
       finalUrl.match(/\/video\/(\d+)/) ||
       finalUrl.match(/\/note\/(\d+)/) ||
       finalUrl.match(/aweme_id=(\d+)/);
-    if (!idMatch) {
-      return {
-        success: false,
-        platform: 'douyin',
-        error: '无法从链接中提取视频 ID',
-        fallbackUrl: 'https://www.douyin.com',
-      };
+
+    if (idMatch) {
+      const awemeId = idMatch[1];
+      const shareUrl = `https://www.iesdouyin.com/share/note/${awemeId}/`;
+      const pageResp = await fetch(shareUrl, {
+        headers: {
+          ...HEADERS,
+          'User-Agent':
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+
+      const html = await pageResp.text();
+      const routerMatch = html.match(/window\._ROUTER_DATA\s*=\s*(\{[\s\S]*?\})\s*<\/script>/);
+      if (routerMatch) {
+        const routerData = JSON.parse(routerMatch[1]);
+        const pageData = routerData?.loaderData?.['note_(id)/page'];
+        const item = pageData?.videoInfoRes?.item_list?.[0];
+
+        if (item) {
+          return extractDouyinItem(item);
+        }
+      }
     }
+  } catch {
+    // 策略 2 失败
+  }
 
-    const awemeId = idMatch[1];
+  // 所有策略失败，返回 fallback
+  return {
+    success: false,
+    platform: 'douyin',
+    error: '服务端解析失败，建议使用第三方工具',
+    fallbackUrl: 'https://douyin.wtf/',
+  };
+}
 
-    // 2. 获取分享页 HTML，解析内嵌的 _ROUTER_DATA
-    const shareUrl = `https://www.iesdouyin.com/share/note/${awemeId}/`;
-    const pageResp = await fetch(shareUrl, {
+// 通过 aweme_id 调用详情 API
+async function fetchDouyinDetail(awemeId: string): Promise<ParseResult> {
+  try {
+    const apiUrl = `https://www.iesdouyin.com/web/api/v2/aweme/iteminfo/?item_ids=${awemeId}`;
+    const resp = await fetch(apiUrl, {
       headers: {
         ...HEADERS,
-        'User-Agent':
-          'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+        Referer: 'https://www.douyin.com/',
       },
       signal: AbortSignal.timeout(10000),
     });
-
-    const html = await pageResp.text();
-
-    // 提取 _ROUTER_DATA JSON
-    const routerMatch = html.match(/window\._ROUTER_DATA\s*=\s*(\{[\s\S]*?\})\s*<\/script>/);
-    if (!routerMatch) {
-      return {
-        success: false,
-        platform: 'douyin',
-        error: '无法解析抖音页面数据',
-        fallbackUrl: 'https://www.douyin.com',
-      };
+    const data = await resp.json();
+    const item = data?.item_list?.[0];
+    if (item) {
+      return extractDouyinItem(item);
     }
+  } catch {
+    // API 调用失败
+  }
+  return { success: false, platform: 'douyin', error: 'API 解析失败' };
+}
 
-    const routerData = JSON.parse(routerMatch[1]);
-    const pageData = routerData?.loaderData?.['note_(id)/page'];
-    const item = pageData?.videoInfoRes?.item_list?.[0];
+// 从抖音 item 中提取视频/图片信息
+function extractDouyinItem(item: Record<string, unknown>): ParseResult {
+  const desc = (item.desc as string) || '抖音作品';
+  const author = (item.author as Record<string, unknown>)?.nickname as string;
+  const awemeType = item.aweme_type as number;
 
-    if (!item) {
-      return {
-        success: false,
-        platform: 'douyin',
-        error: '未找到作品信息',
-        fallbackUrl: 'https://www.douyin.com',
-      };
-    }
-
-    const desc = item.desc || '抖音作品';
-    const author = item.author?.nickname;
-    const awemeType = item.aweme_type;
-
-    // type 2 = 图文作品，其他为视频
-    if (awemeType === 2 && item.images?.length > 0) {
-      // 图文作品：提取图片
-      const imageUrls = item.images
-        .map((img: { url_list?: string[] }) => img.url_list?.[0])
-        .filter(Boolean);
-
-      if (imageUrls.length === 0) {
-        return {
-          success: false,
-          platform: 'douyin',
-          error: '无法获取图片地址',
-          fallbackUrl: 'https://www.douyin.com',
-        };
-      }
-
+  // type 2 = 图文作品
+  if (awemeType === 2 && (item.images as unknown[])?.length > 0) {
+    const imageUrls = (item.images as Array<{ url_list?: string[] }>)
+      .map((img) => img.url_list?.[0])
+      .filter((u): u is string => !!u);
+    if (imageUrls.length > 0) {
       return {
         success: true,
         platform: 'douyin',
@@ -144,38 +174,36 @@ async function parseDouyin(url: string): Promise<ParseResult> {
         author,
       };
     }
+  }
 
-    // 视频作品：提取无水印视频 URL
-    const videoUrl =
-      item.video?.play_addr?.url_list?.[0] ||
-      item.video?.bit_rate?.[0]?.play_addr?.url_list?.[0];
+  // 视频作品
+  const video = item.video as Record<string, unknown> | undefined;
+  const playAddr = video?.play_addr as Record<string, unknown> | undefined;
+  const bitRate = video?.bit_rate as Array<{ play_addr?: { url_list?: string[] } }> | undefined;
+  const videoUrl =
+    (playAddr?.url_list as string[] | undefined)?.[0] ||
+    bitRate?.[0]?.play_addr?.url_list?.[0];
 
-    if (!videoUrl) {
-      return {
-        success: false,
-        platform: 'douyin',
-        error: '无法获取视频下载地址',
-        fallbackUrl: 'https://www.douyin.com',
-      };
-    }
-
+  if (videoUrl) {
+    const cover = video?.cover as Record<string, unknown> | undefined;
+    const coverUrl = (cover?.url_list as string[] | undefined)?.[0];
     return {
       success: true,
       platform: 'douyin',
       type: 'video',
       title: desc,
       videoUrl: videoUrl.replace('playwm', 'play'),
-      coverUrl: item.video?.cover?.url_list?.[0],
+      coverUrl,
       author,
     };
-  } catch (err) {
-    return {
-      success: false,
-      platform: 'douyin',
-      error: `解析失败: ${err instanceof Error ? err.message : '未知错误'}`,
-      fallbackUrl: 'https://www.douyin.com',
-    };
   }
+
+  return {
+    success: false,
+    platform: 'douyin',
+    error: '无法获取下载地址',
+    fallbackUrl: 'https://douyin.wtf/',
+  };
 }
 
 // ===== Bilibili 解析 =====
@@ -363,23 +391,23 @@ async function parseXigua(url: string): Promise<ParseResult> {
   }
 }
 
-// ===== 快手：直接返回 fallback =====
-function parseKuaishou(url: string): ParseResult {
+// ===== 快手：返回第三方工具链接 =====
+function parseKuaishou(_url: string): ParseResult {
   return {
     success: false,
     platform: 'kuaishou',
     error: '快手暂不支持服务端解析，请使用第三方工具',
-    fallbackUrl: 'https://www.kuaishou.com',
+    fallbackUrl: 'https://douyin.wtf/',
   };
 }
 
-// ===== TikTok：直接返回 fallback =====
-function parseTiktok(url: string): ParseResult {
+// ===== TikTok：返回第三方工具链接 =====
+function parseTiktok(_url: string): ParseResult {
   return {
     success: false,
     platform: 'tiktok',
     error: 'TikTok 暂不支持服务端解析，请使用第三方工具',
-    fallbackUrl: 'https://www.tiktok.com',
+    fallbackUrl: 'https://douyin.wtf/',
   };
 }
 

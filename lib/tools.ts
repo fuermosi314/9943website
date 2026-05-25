@@ -120,6 +120,15 @@ export const tools: Tool[] = [
     tags: ['图片', '旋转', '翻转', 'rotate', 'flip'],
   },
   {
+    id: 'icon-extract',
+    name: '图标提取',
+    description: '从 EXE/DLL/ICO 文件中提取图标',
+    icon: '🎯',
+    category: 'image',
+    path: '/tools/icon-extract',
+    tags: ['图标', '提取', 'exe', 'dll', 'ico', 'icon', 'extract'],
+  },
+  {
     id: 'pdf-to-office',
     name: 'PDF 转 Office',
     description: 'PDF 转 Word/Excel/PPT',
@@ -190,6 +199,15 @@ export const tools: Tool[] = [
     category: 'life',
     path: '/tools/video-unwatermark',
     tags: ['视频', '去水印', '抖音', 'bilibili', '下载', '无水印', '短视频'],
+  },
+  {
+    id: 'fast-download',
+    name: '高速下载',
+    description: '分析下载链接，推荐最佳下载加速方案',
+    icon: '⚡',
+    category: 'life',
+    path: '/tools/fast-download',
+    tags: ['下载', '加速', '高速', 'download', 'idm', 'aria2', '多线程'],
   },
   {
     id: 'steam',

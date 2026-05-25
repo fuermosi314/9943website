@@ -265,11 +265,21 @@ export default function VideoUnwatermarkPage() {
 
                 {/* 提示信息 */}
                 <div className="mt-4 bg-white/5 rounded-xl p-4">
-                  <p className="text-sm text-white/60">
+                  <p className="text-sm text-white/60 mb-3">
                     {result.platform === 'kuaishou' || result.platform === 'tiktok'
-                      ? '该平台暂不支持自动解析，请在 APP 内直接保存无水印原图/视频。'
-                      : '解析遇到问题，请检查链接是否正确，或换个链接重试。'}
+                      ? '该平台暂不支持自动解析，请使用第三方工具。'
+                      : '服务端解析失败，可以尝试第三方工具。'}
                   </p>
+                  {result.fallbackUrl && (
+                    <a
+                      href={result.fallbackUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block px-4 py-2 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white text-sm font-medium rounded-xl shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all"
+                    >
+                      前往第三方工具
+                    </a>
+                  )}
                 </div>
               </div>
             )}
