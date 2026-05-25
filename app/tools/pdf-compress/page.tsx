@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import BackButton from '@/components/BackButton';
 import { PDFDocument } from 'pdf-lib';
 
 type CompressLevel = 'low' | 'medium' | 'high';
@@ -27,7 +27,6 @@ interface CompressResult {
 }
 
 export default function PdfCompress() {
-  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState('');
   const [fileSize, setFileSize] = useState(0);
@@ -36,6 +35,7 @@ export default function PdfCompress() {
   const [selectedLevel, setSelectedLevel] = useState<CompressLevel>('medium');
   const [isCompressing, setIsCompressing] = useState(false);
   const [result, setResult] = useState<CompressResult | null>(null);
+  const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getPdfInfo = async (f: File) => {
@@ -113,7 +113,7 @@ export default function PdfCompress() {
       });
     } catch (error) {
       console.error('Compress failed:', error);
-      alert('压缩失败，请确保文件是有效的 PDF');
+      setError('压缩失败，请确保文件是有效的 PDF');
     } finally {
       setIsCompressing(false);
     }
@@ -140,12 +140,7 @@ export default function PdfCompress() {
     <div className="min-h-screen relative z-10">
       <header className="fixed top-0 left-0 right-0 z-50 bg-black/40 backdrop-blur-xl border-b border-white/10">
         <div className="max-w-4xl mx-auto px-6 py-3 flex items-center">
-          <button onClick={() => router.back()} className="flex items-center text-white/60 hover:text-[#fb6400] transition-colors mr-6">
-            <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            返回
-          </button>
+          <BackButton toolId="pdf-compress" />
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-gradient-to-br from-[#fb6400] to-[#ff8c00] rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/30">
               <span className="text-white text-sm">📦</span>
@@ -157,6 +152,12 @@ export default function PdfCompress() {
 
       <main className="max-w-4xl mx-auto px-6 pt-24 pb-16">
         <div className="animate-fade-in">
+          {error && (
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
+              {error}
+              <button onClick={() => setError('')} className="ml-2 underline">关闭</button>
+            </div>
+          )}
           {/* Upload Area */}
           {!file ? (
             <div

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import BackButton from '@/components/BackButton';
 
 type Mode = 'number' | 'string' | 'uuid' | 'password';
 
@@ -50,7 +50,6 @@ function generatePassword(length: number): string {
 }
 
 export default function RandomGenerator() {
-  const router = useRouter();
   const [mode, setMode] = useState<Mode>('number');
   const [minVal, setMinVal] = useState('1');
   const [maxVal, setMaxVal] = useState('100');
@@ -111,12 +110,7 @@ export default function RandomGenerator() {
     <div className="min-h-screen relative z-10">
       <header className="fixed top-0 left-0 right-0 z-50 bg-black/40 backdrop-blur-xl border-b border-white/10">
         <div className="max-w-4xl mx-auto px-6 py-3 flex items-center">
-          <button onClick={() => router.back()} className="flex items-center text-white/60 hover:text-[#fb6400] transition-colors mr-6">
-            <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            返回
-          </button>
+          <BackButton toolId="random-generator" />
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-gradient-to-br from-[#fb6400] to-[#ff8c00] rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/30">
               <span className="text-white text-sm">🎲</span>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import BackButton from '@/components/BackButton';
 import { Platform, ContentType, Hook, GenerateResponse, HistoryRecord } from '@/lib/types';
 import { saveHistory } from '@/lib/storage';
 import TopicInput from '@/components/TopicInput';
@@ -12,7 +12,6 @@ import ErrorBanner from '@/components/ErrorBanner';
 import HistoryPanel from '@/components/HistoryPanel';
 
 export default function HookGenerator() {
-  const router = useRouter();
   const [topic, setTopic] = useState('');
   const [platform, setPlatform] = useState<Platform>('xiaohongshu');
   const [contentType, setContentType] = useState<ContentType>('video');
@@ -27,8 +26,11 @@ export default function HookGenerator() {
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
-  const handlePasswordSubmit = () => {
-    if (password === 'fuermosizuishuai') {
+  const handlePasswordSubmit = async () => {
+    const encoded = new TextEncoder().encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+    const hash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    if (hash === 'fb8659cc7e7458605e62496877c123427700fb068851aff245693067e71bcebe') {
       localStorage.setItem('hook-generator-auth', 'true');
       setAuthenticated(true);
       setPasswordError('');
@@ -99,12 +101,7 @@ export default function HookGenerator() {
       {/* 顶部导航 */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-black/40 backdrop-blur-xl border-b border-white/10">
         <div className="max-w-4xl mx-auto px-6 py-3 flex items-center">
-          <button onClick={() => router.back()} className="flex items-center text-white/60 hover:text-purple-400 transition-colors mr-6">
-            <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            返回
-          </button>
+          <BackButton toolId="hook-generator" className="hover:text-purple-400" />
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center shadow-lg shadow-purple-500/30">
               <span className="text-white text-sm">🎯</span>

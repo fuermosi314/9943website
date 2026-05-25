@@ -86,7 +86,27 @@ function buildPrompt(topic: string, platform: string, contentType: string): stri
 请生成10个hook，风格依次为：${STYLE_TYPES.join('、')}`;
 }
 
+// 简易 IP 速率限制（每 IP 每分钟最多 5 次）
+const rateLimit = new Map<string, { count: number; resetTime: number }>();
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const record = rateLimit.get(ip);
+  if (!record || now > record.resetTime) {
+    rateLimit.set(ip, { count: 1, resetTime: now + 60_000 });
+    return true;
+  }
+  if (record.count >= 5) return false;
+  record.count++;
+  return true;
+}
+
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown';
+  if (!checkRateLimit(ip)) {
+    return NextResponse.json({ error: '请求过于频繁，请稍后再试' }, { status: 429 });
+  }
+
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
@@ -105,6 +125,10 @@ export async function POST(request: NextRequest) {
   const { topic, platform, contentType } = body;
   if (!topic || !platform || !contentType) {
     return NextResponse.json({ error: '请填写完整信息：主题、平台、内容类型' }, { status: 400 });
+  }
+
+  if (topic.length > 100) {
+    return NextResponse.json({ error: '主题内容不能超过100个字' }, { status: 400 });
   }
 
   const baseURL = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
@@ -130,7 +154,7 @@ export async function POST(request: NextRequest) {
       if (res.status === 401) {
         return NextResponse.json({ error: 'API Key 无效，请检查 .env.local 配置' }, { status: 401 });
       }
-      return NextResponse.json({ error: `AI 服务调用失败（${res.status}）：${errBody}` }, { status: 502 });
+      return NextResponse.json({ error: `AI 服务调用失败（${res.status}）` }, { status: 502 });
     }
 
     const data = await res.json();

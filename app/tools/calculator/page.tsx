@@ -1,13 +1,12 @@
 'use client';
 
 import { useState, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import BackButton from '@/components/BackButton';
 
 type CalcMode = 'standard' | 'scientific' | 'programmer' | 'date';
 type Base = 2 | 8 | 10 | 16;
 
 export default function CalculatorPage() {
-  const router = useRouter();
   const [mode, setMode] = useState<CalcMode>('standard');
 
   // Standard / Scientific state
@@ -343,7 +342,7 @@ export default function CalculatorPage() {
     <button
       onClick={onClick}
       className={`
-        h-14 rounded-xl text-base font-medium transition-all active:scale-95
+        h-12 sm:h-14 rounded-xl text-sm sm:text-base font-medium transition-all active:scale-95
         ${span === 2 ? 'col-span-2' : ''}
         ${className || 'bg-white/5 hover:bg-white/10 text-white'}
       `}
@@ -360,12 +359,7 @@ export default function CalculatorPage() {
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-black/40 backdrop-blur-xl border-b border-white/10">
         <div className="max-w-2xl mx-auto px-6 py-3 flex items-center">
-          <button onClick={() => router.back()} className="flex items-center text-white/60 hover:text-[#fb6400] transition-colors mr-6">
-            <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            返回
-          </button>
+          <BackButton toolId="calculator" />
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-gradient-to-br from-[#fb6400] to-[#ff8c00] rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/30">
               <span className="text-white text-sm">🧮</span>
@@ -458,7 +452,7 @@ export default function CalculatorPage() {
               </div>
 
               {/* Scientific buttons row 1 */}
-              <div className="grid grid-cols-5 gap-1.5 mb-2">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 mb-2">
                 <CalcButton label="sin" onClick={() => applySciFunc('sin')} className={funcClass} />
                 <CalcButton label="cos" onClick={() => applySciFunc('cos')} className={funcClass} />
                 <CalcButton label="tan" onClick={() => applySciFunc('tan')} className={funcClass} />
@@ -467,7 +461,7 @@ export default function CalculatorPage() {
               </div>
 
               {/* Scientific buttons row 2 */}
-              <div className="grid grid-cols-5 gap-1.5 mb-2">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 mb-2">
                 <CalcButton label="log" onClick={() => applySciFunc('log')} className={funcClass} />
                 <CalcButton label="ln" onClick={() => applySciFunc('ln')} className={funcClass} />
                 <CalcButton label="x²" onClick={() => applySciFunc('x²')} className={funcClass} />
@@ -476,7 +470,7 @@ export default function CalculatorPage() {
               </div>
 
               {/* Scientific buttons row 3 */}
-              <div className="grid grid-cols-5 gap-1.5 mb-2">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 mb-2">
                 <CalcButton label="√" onClick={() => applySciFunc('√')} className={funcClass} />
                 <CalcButton label="∛" onClick={() => applySciFunc('∛')} className={funcClass} />
                 <CalcButton label="1/x" onClick={() => applySciFunc('1/x')} className={funcClass} />
@@ -529,7 +523,7 @@ export default function CalculatorPage() {
                         : 'bg-white/5 text-white/60 hover:bg-white/10'}
                     `}
                   >
-                    {b === 2 ? 'BIN' : b === 8 ? 'OCT' : b === 10 ? 'DEC' : 'HEX'}
+                    {b === 2 ? '二进制' : b === 8 ? '八进制' : b === 10 ? '十进制' : '十六进制'}
                   </button>
                 ))}
               </div>
@@ -545,19 +539,19 @@ export default function CalculatorPage() {
               {/* Base representations */}
               <div className="grid grid-cols-2 gap-2 mb-4 text-xs">
                 <div className="bg-white/5 rounded-lg px-3 py-2">
-                  <span className="text-white/40">BIN </span>
+                  <span className="text-white/40">二进制 </span>
                   <span className="text-white/80 font-mono truncate block">{progValueDisplay.bin}</span>
                 </div>
                 <div className="bg-white/5 rounded-lg px-3 py-2">
-                  <span className="text-white/40">OCT </span>
+                  <span className="text-white/40">八进制 </span>
                   <span className="text-white/80 font-mono truncate block">{progValueDisplay.oct}</span>
                 </div>
                 <div className="bg-white/5 rounded-lg px-3 py-2">
-                  <span className="text-white/40">DEC </span>
+                  <span className="text-white/40">十进制 </span>
                   <span className="text-white/80 font-mono truncate block">{progValueDisplay.dec}</span>
                 </div>
                 <div className="bg-white/5 rounded-lg px-3 py-2">
-                  <span className="text-white/40">HEX </span>
+                  <span className="text-white/40">十六进制 </span>
                   <span className="text-white/80 font-mono truncate block">{progValueDisplay.hex}</span>
                 </div>
               </div>

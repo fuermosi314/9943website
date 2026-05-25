@@ -1,6 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
+import BackButton from '@/components/BackButton';
 import { tools } from '@/lib/tools';
 
 const siteFeatures: Record<string, string[]> = {
@@ -114,13 +115,7 @@ export default function SiteDetailPage() {
       {/* Nav bar */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-md border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center">
-          <button
-            onClick={() => router.back()}
-            className="flex items-center gap-2 text-gray-300 hover:text-[#fb6400] transition-colors group"
-          >
-            <span className="text-xl group-hover:-translate-x-1 transition-transform">←</span>
-            <span className="font-medium">返回</span>
-          </button>
+          <BackButton toolId={slug} />
           <div className="ml-auto flex items-center gap-2">
             <div className="w-5 h-5 bg-gradient-to-br from-[#fb6400] to-[#ff8c00] rounded flex items-center justify-center">
               <span className="text-white text-[10px] font-bold">9</span>
