@@ -135,7 +135,11 @@ export default function SiteDetailPage() {
           {/* Icon */}
           <div className="text-center mb-8">
             <div className="inline-block p-8 glass-card rounded-3xl mb-6 border border-white/10">
-              <span className="text-7xl block">{tool.icon}</span>
+              {tool.icon.startsWith('/') ? (
+                <img src={tool.icon} alt={tool.name} className="w-20 h-20 object-contain" />
+              ) : (
+                <span className="text-7xl block">{tool.icon}</span>
+              )}
             </div>
           </div>
 

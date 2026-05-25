@@ -204,7 +204,7 @@ export const tools: Tool[] = [
     id: 'tbtool',
     name: '图吧工具箱',
     description: 'DIY 爱好者硬件检测工具合集，开源免费无捆绑',
-    icon: '🔧',
+    icon: '/tbtool.png',
     category: 'website',
     path: '/tools/site/tbtool',
     externalUrl: 'https://www.tbtool.cn/',
