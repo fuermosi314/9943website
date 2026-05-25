@@ -1,0 +1,311 @@
+export interface Tool {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: string;
+  path: string;
+  tags: string[];
+  externalUrl?: string;
+}
+
+export const categories = [
+  { id: 'all', name: '全部', icon: '🔥' },
+  { id: 'image', name: '图片工具', icon: '🖼️' },
+  { id: 'document', name: '文档工具', icon: '📄' },
+  { id: 'dev', name: '开发工具', icon: '🔧' },
+  { id: 'life', name: '生活工具', icon: '🎯' },
+  { id: 'entertainment', name: '娱乐工具', icon: '🎮' },
+  { id: 'website', name: '网站工具', icon: '🌐' },
+];
+
+export const tools: Tool[] = [
+  {
+    id: 'image-compress',
+    name: '图片压缩',
+    description: '压缩图片大小，支持 JPG、PNG、WebP',
+    icon: '📷',
+    category: 'image',
+    path: '/tools/image-compress',
+    tags: ['图片', '压缩', 'image', 'compress'],
+  },
+  {
+    id: 'qrcode',
+    name: '二维码生成',
+    description: '生成自定义二维码，支持调整大小和颜色',
+    icon: '📱',
+    category: 'entertainment',
+    path: '/tools/qrcode',
+    tags: ['二维码', 'qr', 'qrcode', '生成'],
+  },
+  {
+    id: 'word-count',
+    name: '字数统计',
+    description: '统计文本字数、字符数、行数',
+    icon: '📝',
+    category: 'document',
+    path: '/tools/word-count',
+    tags: ['字数', '统计', 'word', 'count', '文本'],
+  },
+  {
+    id: 'bmi',
+    name: 'BMI 计算器',
+    description: '计算身体质量指数，支持公制/英制',
+    icon: '⚖️',
+    category: 'life',
+    path: '/tools/bmi',
+    tags: ['bmi', '体重', '健康', '计算'],
+  },
+  {
+    id: 'random-generator',
+    name: '随机数生成器',
+    description: '生成随机数、字符串、UUID、密码',
+    icon: '🎲',
+    category: 'entertainment',
+    path: '/tools/random-generator',
+    tags: ['随机', 'random', 'uuid', '密码', '生成'],
+  },
+  {
+    id: 'unit-converter',
+    name: '单位换算',
+    description: '长度、重量、温度、面积、体积、时间单位互转',
+    icon: '📏',
+    category: 'life',
+    path: '/tools/unit-converter',
+    tags: ['单位', '换算', 'unit', 'convert'],
+  },
+  {
+    id: 'calculator',
+    name: '专业计算器',
+    description: '标准/科学/程序员/日期四种模式',
+    icon: '🧮',
+    category: 'life',
+    path: '/tools/calculator',
+    tags: ['计算器', 'calculator', '科学', '程序员', '进制'],
+  },
+  {
+    id: 'image-convert',
+    name: '图片格式转换',
+    description: 'JPG/PNG/WebP/BMP 格式互转',
+    icon: '🔄',
+    category: 'image',
+    path: '/tools/image-convert',
+    tags: ['图片', '格式', '转换', 'png', 'jpg', 'webp'],
+  },
+  {
+    id: 'image-crop',
+    name: '图片裁剪',
+    description: '自定义区域裁剪图片',
+    icon: '✂️',
+    category: 'image',
+    path: '/tools/image-crop',
+    tags: ['图片', '裁剪', 'crop'],
+  },
+  {
+    id: 'image-resize',
+    name: '图片调整大小',
+    description: '按比例或像素调整图片尺寸',
+    icon: '📐',
+    category: 'image',
+    path: '/tools/image-resize',
+    tags: ['图片', '调整', '大小', 'resize', '缩放'],
+  },
+  {
+    id: 'image-rotate',
+    name: '图片旋转/翻转',
+    description: '旋转角度、水平/垂直翻转',
+    icon: '🔃',
+    category: 'image',
+    path: '/tools/image-rotate',
+    tags: ['图片', '旋转', '翻转', 'rotate', 'flip'],
+  },
+  {
+    id: 'pdf-to-office',
+    name: 'PDF 转 Office',
+    description: 'PDF 转 Word/Excel/PPT',
+    icon: '📄',
+    category: 'document',
+    path: '/tools/pdf-to-office',
+    tags: ['pdf', 'word', 'excel', 'ppt', '转换'],
+  },
+  {
+    id: 'office-to-pdf',
+    name: 'Office 转 PDF',
+    description: 'Word/Excel/PPT 转 PDF',
+    icon: '📑',
+    category: 'document',
+    path: '/tools/office-to-pdf',
+    tags: ['word', 'excel', 'ppt', 'pdf', '转换'],
+  },
+  {
+    id: 'pdf-merge',
+    name: 'PDF 合并',
+    description: '多个 PDF 合并为一个文件',
+    icon: '📑',
+    category: 'document',
+    path: '/tools/pdf-merge',
+    tags: ['pdf', '合并', 'merge'],
+  },
+  {
+    id: 'pdf-split',
+    name: 'PDF 拆分',
+    description: 'PDF 拆分为多个独立文件',
+    icon: '✂️',
+    category: 'document',
+    path: '/tools/pdf-split',
+    tags: ['pdf', '拆分', 'split'],
+  },
+  {
+    id: 'pdf-compress',
+    name: 'PDF 压缩',
+    description: '减小 PDF 文件大小',
+    icon: '📦',
+    category: 'document',
+    path: '/tools/pdf-compress',
+    tags: ['pdf', '压缩', 'compress'],
+  },
+  {
+    id: 'wheel',
+    name: '大转盘',
+    description: '随机决策转盘，支持自定义选项',
+    icon: '🎡',
+    category: 'entertainment',
+    path: '/tools/wheel',
+    tags: ['转盘', '随机', '决策', '娱乐', 'wheel'],
+  },
+  {
+    id: 'hook-generator',
+    name: '爆款开头生成器',
+    description: 'AI 生成10个不同风格的爆款开头，支持多平台',
+    icon: '🎯',
+    category: 'entertainment',
+    path: '/tools/hook-generator',
+    tags: ['AI', 'hook', '开头', '爆款', '文案', '小红书', '抖音'],
+  },
+  // ===== 网站工具 =====
+  {
+    id: 'excalidraw',
+    name: 'Excalidraw',
+    description: '手绘风格在线白板画图工具',
+    icon: '✏️',
+    category: 'website',
+    path: '/tools/site/excalidraw',
+    externalUrl: 'https://excalidraw.com',
+    tags: ['画图', '白板', '流程图', '手绘'],
+  },
+  {
+    id: 'carbon',
+    name: 'Carbon',
+    description: '生成精美代码截图，分享代码更好看',
+    icon: '💎',
+    category: 'website',
+    path: '/tools/site/carbon',
+    externalUrl: 'https://carbon.now.sh',
+    tags: ['代码', '截图', '分享', '美化'],
+  },
+  {
+    id: 'jsonformatter',
+    name: 'JSON 格式化',
+    description: 'JSON 在线格式化、校验、树形查看',
+    icon: '📋',
+    category: 'website',
+    path: '/tools/site/jsonformatter',
+    externalUrl: 'https://jsonformatter.org',
+    tags: ['json', '格式化', '校验'],
+  },
+  {
+    id: 'codesandbox',
+    name: 'CodeSandbox',
+    description: '在线代码沙箱，秒速搭建前端项目',
+    icon: '📦',
+    category: 'website',
+    path: '/tools/site/codesandbox',
+    externalUrl: 'https://codesandbox.io',
+    tags: ['代码', '前端', '在线', 'sandbox'],
+  },
+  {
+    id: 'photopea',
+    name: 'Photopea',
+    description: '在线版 Photoshop，支持 PSD/Sketch/AI',
+    icon: '🖼️',
+    category: 'website',
+    path: '/tools/site/photopea',
+    externalUrl: 'https://www.photopea.com',
+    tags: ['ps', '设计', 'psd', '图片编辑', '在线'],
+  },
+  {
+    id: 'kms',
+    name: 'KMS 激活',
+    description: '一键激活 Windows 系统和 Office 软件',
+    icon: '🔑',
+    category: 'website',
+    path: '/tools/site/kms',
+    externalUrl: 'https://kms.cx/',
+    tags: ['kms', 'windows', 'office', '激活', '系统'],
+  },
+  {
+    id: 'pdf24',
+    name: 'PDF24 Tools',
+    description: '免费在线 PDF 工具箱，合并压缩编辑转换',
+    icon: '🐑',
+    category: 'website',
+    path: '/tools/site/pdf24',
+    externalUrl: 'https://tools.pdf24.org/zh/',
+    tags: ['pdf', '合并', '压缩', '编辑', '转换', '免费'],
+  },
+  {
+    id: 's7zy',
+    name: 'S7 资源库',
+    description: '专业设计/办公/系统软件免费下载',
+    icon: '💾',
+    category: 'website',
+    path: '/tools/site/s7zy',
+    externalUrl: 'https://s7zy.top/',
+    tags: ['软件', '下载', '设计', 'adobe', 'office', '免费'],
+  },
+  {
+    id: 'fmhy',
+    name: 'FMHY',
+    description: '互联网最大免费资源导航集合',
+    icon: '🌐',
+    category: 'website',
+    path: '/tools/site/fmhy',
+    externalUrl: 'https://fmhy.net/',
+    tags: ['免费', '资源', '影视', '游戏', '阅读', '导航'],
+  },
+  {
+    id: 'bmcx',
+    name: '便民查询网',
+    description: '身份证/IP/手机/邮编等在线查询工具',
+    icon: '🔍',
+    category: 'website',
+    path: '/tools/site/bmcx',
+    externalUrl: 'https://www.bmcx.com/',
+    tags: ['查询', '身份证', 'ip', '手机', '邮编', '便民'],
+  },
+  {
+    id: 'aikanbot',
+    name: '爱看机器人',
+    description: '全网免费影视资源搜索引擎',
+    icon: '🎬',
+    category: 'website',
+    path: '/tools/site/aikanbot',
+    externalUrl: 'https://v.aikanbot.com/',
+    tags: ['影视', '电影', '电视剧', '搜索', '免费', '在线观看'],
+  },
+];
+
+export function getToolsByCategory(categoryId: string): Tool[] {
+  if (categoryId === 'all') return tools;
+  return tools.filter((tool) => tool.category === categoryId);
+}
+
+export function searchTools(query: string): Tool[] {
+  const q = query.toLowerCase();
+  return tools.filter(
+    (tool) =>
+      tool.name.toLowerCase().includes(q) ||
+      tool.description.toLowerCase().includes(q) ||
+      tool.tags.some((tag) => tag.toLowerCase().includes(q))
+  );
+}
