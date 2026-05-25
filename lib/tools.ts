@@ -200,6 +200,16 @@ export const tools: Tool[] = [
     path: '/tools/steam',
     tags: ['steam', '下载', '游戏', '客户端', '平台'],
   },
+  // ===== 开发工具 =====
+  {
+    id: 'online-compiler',
+    name: '在线编译器',
+    description: 'C/C++、Python、Java、Go 等语言在线编译器导航',
+    icon: '💻',
+    category: 'dev',
+    path: '/tools/online-compiler',
+    tags: ['编译器', 'compiler', '在线', '编程', 'python', 'java', 'c++', '开发'],
+  },
   // ===== 网站工具 =====
   {
     id: 'excalidraw',

@@ -89,6 +89,7 @@
 │       ├── qrcode/          # 二维码生成
 │       ├── random-generator/# 随机数生成器
 │       ├── unit-converter/  # 单位换算
+│       ├── online-compiler/ # 在线编译器导航
 │       ├── video-unwatermark/ # 视频去水印
 │       ├── wheel/           # 大转盘
 │       ├── word-count/      # 字数统计
@@ -125,7 +126,7 @@
 | `all` | 全部 | 🔥 | 默认视图，显示所有工具 |
 | `image` | 图片工具 | 🖼️ | 图片压缩、格式转换、裁剪、缩放、旋转 |
 | `document` | 文档工具 | 📄 | PDF 系列 + 字数统计（原"文本工具"已合并至此） |
-| `dev` | 开发工具 | 🔧 | （暂无工具，预留分类） |
+| `dev` | 开发工具 | 🔧 | 在线编译器导航 |
 | `life` | 生活工具 | 🎯 | BMI 计算器、单位换算、专业计算器、视频去水印 |
 | `entertainment` | 娱乐工具 | 🎮 | 大转盘、二维码生成、随机数生成器、爆款开头生成器 |
 | `website` | 网站工具 | 🌐 | Excalidraw, Carbon, JSON, CodeSandbox, Photopea, KMS, PDF24, S7资源库, FMHY, 便民查询网, 爱看机器人, Steam 下载 |
