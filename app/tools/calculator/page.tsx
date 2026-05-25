@@ -356,7 +356,7 @@ export default function CalculatorPage() {
       onClick={onClick}
       disabled={disabled}
       className={`
-        h-12 sm:h-14 rounded-xl text-sm sm:text-base font-medium transition-all active:scale-95
+        h-12 sm:h-14 rounded-xl text-sm sm:text-base font-medium transition-colors
         ${span === 2 ? 'col-span-2' : ''}
         ${disabled ? 'opacity-20 cursor-not-allowed' : ''}
         ${className || 'bg-white/5 hover:bg-white/10 text-white'}
@@ -371,7 +371,9 @@ export default function CalculatorPage() {
   const hexClass = 'bg-purple-500/15 hover:bg-purple-500/25 text-purple-300';
 
   return (
-    <div className="min-h-screen relative z-10">
+    <div className="min-h-screen relative z-10 calculator-page">
+      {/* 禁用 glass-card hover 效果，防止手机触摸闪烁 */}
+      <style>{`.calculator-page .glass-card:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); box-shadow: none; }`}</style>
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-black/40 backdrop-blur-xl border-b border-white/10">
         <div className="max-w-2xl mx-auto px-6 py-3 flex items-center">
@@ -395,7 +397,7 @@ export default function CalculatorPage() {
                   key={m}
                   onClick={() => setMode(m)}
                   className={`
-                    py-2.5 rounded-xl text-sm font-medium transition-all
+                    py-2.5 rounded-xl text-sm font-medium transition-colors
                     ${mode === m
                       ? 'bg-[#fb6400] text-white shadow-lg shadow-orange-500/30'
                       : 'text-white/60 hover:text-white hover:bg-white/5'}
@@ -526,7 +528,7 @@ export default function CalculatorPage() {
                     key={b}
                     onClick={() => switchBase(b)}
                     className={`
-                      py-2 rounded-lg text-xs font-medium transition-all
+                      py-2 rounded-lg text-xs font-medium transition-colors
                       ${progBase === b
                         ? 'bg-[#fb6400] text-white shadow-lg shadow-orange-500/30'
                         : 'bg-white/5 text-white/60 hover:bg-white/10'}
@@ -624,7 +626,7 @@ export default function CalculatorPage() {
                     type="date"
                     value={dateFrom}
                     onChange={(e) => setDateFrom(e.target.value)}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#fb6400] transition-all [color-scheme:dark]"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#fb6400] transition-colors [color-scheme:dark]"
                   />
                 </div>
                 <div>
@@ -633,7 +635,7 @@ export default function CalculatorPage() {
                     type="date"
                     value={dateTo}
                     onChange={(e) => setDateTo(e.target.value)}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#fb6400] transition-all [color-scheme:dark]"
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-[#fb6400] transition-colors [color-scheme:dark]"
                   />
                 </div>
               </div>
