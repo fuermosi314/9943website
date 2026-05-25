@@ -35,7 +35,7 @@ export default function SteamPage() {
           <BackButton toolId="steam" />
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-[#1b2838] rounded-lg flex items-center justify-center shadow-lg">
-              <img src="/steam.svg" alt="Steam" className="w-5 h-5" />
+              <img src="/steam.png" alt="Steam" className="w-5 h-5 object-contain" />
             </div>
             <h1 className="text-lg font-semibold text-white">Steam 下载</h1>
           </div>
@@ -44,7 +44,7 @@ export default function SteamPage() {
 
       <main className="max-w-lg mx-auto px-6 pt-24 pb-16">
         <div className="text-center mb-8">
-          <div className="text-5xl mb-4">🎮</div>
+          <img src="/steam.png" alt="Steam" className="w-20 h-20 mx-auto mb-4 object-contain" />
           <h2 className="text-2xl font-bold text-white mb-2">Steam 客户端下载</h2>
           <p className="text-white/40 text-sm">全球最大游戏平台，畅享海量游戏</p>
         </div>
