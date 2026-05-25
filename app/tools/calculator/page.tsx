@@ -290,12 +290,17 @@ export default function CalculatorPage() {
     setProgWaiting(true);
   }, [progDisplay, progBase, parseProgInput, formatProgValue]);
 
-  const progValueDisplay = useMemo(() => ({
-    bin: (progValue >>> 0).toString(2),
-    oct: (progValue >>> 0).toString(8),
-    dec: String(progValue),
-    hex: (progValue >>> 0).toString(16).toUpperCase(),
-  }), [progValue]);
+  const progValueDisplay = useMemo(() => {
+    // 从当前输入实时计算各进制值
+    const val = parseProgInput(progDisplay, progBase);
+    const unsigned = isNaN(val) ? 0 : val >>> 0;
+    return {
+      bin: unsigned.toString(2),
+      oct: unsigned.toString(8),
+      dec: String(isNaN(val) ? 0 : val),
+      hex: unsigned.toString(16).toUpperCase(),
+    };
+  }, [progDisplay, progBase, parseProgInput]);
 
   const switchBase = useCallback((newBase: Base) => {
     const current = parseProgInput(progDisplay, progBase);
