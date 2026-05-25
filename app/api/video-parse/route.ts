@@ -409,10 +409,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '请提供视频链接' }, { status: 400 });
   }
 
+  // 从分享文本中提取 URL（用户可能粘贴整段分享文字）
+  const urlMatch = url.match(/https?:\/\/[^\s<>"')]+/);
+  if (!urlMatch) {
+    return NextResponse.json({ error: '未在输入中找到有效链接' }, { status: 400 });
+  }
+
   // 基本 URL 校验
   let parsedUrl: URL;
   try {
-    parsedUrl = new URL(url);
+    parsedUrl = new URL(urlMatch[0]);
   } catch {
     return NextResponse.json({ error: '请输入有效的 URL 链接' }, { status: 400 });
   }
