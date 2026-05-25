@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import CategoryNav from '@/components/CategoryNav';
@@ -8,6 +8,14 @@ import ToolCard from '@/components/ToolCard';
 import { tools, getToolsByCategory, searchTools } from '@/lib/tools';
 
 export default function Home() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0a0a1a]" />}>
+      <HomeContent />
+    </Suspense>
+  );
+}
+
+function HomeContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [activeCategory, setActiveCategory] = useState(searchParams.get('category') || 'all');
