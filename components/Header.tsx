@@ -37,11 +37,13 @@ export default function Header({ onSearch }: HeaderProps) {
           href="/feedback"
           className="flex items-center space-x-3 group"
         >
-          {/* Logo - 模仿 4399 风格 */}
+          {/* Logo - 9943 像素风图标 */}
           <div className="relative">
-            <div className="w-10 h-10 bg-gradient-to-br from-[#fb6400] to-[#ff8c00] rounded-lg flex items-center justify-center transform group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-orange-500/30">
-              <span className="text-white text-lg font-bold">9</span>
-            </div>
+            <img
+              src="/logo.png"
+              alt="9943"
+              className="w-10 h-10 rounded-lg transform group-hover:scale-110 transition-transform duration-300 shadow-lg shadow-orange-500/30"
+            />
             <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#ff4444] rounded-full animate-pulse" />
           </div>
           <div>

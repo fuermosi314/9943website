@@ -59,9 +59,7 @@ export default function BMICalculator() {
         <div className="max-w-4xl mx-auto px-6 py-3 flex items-center">
           <BackButton toolId="bmi" />
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-[#fb6400] to-[#ff8c00] rounded-lg flex items-center justify-center shadow-lg shadow-orange-500/30">
-              <span className="text-white text-sm">⚖️</span>
-            </div>
+            <img src="/logo.png" alt="9943" className="w-8 h-8 rounded-lg shadow-lg shadow-orange-500/30" />
             <h1 className="text-lg font-semibold text-white">BMI 计算器</h1>
           </div>
         </div>

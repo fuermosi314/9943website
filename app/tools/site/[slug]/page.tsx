@@ -117,9 +117,7 @@ export default function SiteDetailPage() {
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center">
           <BackButton toolId={slug} />
           <div className="ml-auto flex items-center gap-2">
-            <div className="w-5 h-5 bg-gradient-to-br from-[#fb6400] to-[#ff8c00] rounded flex items-center justify-center">
-              <span className="text-white text-[10px] font-bold">9</span>
-            </div>
+            <img src="/logo.png" alt="9943" className="w-5 h-5 rounded" />
             <span className="text-xs text-[#fb6400] font-semibold">9943小工具大全</span>
           </div>
         </div>

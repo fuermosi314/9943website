@@ -97,9 +97,7 @@ function HomeContent() {
       <footer className="border-t border-white/10 py-8 relative z-10">
         <div className="max-w-6xl mx-auto px-6 text-center">
           <div className="flex items-center justify-center space-x-2 mb-2">
-            <div className="w-6 h-6 bg-gradient-to-br from-[#fb6400] to-[#ff8c00] rounded flex items-center justify-center">
-              <span className="text-white text-xs font-bold">9</span>
-            </div>
+            <img src="/logo.png" alt="9943" className="w-6 h-6 rounded" />
             <span className="text-sm font-semibold text-[#fb6400]">9943小工具大全</span>
           </div>
           <p className="text-xs text-white/30">
