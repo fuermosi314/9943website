@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="#ffffff">
+  <!-- Steam 齿轮 logo -->
+  <circle cx="50" cy="50" r="46" fill="none" stroke="#ffffff" stroke-width="6"/>
+  <circle cx="50" cy="50" r="12" fill="#ffffff"/>
+  <!-- 齿轮齿 -->
+  <rect x="46" y="0" width="8" height="14" rx="2" fill="#ffffff"/>
+  <rect x="46" y="86" width="8" height="14" rx="2" fill="#ffffff"/>
+  <rect x="0" y="46" width="14" height="8" rx="2" fill="#ffffff"/>
+  <rect x="86" y="46" width="14" height="8" rx="2" fill="#ffffff"/>
+  <!-- 对角齿 -->
+  <rect x="46" y="0" width="8" height="14" rx="2" fill="#ffffff" transform="rotate(45 50 50)"/>
+  <rect x="46" y="0" width="8" height="14" rx="2" fill="#ffffff" transform="rotate(-45 50 50)"/>
+  <rect x="46" y="0" width="8" height="14" rx="2" fill="#ffffff" transform="rotate(135 50 50)"/>
+  <rect x="46" y="0" width="8" height="14" rx="2" fill="#ffffff" transform="rotate(-135 50 50)"/>
+  <!-- 连接臂 -->
+  <line x1="62" y1="50" x2="82" y2="38" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="84" cy="36" r="7" fill="#ffffff"/>
+</svg>

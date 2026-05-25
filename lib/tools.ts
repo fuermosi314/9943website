@@ -186,7 +186,7 @@ export const tools: Tool[] = [
     id: 'steam',
     name: 'Steam 下载',
     description: 'Steam 客户端官方下载地址，支持 Windows/Mac/Linux',
-    icon: '🎮',
+    icon: '/steam.svg',
     category: 'website',
     path: '/tools/steam',
     tags: ['steam', '下载', '游戏', '客户端', '平台'],
