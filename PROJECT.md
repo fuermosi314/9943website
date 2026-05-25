@@ -307,7 +307,7 @@ lang: 'zh-CN'
 - [x] **PDF 工具 alert() 替换**（已改为 React state 内联错误提示）
 - [x] **计算器进制标签汉化**（BIN/OCT/DEC/HEX 已改为中文）
 - [x] **计算器手机端优化**（按钮高度、响应式布局已修复）
-- [ ] **Office-to-PDF 中文支持**（需嵌入中文字体，改动较大）
+- [x] **Office-to-PDF 中文支持**（自动加载 LXGW WenKai 字体，失败时降级为 ASCII）
 - [ ] 右上角在线人数功能（计划接入实时统计）
 - [ ] Git 上传 + Vercel 部署
 - [ ] 开发工具分类的工具补充
