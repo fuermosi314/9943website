@@ -200,6 +200,16 @@ export const tools: Tool[] = [
     path: '/tools/steam',
     tags: ['steam', '下载', '游戏', '客户端', '平台'],
   },
+  {
+    id: 'tbtool',
+    name: '图吧工具箱',
+    description: 'DIY 爱好者硬件检测工具合集，开源免费无捆绑',
+    icon: '🔧',
+    category: 'website',
+    path: '/tools/site/tbtool',
+    externalUrl: 'https://www.tbtool.cn/',
+    tags: ['硬件', '检测', '工具箱', 'diy', '装机', '图吧', 'cpu', 'gpu'],
+  },
   // ===== 开发工具 =====
   {
     id: 'online-compiler',

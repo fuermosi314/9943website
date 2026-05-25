@@ -82,6 +82,13 @@ const siteFeatures: Record<string, string[]> = {
     '支持多线路切换，播放稳定',
     '无需注册，打开即搜即看',
   ],
+  tbtool: [
+    '图拉丁吧出品，DIY 爱好者必备工具合集',
+    '集成 CPU/GPU/硬盘/内存等硬件检测工具',
+    '开源免费，绿色无捆绑，无广告',
+    '支持 Windows 7-11 全系列系统',
+    '装机验机、性能测试一键启动',
+  ],
 };
 
 export default function SiteDetailPage() {
