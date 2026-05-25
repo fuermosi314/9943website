@@ -187,7 +187,7 @@ export const tools: Tool[] = [
     name: '视频去水印',
     description: '抖音/B站/西瓜视频无水印下载，支持多平台',
     icon: '🎬',
-    category: 'entertainment',
+    category: 'life',
     path: '/tools/video-unwatermark',
     tags: ['视频', '去水印', '抖音', 'bilibili', '下载', '无水印', '短视频'],
   },
