@@ -386,7 +386,7 @@ export default function CalculatorPage() {
       </header>
 
       <main className="max-w-2xl mx-auto px-6 pt-24 pb-16">
-        <div className="animate-fade-in animate-slide-up">
+        <div className=" ">
           {/* Mode tabs */}
           <div className="glass-card p-2 mb-6">
             <div className="grid grid-cols-4 gap-1">
@@ -409,7 +409,7 @@ export default function CalculatorPage() {
 
           {/* ========== Standard Mode ========== */}
           {mode === 'standard' && (
-            <div className="glass-card p-5 animate-fade-in">
+            <div className="glass-card p-5">
               <div className="mb-4 text-right">
                 <div className="text-sm text-white/40 h-6 truncate">{expression}</div>
                 <div className="text-4xl font-light text-white truncate">{display}</div>
@@ -449,7 +449,7 @@ export default function CalculatorPage() {
 
           {/* ========== Scientific Mode ========== */}
           {mode === 'scientific' && (
-            <div className="glass-card p-5 animate-fade-in">
+            <div className="glass-card p-5 ">
               <div className="flex items-center justify-between mb-3">
                 <button
                   onClick={() => setIsRadian(!isRadian)}
@@ -518,7 +518,7 @@ export default function CalculatorPage() {
 
           {/* ========== Programmer Mode ========== */}
           {mode === 'programmer' && (
-            <div className="glass-card p-4 sm:p-5 animate-fade-in">
+            <div className="glass-card p-4 sm:p-5 ">
               {/* Base selector */}
               <div className="grid grid-cols-4 gap-1.5 mb-4">
                 {([2, 8, 10, 16] as Base[]).map((b) => (
@@ -614,7 +614,7 @@ export default function CalculatorPage() {
 
           {/* ========== Date Mode ========== */}
           {mode === 'date' && (
-            <div className="glass-card p-6 animate-fade-in">
+            <div className="glass-card p-6 ">
               <h2 className="text-base font-semibold text-white mb-5">日期计算</h2>
 
               <div className="space-y-4 mb-6">
@@ -639,7 +639,7 @@ export default function CalculatorPage() {
               </div>
 
               {dateDiff ? (
-                <div className="space-y-4 animate-fade-in">
+                <div className="space-y-4 ">
                   <div className="text-center py-4 bg-white/5 rounded-xl">
                     <div className="text-4xl font-bold text-[#fb6400] mb-1">{dateDiff.totalDays}</div>
                     <div className="text-sm text-white/60">天</div>
