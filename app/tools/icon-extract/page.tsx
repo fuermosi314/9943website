@@ -266,15 +266,26 @@ export default function IconExtractPage() {
 
     try {
       const buffer = await selectedFile.arrayBuffer();
-      const ext = selectedFile.name.split('.').pop()?.toLowerCase();
+      const view = new DataView(buffer);
 
+      // Detect file format by magic bytes
       let rawIcons: RawIcon[] = [];
-      if (ext === 'ico' || ext === 'cur') {
-        rawIcons = extractIconsFromICO(buffer);
-      } else if (['exe', 'dll', 'ocx', 'cpl', 'scr'].includes(ext || '')) {
-        rawIcons = extractIconsFromPE(buffer);
-      } else {
-        throw new Error('不支持的文件格式，请上传 EXE/DLL/ICO 等文件');
+
+      if (buffer.byteLength >= 4) {
+        // Check ICO: reserved=0, type=1 or 2
+        const icoType = view.getUint16(2, true);
+        const icoReserved = view.getUint16(0, true);
+        if (icoReserved === 0 && (icoType === 1 || icoType === 2)) {
+          rawIcons = extractIconsFromICO(buffer);
+        }
+        // Check PE (MZ header)
+        else if (view.getUint16(0, true) === 0x5A4D) {
+          rawIcons = extractIconsFromPE(buffer);
+        }
+      }
+
+      if (rawIcons.length === 0) {
+        throw new Error('该文件中未找到图标，支持的格式：EXE、DLL、ICO、CPL、SCR 等 PE 格式文件');
       }
 
       if (rawIcons.length === 0) {
@@ -347,12 +358,12 @@ export default function IconExtractPage() {
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
-          <input ref={fileInputRef} type="file" accept=".exe,.dll,.ico,.cur,.ocx,.cpl,.scr" onChange={handleFileChange} className="hidden" />
+          <input ref={fileInputRef} type="file" onChange={handleFileChange} className="hidden" />
           <div className="text-center">
             <div className="text-4xl mb-3">📁</div>
             <h2 className="text-lg font-semibold text-white mb-2">{file ? file.name : '点击或拖拽上传文件'}</h2>
             <p className="text-white/40 text-sm">
-              {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB · 点击重新选择` : '支持 EXE、DLL、ICO 等文件格式'}
+              {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB · 点击重新选择` : '任何包含图标的文件都可以，自动识别格式'}
             </p>
           </div>
         </div>
@@ -414,7 +425,8 @@ export default function IconExtractPage() {
         <div className="glass-card p-6 mt-6 animate-slide-up" style={{ animationDelay: '100ms' }}>
           <h3 className="text-white font-semibold mb-3">💡 使用说明</h3>
           <ul className="space-y-2 text-white/50 text-sm">
-            <li>• 上传 EXE、DLL、ICO 等文件，自动提取其中的图标</li>
+            <li>• 上传任意文件，自动检测是否包含图标</li>
+            <li>• 支持 EXE、DLL、ICO、CPL、SCR 等 PE 格式文件</li>
             <li>• 支持提取多种尺寸的图标（16×16, 32×32, 48×48, 256×256 等）</li>
             <li>• 提取的图标以 PNG 格式保存，支持透明背景</li>
             <li>• 可以单个下载或批量下载所有图标</li>
