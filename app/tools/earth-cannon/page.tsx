@@ -1036,6 +1036,7 @@ export default function EarthCannonPage() {
     isCharging: false,
     chargeStartTime: 0,
     fullChargeShot: false,
+    isQuickShot: false,
     startTime: 0,
     screenShake: 0,
     lastFrame: 0,
@@ -1555,7 +1556,7 @@ export default function EarthCannonPage() {
       state.phase = 'idle';
       state.particles = []; state.debris = []; state.meteors = [];
       state.smoke = []; state.embers = []; state.lava = [];
-      state.screenShake = 0; state.shotCount = 0; state.damageLevel = 0; state.fullChargeShot = false;
+      state.screenShake = 0; state.shotCount = 0; state.damageLevel = 0; state.fullChargeShot = false; state.isQuickShot = false;
       earthCache = null; nebulaCache = null;
       state.stars = initStars(window.innerWidth, window.innerHeight);
       state.startTime = performance.now();
@@ -1576,7 +1577,7 @@ export default function EarthCannonPage() {
       state.phase = 'idle';
       state.particles = []; state.debris = []; state.meteors = [];
       state.smoke = []; state.embers = []; state.lava = [];
-      state.screenShake = 0; state.shotCount = 0; state.damageLevel = 0; state.fullChargeShot = false;
+      state.screenShake = 0; state.shotCount = 0; state.damageLevel = 0; state.fullChargeShot = false; state.isQuickShot = false;
       earthCache = null; nebulaCache = null;
       state.stars = initStars(window.innerWidth, window.innerHeight);
       state.startTime = performance.now();
@@ -1595,18 +1596,21 @@ export default function EarthCannonPage() {
     setChargeLevel(0);
 
     if (elapsed < 200) {
-      // 快速点击 → 触发射击
+      // 快速点击 → 直接触发，跳过蓄力
       state.shotCount++;
       state.fullChargeShot = false;
-      state.phase = 'charging';
+      state.isQuickShot = true;
+      state.phase = 'firing';
       state.phaseTime = performance.now();
+      state.screenShake = 1.2;
       setShowButton(false);
-      setPhase('charging');
+      setPhase('firing');
     } else {
       const chargeTime = 0.5 + (1 - state.damageLevel) * 2.5;
       if (elapsed >= chargeTime * 1000) {
         // 蓄力完成 → 全力发射
         state.fullChargeShot = true;
+        state.isQuickShot = false;
         state.phase = 'charging';
         state.phaseTime = performance.now();
         setShowButton(false);
@@ -1667,13 +1671,11 @@ export default function EarthCannonPage() {
                 className="px-12 py-4 text-xl font-bold text-white rounded-2xl bg-gradient-to-r from-[#fb6400] to-[#ff8c00] hover:scale-105 hover:shadow-[0_0_40px_rgba(251,100,0,0.5)] active:scale-95 transition-all duration-300 shadow-lg shadow-orange-500/30 mb-3 select-none"
               >
                 {stateRef.current.phase === 'aftermath' ? '🔥 再来一次' :
-                  stateRef.current.shotCount > 0 ? `🔥 继续轰炸 (${stateRef.current.shotCount}/5)` :
                   '🔥 发射'}
               </button>
               <p className="text-white/40 text-sm">
                 {stateRef.current.phase === 'aftermath' ? '地球已被毁灭' :
                   chargeInsufficient ? '蓄能不足，充能失败' :
-                  stateRef.current.damageLevel > 0 ? `已造成损伤 (${stateRef.current.shotCount}/5)` :
                   '点击发射，或按住蓄力一发毁灭地球'}
               </p>
             </div>
