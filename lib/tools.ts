@@ -203,7 +203,7 @@ export const tools: Tool[] = [
   {
     id: 'fast-download',
     name: '高速下载',
-    description: '分析下载链接，推荐最佳下载加速方案',
+    description: '多线程并行下载，榨干你的带宽',
     icon: '⚡',
     category: 'life',
     path: '/tools/fast-download',
