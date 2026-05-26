@@ -318,6 +318,29 @@ function EntryEditor({
     setPhotos(prev => prev.filter(p => p.id !== id));
   }, []);
 
+  // 粘贴图片上传
+  const handlePaste = useCallback(async (e: ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imageFiles: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile();
+        if (file) imageFiles.push(file);
+      }
+    }
+    if (imageFiles.length === 0) return;
+    e.preventDefault();
+    const fileList = new DataTransfer();
+    imageFiles.forEach(f => fileList.items.add(f));
+    handleAddPhotos(fileList.files);
+  }, [handleAddPhotos]);
+
+  useEffect(() => {
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [handlePaste]);
+
   const handleSave = useCallback(async () => {
     if (saving) return;
     setSaving(true);
