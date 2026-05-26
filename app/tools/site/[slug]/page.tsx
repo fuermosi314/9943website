@@ -134,7 +134,7 @@ export default function SiteDetailPage() {
         <div className="max-w-2xl mx-auto">
           {/* Icon */}
           <div className="text-center mb-8">
-            <div className="inline-block p-8 glass-card rounded-3xl mb-6 border border-white/10">
+            <div className={`inline-block p-8 rounded-3xl mb-6 ${tool.icon.startsWith('/') ? 'border border-white/5' : 'glass-card border border-white/10'}`}>
               {tool.icon.startsWith('/') ? (
                 <img src={tool.icon} alt={tool.name} className="w-20 h-20 object-contain" />
               ) : (
