@@ -94,6 +94,7 @@ function extractIconsFromPE(buffer: ArrayBuffer): ExtractedIcon[] {
 
   // 读取资源目录，返回 { id, subOffset, isDir }[]
   // subOffset 是相对于 resFileBase 的偏移
+  // 命名资源的 name 会被读取并尝试转为数字 ID（如 "100" -> 100）
   function readDir(fileOffset: number): { id: number; subOffset: number; isDir: boolean }[] {
     if (fileOffset + 16 > buffer.byteLength) return [];
     const numNamed = view.getUint16(fileOffset + 12, true);
@@ -105,13 +106,23 @@ function extractIconsFromPE(buffer: ArrayBuffer): ExtractedIcon[] {
       const nameOrId = view.getUint32(entryOff, true);
       const dataOrSubdir = view.getUint32(entryOff + 4, true);
       const isDir = (dataOrSubdir & 0x80000000) !== 0;
-      // 命名资源（高位为1）跳过，只处理数字 ID
-      if (nameOrId & 0x80000000) continue;
-      entries.push({
-        id: nameOrId,
-        subOffset: dataOrSubdir & 0x7FFFFFFF,
-        isDir,
-      });
+      let id: number;
+      if (nameOrId & 0x80000000) {
+        // 命名资源：读取名称字符串，尝试转为数字
+        const nameStrOff = resFileBase + (nameOrId & 0x7FFFFFFF);
+        if (nameStrOff + 2 > buffer.byteLength) continue;
+        const nameLen = view.getUint16(nameStrOff, true);
+        const chars: string[] = [];
+        for (let j = 0; j < nameLen && nameStrOff + 2 + j * 2 < buffer.byteLength; j++) {
+          chars.push(String.fromCharCode(view.getUint16(nameStrOff + 2 + j * 2, true)));
+        }
+        const nameStr = chars.join('');
+        const parsed = parseInt(nameStr);
+        id = isNaN(parsed) ? -1 - i : parsed; // 非数字名称用负数 ID
+      } else {
+        id = nameOrId;
+      }
+      entries.push({ id, subOffset: dataOrSubdir & 0x7FFFFFFF, isDir });
     }
     return entries;
   }
