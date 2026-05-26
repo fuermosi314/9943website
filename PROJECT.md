@@ -128,7 +128,7 @@
 | `document` | 文档工具 | 📄 | PDF 系列 + 字数统计（原"文本工具"已合并至此） |
 | `dev` | 开发工具 | 🔧 | 在线编译器导航 |
 | `life` | 生活工具 | 🎯 | BMI 计算器、单位换算、专业计算器、视频去水印 |
-| `entertainment` | 娱乐工具 | 🎮 | 大转盘、二维码生成、随机数生成器、爆款开头生成器 |
+| `entertainment` | 娱乐工具 | 🎮 | 大转盘、二维码生成、随机数生成器、爆款开头生成器、毁灭地球的电磁炮 |
 | `website` | 网站工具 | 🌐 | Excalidraw, Carbon, JSON, CodeSandbox, Photopea, KMS, PDF24, S7资源库, FMHY, 便民查询网, 爱看机器人, Steam 下载, 图吧工具箱 |
 
 ### 工具归属规则
@@ -242,6 +242,13 @@ const backUrl = `/?category=${tool.category}`;
 - **LNK 解析**: 读取 LinkInfo 提取 LocalBasePath（GBK 编码），支持自定义图标路径
 - **URL 解析**: 读取 INI 格式的 IconFile 字段
 - LNK/URL 无完整路径时显示友好提示，引导用户手动定位文件
+
+### 7.6 毁灭地球的电磁炮 (earth-cannon)
+- 全屏 Canvas 互动小游戏，纯前端实现
+- 动画状态机：idle → charging → firing → beam → impact → explosion → aftermath
+- 视觉元素：星空背景、卡通汪星人（太空头盔+呼吸动画+摇尾巴）、电磁炮（金属质感+能量线圈+蓝色辉光）、地球（渐变球体+大陆纹理+大气层）
+- 爆炸效果：裂纹扩散、碎片粒子系统、冲击波环、闪光
+- 点击"再来一次"可重置场景重新体验
 
 ---
 
