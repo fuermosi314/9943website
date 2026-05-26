@@ -18,7 +18,8 @@ interface ChunkProgress {
   done: boolean;
 }
 
-const THREAD_COUNT = 8;
+const THREAD_OPTIONS = [1, 2, 4, 8, 16, 32];
+const DEFAULT_THREADS = 8;
 
 function formatSize(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -36,6 +37,7 @@ export default function FastDownloadPage() {
   const [url, setUrl] = useState('');
   const [probing, setProbing] = useState(false);
   const [probeResult, setProbeResult] = useState<ProbeResult | null>(null);
+  const [threadCount, setThreadCount] = useState(DEFAULT_THREADS);
   const [downloading, setDownloading] = useState(false);
   const [chunks, setChunks] = useState<ChunkProgress[]>([]);
   const [totalLoaded, setTotalLoaded] = useState(0);
@@ -77,15 +79,16 @@ export default function FastDownloadPage() {
       return;
     }
 
+    const threads = threadCount;
     setDownloading(true);
     setError('');
     setTotalLoaded(0);
     setTotalSize(probeResult.fileSize);
 
     const fileSize = probeResult.fileSize;
-    const chunkSize = Math.ceil(fileSize / THREAD_COUNT);
+    const chunkSize = Math.ceil(fileSize / threads);
     const initChunks: ChunkProgress[] = [];
-    for (let i = 0; i < THREAD_COUNT; i++) {
+    for (let i = 0; i < threads; i++) {
       const start = i * chunkSize;
       const end = Math.min(start + chunkSize - 1, fileSize - 1);
       if (start >= fileSize) break;
@@ -185,7 +188,7 @@ export default function FastDownloadPage() {
       setDownloading(false);
       abortRef.current = null;
     }
-  }, [url, probeResult]);
+  }, [url, probeResult, threadCount]);
 
   const handleCancel = useCallback(() => {
     abortRef.current?.abort();
@@ -274,22 +277,58 @@ export default function FastDownloadPage() {
               <div className="flex justify-between text-sm">
                 <span className="text-white/40">多线程支持</span>
                 <span className={probeResult.supportsRange ? 'text-green-400' : 'text-yellow-400'}>
-                  {probeResult.supportsRange ? `支持 (${THREAD_COUNT} 线程)` : '不支持'}
+                  {probeResult.supportsRange ? '支持' : '不支持'}
                 </span>
               </div>
               {probeResult.supportsRange && (
                 <div className="flex justify-between text-sm">
                   <span className="text-white/40">预计加速</span>
-                  <span className="text-[#fb6400]">最高 {THREAD_COUNT}x</span>
+                  <span className="text-[#fb6400]">最高 {threadCount}x</span>
                 </div>
               )}
             </div>
+
+            {/* 线程选择 */}
+            {probeResult.supportsRange && (
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm text-white/60">选择线程数</span>
+                  <span className="text-xs text-white/30">内存占用 ≈ {formatSize(probeResult.fileSize)}</span>
+                </div>
+                <div className="grid grid-cols-5 gap-2">
+                  {THREAD_OPTIONS.map((t) => {
+                    const isSelected = threadCount === t;
+                    const chunkSize = Math.ceil(probeResult.fileSize / t);
+                    return (
+                      <button
+                        key={t}
+                        onClick={() => setThreadCount(t)}
+                        className={`p-3 rounded-xl text-center transition-all ${
+                          isSelected
+                            ? 'bg-gradient-to-br from-[#fb6400] to-[#ff8c00] text-white shadow-lg shadow-orange-500/30'
+                            : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        <div className="text-lg font-bold">{t}</div>
+                        <div className="text-[10px] mt-0.5 opacity-70">线程</div>
+                        <div className="text-[10px] mt-1 opacity-50">
+                          {formatSize(chunkSize)}/片
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-white/25 mt-2 text-center">
+                  线程越多速度越快，但内存占用越高。文件约 {formatSize(probeResult.fileSize)}，无论几线程内存占用相同
+                </p>
+              </div>
+            )}
 
             <button
               onClick={handleDownload}
               className="w-full py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white font-medium rounded-xl shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all active:scale-[0.98]"
             >
-              {probeResult.supportsRange ? `多线程下载 (${THREAD_COUNT} 线程)` : '直接下载'}
+              {probeResult.supportsRange ? `${threadCount} 线程下载` : '直接下载'}
             </button>
           </div>
         )}
@@ -328,7 +367,7 @@ export default function FastDownloadPage() {
             </div>
 
             {/* 分片状态 */}
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
               {chunks.map((chunk) => (
                 <div
                   key={chunk.id}
