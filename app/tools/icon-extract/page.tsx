@@ -161,6 +161,8 @@ function extractIconsFromPE(buffer: ArrayBuffer): ExtractedIcon[] {
   // === 解析 RT_GROUP_ICON ===
   const groupNames = readDir(resFileBase + groupIconDir.subOffset);
   const results: ExtractedIcon[] = [];
+  let groupCount = 0;
+  let iconLookupFailures = 0;
 
   for (const nameEntry of groupNames) {
     if (!nameEntry.isDir) continue;
@@ -169,33 +171,22 @@ function extractIconsFromPE(buffer: ArrayBuffer): ExtractedIcon[] {
       if (lang.isDir) continue;
       const de = readDataEntry(resFileBase + lang.subOffset);
       if (!de) continue;
+      groupCount++;
 
       // GRPICONDIR 结构: reserved(2) + type(2) + count(2) + GRPICONDIRENTRY[] * 14
       if (de.dataFileOff + 6 > buffer.byteLength) continue;
       const count = view.getUint16(de.dataFileOff + 4, true);
 
-      // 取最大的图标
-      let bestIdx = -1;
-      let bestPixels = 0;
+      // 提取组内所有图标
       for (let i = 0; i < count; i++) {
         const entryOff = de.dataFileOff + 6 + i * 14;
         if (entryOff + 14 > buffer.byteLength) break;
         const w = view.getUint8(entryOff) || 256;
         const h = view.getUint8(entryOff + 1) || 256;
-        if (w * h > bestPixels) {
-          bestPixels = w * h;
-          bestIdx = i;
-        }
-      }
-      if (bestIdx < 0) continue;
+        const iconId = view.getUint16(entryOff + 12, true);
 
-      const bestEntryOff = de.dataFileOff + 6 + bestIdx * 14;
-      const w = view.getUint8(bestEntryOff) || 256;
-      const h = view.getUint8(bestEntryOff + 1) || 256;
-      const iconId = view.getUint16(bestEntryOff + 12, true);
-
-      const iconInfo = iconMap.get(iconId);
-      if (!iconInfo) continue;
+        const iconInfo = iconMap.get(iconId);
+        if (!iconInfo) { iconLookupFailures++; continue; }
 
       // 读取图标原始数据
       const iconBuf = buffer.slice(iconInfo.fileOffset, iconInfo.fileOffset + iconInfo.size);
@@ -225,7 +216,12 @@ function extractIconsFromPE(buffer: ArrayBuffer): ExtractedIcon[] {
         const blob = new Blob([icoHeader, icoEntry, iconBuf], { type: 'image/x-icon' });
         results.push({ width: w, height: h, url: URL.createObjectURL(blob), format: 'ICO', size: iconBuf.byteLength });
       }
+      } // end for each icon in group
     }
+  }
+
+  if (results.length === 0 && groupCount > 0) {
+    throw new Error(`找到 ${groupCount} 个图标组，但未能提取到图标数据（${iconLookupFailures} 个图标 ID 未匹配）。该文件可能使用了特殊的资源格式。`);
   }
 
   return results;
@@ -307,7 +303,7 @@ function extractIconFromLNK(buffer: ArrayBuffer): ExtractedIcon[] {
     const linkInfoSize = view.getUint32(offset, true);
     const linkInfoHeaderSize = view.getUint32(offset + 4, true);
     const linkInfoFlags = view.getUint32(offset + 8, true);
-    // 提取 LocalBasePath（ASCII 目标路径）
+    // 提取 LocalBasePath（目标路径，Windows 中文系统通常用 GBK 编码）
     if ((linkInfoFlags & 0x01) !== 0 && linkInfoHeaderSize >= 28) {
       const localBasePathOffset = view.getUint32(offset + 16, true);
       if (localBasePathOffset > 0 && offset + localBasePathOffset < buffer.byteLength) {
@@ -318,7 +314,11 @@ function extractIconFromLNK(buffer: ArrayBuffer): ExtractedIcon[] {
           if (b === 0) break;
           pathBytes.push(b);
         }
-        targetPath = String.fromCharCode(...pathBytes);
+        try {
+          targetPath = new TextDecoder('gbk').decode(new Uint8Array(pathBytes));
+        } catch {
+          targetPath = String.fromCharCode(...pathBytes);
+        }
       }
     }
     if (linkInfoSize >= 4) {
