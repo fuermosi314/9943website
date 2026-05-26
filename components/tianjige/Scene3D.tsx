@@ -267,6 +267,7 @@ export default function Scene3D() {
   const [selectedFurniture, setSelectedFurniture] = useState<Furniture | null>(null);
   const [showItemPanel, setShowItemPanel] = useState(false);
   const [showItemEditor, setShowItemEditor] = useState(false);
+  const [showFurniturePicker, setShowFurniturePicker] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [itemForm, setItemForm] = useState({
     name: '', category: '日用', quantity: 1, price: 0,
@@ -478,6 +479,77 @@ export default function Scene3D() {
           ))}
         </select>
       </div>
+
+      {/* Bottom toolbar */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex gap-2">
+        <button onClick={() => setShowFurniturePicker(true)}
+          className="px-4 py-2 bg-[#fb6400] hover:bg-[#e55a00] text-white rounded-xl text-sm font-medium transition-colors shadow-lg">
+          + 添加家具
+        </button>
+        <button className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm font-medium transition-colors backdrop-blur">
+          管理场景
+        </button>
+        <button className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm font-medium transition-colors backdrop-blur">
+          📊 统计
+        </button>
+      </div>
+
+      {/* Furniture Picker Modal */}
+      {showFurniturePicker && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#1a1a2e] rounded-t-2xl sm:rounded-2xl border border-white/10 w-full max-w-lg max-h-[70vh] overflow-y-auto p-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-white font-bold">添加家具</h3>
+              <button onClick={() => setShowFurniturePicker(false)}
+                className="text-white/50 hover:text-white text-xl">&times;</button>
+            </div>
+
+            {([
+              { group: '收纳类', types: ['wardrobe', 'bookshelf', 'shoe-cabinet', 'drawer-cabinet', 'nightstand'] as FurnitureType[] },
+              { group: '桌类', types: ['desk', 'dining-table', 'coffee-table'] as FurnitureType[] },
+              { group: '其他', types: ['bed', 'sofa', 'tv-cabinet', 'fridge', 'washing-machine', 'sink'] as FurnitureType[] },
+            ]).map(({ group, types }) => (
+              <div key={group} className="mb-4">
+                <h4 className="text-white/50 text-xs mb-2 uppercase tracking-wider">{group}</h4>
+                <div className="grid grid-cols-3 gap-2">
+                  {types.map(type => {
+                    const def = FURNITURE_DEFAULTS[type];
+                    return (
+                      <button key={type} onClick={() => {
+                        const newFurniture: Furniture = {
+                          id: crypto.randomUUID(),
+                          type,
+                          name: def.name,
+                          color: '',
+                          position: { x: 0, z: 0 },
+                          rotation: 0,
+                          scale: 1,
+                          addedAt: Date.now(),
+                          items: [],
+                        };
+                        setScenes(prev => {
+                          const updated = prev.map(s => {
+                            if (s.id !== activeSceneId) return s;
+                            return { ...s, furniture: [...s.furniture, newFurniture] };
+                          });
+                          const active = updated.find(s => s.id === activeSceneId);
+                          if (active) saveScene(active);
+                          return updated;
+                        });
+                        setShowFurniturePicker(false);
+                      }}
+                        className="glass-card p-3 rounded-xl text-center hover:border-[#fb6400]/30 transition-colors">
+                        <div className="text-2xl mb-1">{def.emoji}</div>
+                        <div className="text-white text-xs">{def.name}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Item Panel */}
       {showItemPanel && selectedFurniture && (
