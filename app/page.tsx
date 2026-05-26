@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import CategoryNav from '@/components/CategoryNav';
@@ -20,17 +20,34 @@ function HomeContent() {
   const router = useRouter();
   const [activeCategory, setActiveCategory] = useState(searchParams.get('category') || 'all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [animated, setAnimated] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    const played = sessionStorage.getItem('tools-animation-played');
-    if (played) return false;
-    sessionStorage.setItem('tools-animation-played', '1');
-    return true;
-  });
+  // 追踪哪些分页面已经播放过动画
+  const animatedCatsRef = useRef<Set<string> | null>(null);
+  if (!animatedCatsRef.current) {
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = sessionStorage.getItem('tools-animated-categories');
+        animatedCatsRef.current = new Set<string>(raw ? JSON.parse(raw) : []);
+      } catch {
+        animatedCatsRef.current = new Set<string>();
+      }
+    } else {
+      animatedCatsRef.current = new Set<string>();
+    }
+  }
+  const animatedCats = animatedCatsRef.current;
+  const [animated, setAnimated] = useState(true);
 
   useEffect(() => {
-    setActiveCategory(searchParams.get('category') || 'all');
-  }, [searchParams]);
+    const cat = searchParams.get('category') || 'all';
+    setActiveCategory(cat);
+    if (!animatedCats.has(cat)) {
+      animatedCats.add(cat);
+      sessionStorage.setItem('tools-animated-categories', JSON.stringify(Array.from(animatedCats)));
+      setAnimated(true);
+    } else {
+      setAnimated(false);
+    }
+  }, [searchParams, animatedCats]);
 
   const handleCategoryChange = useCallback((id: string) => {
     setActiveCategory(id);
