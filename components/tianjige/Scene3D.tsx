@@ -40,45 +40,151 @@ const FURNITURE_DEFAULTS: Record<
 // ── Room builder ────────────────────────────────────────────────────
 function createRoom(): THREE.Group {
   const room = new THREE.Group();
+  const ROOM = 5;
+  const WALL_H = 2.8;
 
-  // Floor
-  const floor = new THREE.Mesh(
-    new THREE.BoxGeometry(5, 0.1, 5),
-    new THREE.MeshLambertMaterial({ color: 0xDEB887 }),
+  // ── Floor with wood plank texture ──
+  const floorBase = new THREE.Mesh(
+    new THREE.BoxGeometry(ROOM, 0.12, ROOM),
+    new THREE.MeshLambertMaterial({ color: 0xC9A96E }),
   );
-  floor.position.set(0, -0.05, 0);
-  room.add(floor);
+  floorBase.position.set(0, -0.06, 0);
+  room.add(floorBase);
 
-  // Grid
-  const grid = new THREE.GridHelper(5, 10, 0xcccccc, 0xe0e0e0);
-  grid.position.y = 0.01;
-  (grid.material as THREE.Material).transparent = true;
-  (grid.material as THREE.Material).opacity = 0.15;
-  room.add(grid);
+  // Wood plank lines (subtle darker strips)
+  const plankMat = new THREE.MeshLambertMaterial({ color: 0xB8944F });
+  for (let i = -2; i <= 2; i++) {
+    const plank = new THREE.Mesh(
+      new THREE.BoxGeometry(ROOM, 0.005, 0.02),
+      plankMat,
+    );
+    plank.position.set(0, 0.001, i * 1.0);
+    room.add(plank);
+  }
 
-  // Back wall
-  const backWall = new THREE.Mesh(
-    new THREE.BoxGeometry(5, 2.5, 0.1),
-    new THREE.MeshLambertMaterial({ color: 0xF5F5F5 }),
+  // ── Walls with two-tone paint (lower wainscoting) ──
+  const wallUpper = new THREE.MeshLambertMaterial({ color: 0xF0EDE5 });
+  const wallLower = new THREE.MeshLambertMaterial({ color: 0xE8E4DA });
+
+  // Back wall — upper
+  const backUpper = new THREE.Mesh(new THREE.BoxGeometry(ROOM, WALL_H * 0.6, 0.12), wallUpper);
+  backUpper.position.set(0, WALL_H * 0.3 + 0.8, -ROOM / 2);
+  room.add(backUpper);
+  // Back wall — lower (wainscoting)
+  const backLower = new THREE.Mesh(new THREE.BoxGeometry(ROOM, 0.8, 0.14), wallLower);
+  backLower.position.set(0, 0.4, -ROOM / 2);
+  room.add(backLower);
+
+  // Left wall — upper
+  const leftUpper = new THREE.Mesh(new THREE.BoxGeometry(0.12, WALL_H * 0.6, ROOM), wallUpper);
+  leftUpper.position.set(-ROOM / 2, WALL_H * 0.3 + 0.8, 0);
+  room.add(leftUpper);
+  // Left wall — lower
+  const leftLower = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.8, ROOM), wallLower);
+  leftLower.position.set(-ROOM / 2, 0.4, 0);
+  room.add(leftLower);
+
+  // Right wall — upper
+  const rightUpper = new THREE.Mesh(new THREE.BoxGeometry(0.12, WALL_H * 0.6, ROOM), wallUpper);
+  rightUpper.position.set(ROOM / 2, WALL_H * 0.3 + 0.8, 0);
+  room.add(rightUpper);
+  // Right wall — lower
+  const rightLower = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.8, ROOM), wallLower);
+  rightLower.position.set(ROOM / 2, 0.4, 0);
+  room.add(rightLower);
+
+  // ── Baseboards (踢脚线) ──
+  const baseMat = new THREE.MeshLambertMaterial({ color: 0xF5F0E8 });
+  const bh = 0.12;
+  // Back
+  const bb = new THREE.Mesh(new THREE.BoxGeometry(ROOM + 0.04, bh, 0.06), baseMat);
+  bb.position.set(0, bh / 2, -ROOM / 2 + 0.09);
+  room.add(bb);
+  // Left
+  const bl = new THREE.Mesh(new THREE.BoxGeometry(0.06, bh, ROOM + 0.04), baseMat);
+  bl.position.set(-ROOM / 2 + 0.09, bh / 2, 0);
+  room.add(bl);
+  // Right
+  const br = new THREE.Mesh(new THREE.BoxGeometry(0.06, bh, ROOM + 0.04), baseMat);
+  br.position.set(ROOM / 2 - 0.09, bh / 2, 0);
+  room.add(br);
+
+  // ── Chair rail / wainscoting cap (腰线) ──
+  const railMat = new THREE.MeshLambertMaterial({ color: 0xEDE8DD });
+  // Back
+  const rb = new THREE.Mesh(new THREE.BoxGeometry(ROOM + 0.04, 0.04, 0.04), railMat);
+  rb.position.set(0, 0.82, -ROOM / 2 + 0.09);
+  room.add(rb);
+  // Left
+  const rl = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, ROOM + 0.04), railMat);
+  rl.position.set(-ROOM / 2 + 0.09, 0.82, 0);
+  room.add(rl);
+  // Right
+  const rr = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, ROOM + 0.04), railMat);
+  rr.position.set(ROOM / 2 - 0.09, 0.82, 0);
+  room.add(rr);
+
+  // ── Window on back wall (窗框 + 玻璃) ──
+  const frameMat = new THREE.MeshLambertMaterial({ color: 0xF5F0E8 });
+  const glassMat = new THREE.MeshLambertMaterial({ color: 0xB0D4F1, transparent: true, opacity: 0.4 });
+  const ww = 1.6, wh = 1.2;
+  const wy = 1.6; // window center height
+  const wz = -ROOM / 2 + 0.08;
+  // Frame — top
+  room.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(ww + 0.12, 0.08, 0.08), frameMat), { position: new THREE.Vector3(0, wy + wh / 2, wz) }));
+  // Frame — bottom
+  room.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(ww + 0.12, 0.08, 0.08), frameMat), { position: new THREE.Vector3(0, wy - wh / 2, wz) }));
+  // Frame — left
+  room.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.08, wh + 0.08, 0.08), frameMat), { position: new THREE.Vector3(-ww / 2, wy, wz) }));
+  // Frame — right
+  room.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.08, wh + 0.08, 0.08), frameMat), { position: new THREE.Vector3(ww / 2, wy, wz) }));
+  // Frame — center vertical
+  room.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.05, wh, 0.06), frameMat), { position: new THREE.Vector3(0, wy, wz) }));
+  // Frame — center horizontal
+  room.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(ww, 0.05, 0.06), frameMat), { position: new THREE.Vector3(0, wy, wz) }));
+  // Glass pane
+  room.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(ww - 0.1, wh - 0.1, 0.02), glassMat), { position: new THREE.Vector3(0, wy, wz) }));
+
+  // ── Window sill (窗台) ──
+  const sill = new THREE.Mesh(
+    new THREE.BoxGeometry(ww + 0.2, 0.06, 0.18),
+    new THREE.MeshLambertMaterial({ color: 0xEDE8DD }),
   );
-  backWall.position.set(0, 1.25, -2.5);
-  room.add(backWall);
+  sill.position.set(0, wy - wh / 2 - 0.03, wz + 0.09);
+  room.add(sill);
 
-  // Left wall
-  const leftWall = new THREE.Mesh(
-    new THREE.BoxGeometry(0.1, 2.5, 5),
-    new THREE.MeshLambertMaterial({ color: 0xF5F5F5 }),
-  );
-  leftWall.position.set(-2.5, 1.25, 0);
-  room.add(leftWall);
+  // ── Crown molding (天花板石膏线) ──
+  const crownMat = new THREE.MeshLambertMaterial({ color: 0xF8F5F0 });
+  const ch = 0.1;
+  // Back
+  room.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(ROOM + 0.08, ch, 0.08), crownMat), { position: new THREE.Vector3(0, WALL_H - ch / 2, -ROOM / 2 + 0.06) }));
+  // Left
+  room.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.08, ch, ROOM + 0.08), crownMat), { position: new THREE.Vector3(-ROOM / 2 + 0.06, WALL_H - ch / 2, 0) }));
+  // Right
+  room.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(0.08, ch, ROOM + 0.08), crownMat), { position: new THREE.Vector3(ROOM / 2 - 0.06, WALL_H - ch / 2, 0) }));
 
-  // Right wall
-  const rightWall = new THREE.Mesh(
-    new THREE.BoxGeometry(0.1, 2.5, 5),
-    new THREE.MeshLambertMaterial({ color: 0xF5F5F5 }),
+  // ── Ceiling edge (visible from isometric view) ──
+  const ceiling = new THREE.Mesh(
+    new THREE.BoxGeometry(ROOM, 0.08, ROOM),
+    new THREE.MeshLambertMaterial({ color: 0xFAFAFA }),
   );
-  rightWall.position.set(2.5, 1.25, 0);
-  room.add(rightWall);
+  ceiling.position.set(0, WALL_H, 0);
+  room.add(ceiling);
+
+  // ── Subtle area rug (地毯) ──
+  const rug = new THREE.Mesh(
+    new THREE.BoxGeometry(2.4, 0.015, 1.6),
+    new THREE.MeshLambertMaterial({ color: 0xC4956A }),
+  );
+  rug.position.set(0, 0.008, 0);
+  room.add(rug);
+  // Rug border
+  const rugBorder = new THREE.Mesh(
+    new THREE.BoxGeometry(2.6, 0.012, 1.8),
+    new THREE.MeshLambertMaterial({ color: 0xA67B52 }),
+  );
+  rugBorder.position.set(0, 0.005, 0);
+  room.add(rugBorder);
 
   return room;
 }
@@ -319,7 +425,7 @@ export default function Scene3D() {
     if (!container) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xF0EDE8);
+    scene.background = new THREE.Color(0xE8E4DC);
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(
@@ -339,11 +445,15 @@ export default function Scene3D() {
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // Lighting
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(5, 8, 5);
+    // Lighting — warm, soft
+    scene.add(new THREE.AmbientLight(0xFFF5E6, 0.5));
+    const dirLight = new THREE.DirectionalLight(0xFFF8F0, 0.9);
+    dirLight.position.set(4, 8, 4);
     scene.add(dirLight);
+    // Fill light from the side for depth
+    const fillLight = new THREE.DirectionalLight(0xE8F0FF, 0.3);
+    fillLight.position.set(-3, 5, -2);
+    scene.add(fillLight);
 
     // Room
     scene.add(createRoom());
