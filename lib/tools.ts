@@ -212,6 +212,16 @@ export const tools: Tool[] = [
     keywords: ['标题生成', '文案写作', '自媒体', '短视频文案', '吸引眼球', '写作助手'],
   },
   {
+    id: 'earth-cannon',
+    name: '毁灭地球的电磁炮',
+    description: '太空汪星人的电磁炮小游戏',
+    icon: '🔫',
+    category: 'entertainment',
+    path: '/tools/earth-cannon',
+    tags: ['电磁炮', '毁灭', '地球', '游戏', '娱乐'],
+    keywords: ['电磁炮', '毁灭地球', '小游戏', '太空', '汪星人'],
+  },
+  {
     id: 'video-unwatermark',
     name: '视频去水印',
     description: '抖音/B站/西瓜视频无水印下载，支持多平台',
