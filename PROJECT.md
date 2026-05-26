@@ -72,6 +72,10 @@
 │   │   └── route.ts         # DeepSeek API 调用（爆款开头生成器）
 │   ├── api/video-parse/
 │   │   └── route.ts         # 视频去水印解析 API（抖音/B站/西瓜）
+│   ├── api/fast-download/
+│   │   ├── parse/route.ts   # 网盘链接解析（夸克/阿里/百度/115/天翼/迅雷）
+│   │   ├── probe/route.ts   # 下载链接探测（文件大小/Range支持）
+│   │   └── download/route.ts # 分片下载代理
 │   └── tools/
 │       ├── bmi/             # BMI 计算器
 │       ├── calculator/      # 专业计算器
@@ -260,6 +264,22 @@ const backUrl = `/?category=${tool.category}`;
 - 全屏编辑器：日期、心情、文字、照片
 - localStorage 键名：无（使用 IndexedDB）
 
+### 7.8 高速下载 (fast-download)
+- 多线程并行下载工具，支持 HTTP/HTTPS 直链
+- **网盘链接支持**: 自动识别夸克/阿里/百度/115/天翼/迅雷网盘分享链接
+- **解析后端**: 使用 alist 开源项目作为网盘解析服务（需自行部署）
+- **API 路由**: `/api/fast-download/parse` — 网盘链接解析为直链
+- **环境变量**: `ALIST_URL`（alist 服务地址）、`ALIST_TOKEN`（可选认证令牌）
+- 百度网盘、115网盘支持提取码输入
+- 未配置 alist 时网盘解析不可用，直链下载不受影响
+
+### 7.9 天机阁 (tianjige)
+- 3D 家居收纳工具，使用 Three.js 渲染房间和家具
+- **数据存储**: IndexedDB（`lib/tianjige-db.ts`）
+- **核心组件**: `components/tianjige/Scene3D.tsx`
+- **功能**: 预设场景（客厅/卧室/厨房等）、自定义场景管理、家具添加/移动、物品记录（名称/分类/数量/价格/照片）、场景数据导入/导出
+- **场景管理**: 底部工具栏"管理场景"按钮打开场景管理弹窗，支持新建/删除自定义场景、JSON 导出/导入（merge 模式）
+
 ---
 
 ## 8. 数据持久化
@@ -286,9 +306,14 @@ const backUrl = `/?category=${tool.category}`;
 DEEPSEEK_API_KEY=sk-xxx
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_MODEL=deepseek-chat
+
+# 网盘解析服务（alist）
+ALIST_URL=https://alist.example.com
+ALIST_TOKEN=
 ```
 
-- API 调用仅在服务端 (`/api/generate/route.ts`)
+- DeepSeek API 调用仅在服务端 (`/api/generate/route.ts`)
+- 网盘解析通过 alist 开源项目实现 (`/api/fast-download/parse/route.ts`)
 - 使用原生 `fetch()`，无第三方 AI SDK
 - API Key 不发送到客户端
 
@@ -306,6 +331,7 @@ DEEPSEEK_MODEL=deepseek-chat
 | docx | Word 文档操作 |
 | pptxgenjs | PPT 生成 |
 | xlsx | Excel 操作 |
+| alist | 网盘解析服务（外部部署，非 npm 包） |
 
 ---
 
@@ -346,6 +372,7 @@ lang: 'zh-CN'
 - [x] **计算器进制标签汉化**（BIN/OCT/DEC/HEX 已改为中文）
 - [x] **计算器手机端优化**（按钮高度、响应式布局已修复）
 - [x] **Office-to-PDF 中文支持**（自动加载 LXGW WenKai 字体，失败时降级为 ASCII）
+- [x] **分类切换动画逻辑**（sessionStorage 追踪已动画分类：首次进入蹦出动画，后续进入全部一起出现）
 - [ ] 右上角在线人数功能（计划接入实时统计）
 - [ ] Git 上传 + Vercel 部署
 - [ ] 开发工具分类的工具补充
