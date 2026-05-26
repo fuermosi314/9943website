@@ -39,17 +39,16 @@ function extractIconsFromPE(buffer: ArrayBuffer): ExtractedIcon[] {
   const resRVA = view.getUint32(dataDirOffset + 8, true);
   const resSize = view.getUint32(dataDirOffset + 12, true);
 
-  if (resRVA === 0 || resSize === 0) {
-    throw new Error('文件中未找到资源段');
-  }
-
   // 构建 section map: RVA -> file offset
-  type Section = { rva: number; size: number; raw: number };
+  type Section = { name: string; rva: number; size: number; raw: number };
   const sections: Section[] = [];
   for (let i = 0; i < numSections; i++) {
     const secOff = sectionStart + i * 40;
     if (secOff + 40 > buffer.byteLength) break;
+    const nameBytes = new Uint8Array(buffer, secOff, 8);
+    const name = new TextDecoder().decode(nameBytes).replace(/\0/g, '');
     sections.push({
+      name,
       rva: view.getUint32(secOff + 12, true),
       size: view.getUint32(secOff + 16, true),
       raw: view.getUint32(secOff + 20, true),
@@ -66,10 +65,31 @@ function extractIconsFromPE(buffer: ArrayBuffer): ExtractedIcon[] {
     return 0;
   }
 
-  // 资源段在文件中的起始偏移
-  const resFileBase = rvaToFile(resRVA);
+  // 找到资源段的文件偏移
+  let resFileBase = 0;
+
+  // 方法1: 使用 DataDirectory 指向的 RVA
+  if (resRVA !== 0 && resSize !== 0) {
+    const candidate = rvaToFile(resRVA);
+    if (candidate > 0 && candidate + 16 <= buffer.byteLength) {
+      const numNamed = view.getUint16(candidate + 12, true);
+      const numId = view.getUint16(candidate + 14, true);
+      if (numNamed + numId > 0 && numNamed + numId < 1000) {
+        resFileBase = candidate;
+      }
+    }
+  }
+
+  // 方法2: 直接查找 .rsrc 段
   if (resFileBase === 0) {
-    throw new Error('无法定位资源段');
+    const rsrcSection = sections.find((s) => s.name === '.rsrc');
+    if (rsrcSection && rsrcSection.raw > 0 && rsrcSection.raw + 16 <= buffer.byteLength) {
+      resFileBase = rsrcSection.raw;
+    }
+  }
+
+  if (resFileBase === 0) {
+    throw new Error('文件中未找到资源段');
   }
 
   // 读取资源目录，返回 { id, subOffset, isDir }[]
@@ -268,24 +288,11 @@ function extractIconFromLNK(buffer: ArrayBuffer): ExtractedIcon[] {
   }
 
   const flags = view.getUint32(20, true);
-  const hasIconLocation = (flags & 0x00000400) !== 0; // HasIconLocationFlag
-
-  if (!hasIconLocation) {
-    throw new Error('该快捷方式没有自定义图标');
-  }
 
   // ShellLinkHeader 固定 76 字节
   let offset = 76;
 
-  // 跳过 LinkInfo（如果有）
-  const hasLinkInfo = (flags & 0x00000002) !== 0;
-  if (hasLinkInfo && offset + 4 <= buffer.byteLength) {
-    const linkInfoSize = view.getUint32(offset, true);
-    if (linkInfoSize >= 4) {
-      offset += linkInfoSize;
-    }
-  }
-
+  // 按 LNK 规范顺序处理：LinkTargetIDList → LinkInfo → StringData
   // 跳过 LinkTargetIDList（如果有）
   const hasTargetIDList = (flags & 0x00000001) !== 0;
   if (hasTargetIDList && offset + 2 <= buffer.byteLength) {
@@ -293,8 +300,33 @@ function extractIconFromLNK(buffer: ArrayBuffer): ExtractedIcon[] {
     offset += 2 + idListSize;
   }
 
+  // 跳过 LinkInfo（如果有），同时提取目标路径
+  let targetPath = '';
+  const hasLinkInfo = (flags & 0x00000002) !== 0;
+  if (hasLinkInfo && offset + 4 <= buffer.byteLength) {
+    const linkInfoSize = view.getUint32(offset, true);
+    const linkInfoHeaderSize = view.getUint32(offset + 4, true);
+    const linkInfoFlags = view.getUint32(offset + 8, true);
+    // 提取 LocalBasePath（ASCII 目标路径）
+    if ((linkInfoFlags & 0x01) !== 0 && linkInfoHeaderSize >= 28) {
+      const localBasePathOffset = view.getUint32(offset + 16, true);
+      if (localBasePathOffset > 0 && offset + localBasePathOffset < buffer.byteLength) {
+        const pathStart = offset + localBasePathOffset;
+        const pathBytes: number[] = [];
+        for (let i = pathStart; i < buffer.byteLength && i < pathStart + 520; i++) {
+          const b = view.getUint8(i);
+          if (b === 0) break;
+          pathBytes.push(b);
+        }
+        targetPath = String.fromCharCode(...pathBytes);
+      }
+    }
+    if (linkInfoSize >= 4) {
+      offset += linkInfoSize;
+    }
+  }
+
   // StringData: 按顺序读取 UTF-16LE 字符串
-  // 每个字符串: 2字节字符数 + 字符数*2字节 UTF-16LE 数据
   const readString = (): string | null => {
     if (offset + 2 > buffer.byteLength) return null;
     const charCount = view.getUint16(offset, true);
@@ -316,22 +348,28 @@ function extractIconFromLNK(buffer: ArrayBuffer): ExtractedIcon[] {
   if (flags & 0x00000010) skipString(); // HasWorkingDir
   if (flags & 0x00000020) skipString(); // HasArguments
 
-  // 读取 IconLocation
-  const iconPath = readString();
-
-  if (!iconPath) {
-    throw new Error('快捷方式中未找到图标路径');
+  // 读取 IconLocation（如果有）
+  let iconPath = '';
+  if (flags & 0x00000400) {
+    iconPath = readString() || '';
   }
 
-  // iconPath 格式通常是 "C:\path\file.exe,0" 或 "file.exe,-1"
-  const parts = iconPath.split(',');
+  // 优先使用 iconPath，否则使用 targetPath
+  const effectivePath = iconPath || targetPath;
+
+  if (!effectivePath) {
+    throw new Error('该快捷方式没有自定义图标，也未能解析到目标程序路径');
+  }
+
+  // 路径格式: "C:\path\file.exe,0" 或 "C:\path\file.exe"
+  const parts = effectivePath.split(',');
   const filePath = parts[0].trim();
   const iconIndex = parts.length > 1 ? parseInt(parts[1]) || 0 : 0;
 
   // 返回提示信息（无法直接访问文件系统）
   throw new Error(
-    `快捷方式指向图标：${filePath}${iconIndex !== 0 ? ` (索引 ${iconIndex})` : ''}。` +
-    `由于浏览器安全限制，无法直接读取该文件。请直接上传 ${filePath.split('\\').pop()} 文件来提取图标。`
+    `快捷方式指向：${filePath}${iconIndex !== 0 ? ` (图标索引 ${iconIndex})` : ''}。` +
+    `由于浏览器安全限制，无法直接读取该文件。请找到该文件并直接上传 ${filePath.split('\\').pop()} 来提取图标。`
   );
 }
 
