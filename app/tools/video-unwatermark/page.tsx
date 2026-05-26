@@ -69,6 +69,11 @@ export default function VideoUnwatermarkPage() {
     try {
       const resp = await fetch(imgUrl);
       const blob = await resp.blob();
+      // 动图直接打开原图保留动画
+      if (blob.type === 'image/gif' || imgUrl.includes('.gif')) {
+        window.open(imgUrl, '_blank');
+        return;
+      }
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -82,13 +87,40 @@ export default function VideoUnwatermarkPage() {
     }
   }, [result]);
 
+  const [pasteError, setPasteError] = useState(false);
+
   const handlePaste = useCallback(async () => {
     try {
       const text = await navigator.clipboard.readText();
-      setUrl(text);
+      if (text) {
+        setUrl(text);
+        return;
+      }
     } catch {
-      // clipboard read failed silently
+      // clipboard API failed, try fallback
     }
+    // Fallback: 创建临时 textarea 让用户手动粘贴
+    const ta = document.createElement('textarea');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '50%';
+    document.body.appendChild(ta);
+    ta.focus();
+    try {
+      document.execCommand('paste');
+      const text = ta.value;
+      if (text) {
+        setUrl(text);
+        document.body.removeChild(ta);
+        return;
+      }
+    } catch {
+      // execCommand failed
+    }
+    document.body.removeChild(ta);
+    // 最终提示用户手动粘贴
+    setPasteError(true);
+    setTimeout(() => setPasteError(false), 3000);
   }, []);
 
   return (
@@ -158,6 +190,13 @@ export default function VideoUnwatermarkPage() {
                 </span>
               ))}
           </div>
+
+          {/* 粘贴失败提示 */}
+          {pasteError && (
+            <div className="mt-2 px-3 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-yellow-400 text-xs animate-fade-in">
+              无法自动粘贴，请长按输入框手动粘贴链接
+            </div>
+          )}
         </div>
 
         {/* 解析结果 */}
