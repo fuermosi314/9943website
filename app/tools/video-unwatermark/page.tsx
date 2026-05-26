@@ -255,9 +255,16 @@ export default function VideoUnwatermarkPage() {
                   )}
                 </div>
 
-                <p className="text-xs text-white/30 mt-3 text-center">
-                  点击下载后，长按视频保存到相册，或右键另存为
-                </p>
+                {result.type === 'images' && (
+                  <p className="text-xs text-white/30 mt-3 text-center">
+                    图文作品由平台提供静态图片，下载为 WebP 格式
+                  </p>
+                )}
+                {result.type !== 'images' && (
+                  <p className="text-xs text-white/30 mt-3 text-center">
+                    点击下载后，长按视频保存到相册，或右键另存为
+                  </p>
+                )}
               </div>
             ) : (
               <div>

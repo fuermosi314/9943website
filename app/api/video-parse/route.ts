@@ -43,57 +43,46 @@ const HEADERS = {
   Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
 };
 
-// ===== 抖音解析（多策略） =====
+// ===== 抖音解析（多策略并行） =====
 async function parseDouyin(url: string): Promise<ParseResult> {
-  // 策略 1: 尝试通过移动端 API 获取
-  try {
-    const resp = await fetch(url, {
-      headers: {
-        ...HEADERS,
-        'User-Agent':
-          'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
-      },
-      redirect: 'follow',
-      signal: AbortSignal.timeout(10000),
-    });
-
-    const finalUrl = resp.url || url;
-
-    // 从 URL 中提取 aweme_id（支持 /video/{id}、/note/{id}、/discover?... 等）
-    const idMatch =
-      finalUrl.match(/\/video\/(\d+)/) ||
-      finalUrl.match(/\/note\/(\d+)/) ||
-      finalUrl.match(/aweme_id=(\d+)/) ||
-      finalUrl.match(/\/(\d{15,})/); // 15+位数字通常是 aweme_id
-    if (idMatch) {
-      const awemeId = idMatch[1];
-      // 尝试通过 aweme_id 直接调用详情 API
-      const detailResult = await fetchDouyinDetail(awemeId);
-      if (detailResult.success) return detailResult;
-    }
-  } catch {
-    // 策略 1 失败，继续尝试
-  }
-
-  // 策略 2: 通过分享页解析
-  try {
-    const resp = await fetch(url, {
-      headers: HEADERS,
-      redirect: 'manual',
-      signal: AbortSignal.timeout(10000),
-    });
-
-    let finalUrl = url;
-    if (resp.status >= 300 && resp.status < 400) {
-      finalUrl = resp.headers.get('location') || url;
-    }
-
-    const idMatch =
-      finalUrl.match(/\/video\/(\d+)/) ||
-      finalUrl.match(/\/note\/(\d+)/) ||
-      finalUrl.match(/aweme_id=(\d+)/);
-
-    if (idMatch) {
+  // 两个策略并行执行，谁先成功用谁
+  const [strategy1, strategy2] = await Promise.allSettled([
+    // 策略 1: 移动端 UA 跟随重定向 → 提取 aweme_id → 调详情 API
+    (async (): Promise<ParseResult> => {
+      const resp = await fetch(url, {
+        headers: {
+          ...HEADERS,
+          'User-Agent':
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+        },
+        redirect: 'follow',
+        signal: AbortSignal.timeout(5000),
+      });
+      const finalUrl = resp.url || url;
+      const idMatch =
+        finalUrl.match(/\/video\/(\d+)/) ||
+        finalUrl.match(/\/note\/(\d+)/) ||
+        finalUrl.match(/aweme_id=(\d+)/) ||
+        finalUrl.match(/\/(\d{15,})/);
+      if (!idMatch) throw new Error('no aweme_id');
+      return fetchDouyinDetail(idMatch[1]);
+    })(),
+    // 策略 2: 手动重定向提取 aweme_id → 分享页解析
+    (async (): Promise<ParseResult> => {
+      const resp = await fetch(url, {
+        headers: HEADERS,
+        redirect: 'manual',
+        signal: AbortSignal.timeout(5000),
+      });
+      let finalUrl = url;
+      if (resp.status >= 300 && resp.status < 400) {
+        finalUrl = resp.headers.get('location') || url;
+      }
+      const idMatch =
+        finalUrl.match(/\/video\/(\d+)/) ||
+        finalUrl.match(/\/note\/(\d+)/) ||
+        finalUrl.match(/aweme_id=(\d+)/);
+      if (!idMatch) throw new Error('no aweme_id');
       const awemeId = idMatch[1];
       const shareUrl = `https://www.iesdouyin.com/share/note/${awemeId}/`;
       const pageResp = await fetch(shareUrl, {
@@ -102,26 +91,28 @@ async function parseDouyin(url: string): Promise<ParseResult> {
           'User-Agent':
             'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
         },
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(5000),
       });
-
       const html = await pageResp.text();
       const routerMatch = html.match(/window\._ROUTER_DATA\s*=\s*(\{[\s\S]*?\})\s*<\/script>/);
-      if (routerMatch) {
-        const routerData = JSON.parse(routerMatch[1]);
-        const pageData = routerData?.loaderData?.['note_(id)/page'];
-        const item = pageData?.videoInfoRes?.item_list?.[0];
+      if (!routerMatch) throw new Error('no router data');
+      const routerData = JSON.parse(routerMatch[1]);
+      const pageData = routerData?.loaderData?.['note_(id)/page'];
+      const item = pageData?.videoInfoRes?.item_list?.[0];
+      if (!item) throw new Error('no item');
+      return extractDouyinItem(item);
+    })(),
+  ]);
 
-        if (item) {
-          return extractDouyinItem(item);
-        }
-      }
-    }
-  } catch {
-    // 策略 2 失败
+  // 返回第一个成功的结果
+  for (const r of [strategy1, strategy2]) {
+    if (r.status === 'fulfilled' && r.value.success) return r.value;
+  }
+  // 如果有成功但没数据的，返回那个
+  for (const r of [strategy1, strategy2]) {
+    if (r.status === 'fulfilled') return r.value;
   }
 
-  // 所有策略失败，返回 fallback
   return {
     success: false,
     platform: 'douyin',
@@ -139,7 +130,7 @@ async function fetchDouyinDetail(awemeId: string): Promise<ParseResult> {
         ...HEADERS,
         Referer: 'https://www.douyin.com/',
       },
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(5000),
     });
     const data = await resp.json();
     const item = data?.item_list?.[0];
