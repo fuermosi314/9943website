@@ -4,15 +4,16 @@ import { Tool } from '@/lib/tools';
 interface ToolCardProps {
   tool: Tool;
   index?: number;
+  animated?: boolean;
 }
 
-export default function ToolCard({ tool, index = 0 }: ToolCardProps) {
+export default function ToolCard({ tool, index = 0, animated = true }: ToolCardProps) {
   const isExternal = tool.path.startsWith('http');
 
   const card = (
     <div
-      className="group relative glass-card p-4 sm:p-6 cursor-pointer transition-all duration-300 hover:transform hover:scale-105 animate-fade-in h-full"
-      style={{ animationDelay: `${index * 80}ms` }}
+      className={`group relative glass-card p-4 sm:p-6 cursor-pointer transition-all duration-300 hover:transform hover:scale-105 h-full${animated ? ' animate-fade-in' : ''}`}
+      style={animated ? { animationDelay: `${index * 80}ms` } : undefined}
     >
       <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#fb6400]/10 to-[#ff8c00]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 

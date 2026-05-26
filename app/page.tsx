@@ -20,6 +20,13 @@ function HomeContent() {
   const router = useRouter();
   const [activeCategory, setActiveCategory] = useState(searchParams.get('category') || 'all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [animated, setAnimated] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    const played = sessionStorage.getItem('tools-animation-played');
+    if (played) return false;
+    sessionStorage.setItem('tools-animation-played', '1');
+    return true;
+  });
 
   useEffect(() => {
     setActiveCategory(searchParams.get('category') || 'all');
@@ -77,7 +84,7 @@ function HomeContent() {
         {/* Tools Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {displayTools.map((tool, index) => (
-            <ToolCard key={tool.id} tool={tool} index={index} />
+            <ToolCard key={tool.id} tool={tool} index={index} animated={animated} />
           ))}
         </div>
 
