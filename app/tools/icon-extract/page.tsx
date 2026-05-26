@@ -374,14 +374,19 @@ function extractIconFromLNK(buffer: ArrayBuffer): ExtractedIcon[] {
 
   // 路径格式: "C:\path\file.exe,0" 或 "C:\path\file.exe"
   const parts = effectivePath.split(',');
-  const filePath = parts[0].trim();
+  const fullPath = parts[0].trim();
   const iconIndex = parts.length > 1 ? parseInt(parts[1]) || 0 : 0;
+
+  // 取文件所在目录（去掉末尾反斜杠后截取目录部分）
+  const lastSep = Math.max(fullPath.lastIndexOf('\\'), fullPath.lastIndexOf('/'));
+  const dirPath = lastSep > 0 ? fullPath.substring(0, lastSep + 1) : fullPath;
+  const fileName = fullPath.split('\\').pop() || fullPath.split('/').pop() || fullPath;
 
   // 返回路径信息（UI 层处理显示）
   throw new Error(JSON.stringify({
     type: 'lnk_target',
-    filePath,
-    fileName: filePath.split('\\').pop() || filePath.split('/').pop() || filePath,
+    filePath: dirPath,
+    fileName,
     iconIndex,
   }));
 }
