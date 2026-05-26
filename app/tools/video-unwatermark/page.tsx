@@ -298,6 +298,30 @@ export default function VideoUnwatermarkPage() {
             <li>• 请尊重原创作者版权，仅供个人学习参考使用</li>
           </ul>
         </div>
+
+        {/* 会员视频提示 */}
+        <div className="glass-card p-6 mt-4 animate-slide-up border border-[#fb6400]/20" style={{ animationDelay: '200ms' }}>
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#fb6400]/20 flex items-center justify-center shrink-0">
+              <span className="text-lg">🎬</span>
+            </div>
+            <div>
+              <h3 className="text-white font-semibold mb-1">会员视频无法解析？</h3>
+              <p className="text-white/50 text-sm mb-3">
+                大会员、VIP 等付费视频受版权保护，无法通过链接解析获取。如需观看，请前往网站工具中使用「爱看机器人」进行搜索观看。
+              </p>
+              <a
+                href="/tools/site/aikanbot"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#fb6400] bg-[#fb6400]/10 rounded-lg hover:bg-[#fb6400]/20 transition-colors"
+              >
+                前往爱看机器人
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </a>
+            </div>
+          </div>
+        </div>
       </main>
     </div>
   );
