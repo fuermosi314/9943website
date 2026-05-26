@@ -1031,11 +1031,11 @@ export default function EarthCannonPage() {
     smoke: [] as Smoke[],
     embers: [] as Ember[],
     lava: [] as Lava[],
-    mode: 'multi' as 'multi' | 'charge',
     shotCount: 0,
     damageLevel: 0,
     isCharging: false,
     chargeStartTime: 0,
+    fullChargeShot: false,
     startTime: 0,
     screenShake: 0,
     lastFrame: 0,
@@ -1215,13 +1215,15 @@ export default function EarthCannonPage() {
         if (l.life <= 0) state.lava.splice(i, 1);
       }
 
-      // 蓄力模式计时
-      if (state.isCharging && state.mode === 'charge') {
-        const cl = Math.min((now - state.chargeStartTime) / 3000, 1);
+      // 蓄力计时（动态蓄力时间）
+      if (state.isCharging) {
+        const chargeTime = 0.5 + (1 - state.damageLevel) * 2.5;
+        const cl = Math.min((now - state.chargeStartTime) / (chargeTime * 1000), 1);
         setChargeLevel(cl);
         // 蓄力完成自动发射
         if (cl >= 1) {
           state.isCharging = false;
+          state.fullChargeShot = true;
           state.phase = 'charging';
           state.phaseTime = now;
           setShowButton(false);
@@ -1405,7 +1407,7 @@ export default function EarthCannonPage() {
         state.phase = 'impact'; state.phaseTime = now; state.screenShake = 1.8;
         setPhase('impact');
       } else if (state.phase === 'impact' && now - state.phaseTime > 500) {
-        const isFullDestruction = state.mode === 'charge' || state.shotCount >= 5;
+        const isFullDestruction = state.fullChargeShot || state.shotCount >= 5;
         if (isFullDestruction) {
           // 全面爆炸
           state.phase = 'explosion'; state.phaseTime = now; state.screenShake = 2.8;
@@ -1553,64 +1555,69 @@ export default function EarthCannonPage() {
       state.phase = 'idle';
       state.particles = []; state.debris = []; state.meteors = [];
       state.smoke = []; state.embers = []; state.lava = [];
-      state.screenShake = 0; state.shotCount = 0; state.damageLevel = 0;
+      state.screenShake = 0; state.shotCount = 0; state.damageLevel = 0; state.fullChargeShot = false;
       earthCache = null; nebulaCache = null;
       state.stars = initStars(window.innerWidth, window.innerHeight);
       state.startTime = performance.now();
     }
+    state.shotCount++;
     state.phase = 'charging';
     state.phaseTime = performance.now();
-    if (state.mode === 'multi') state.shotCount++;
     setShowButton(false);
     setPhase('charging');
   }, [initStars]);
 
-  // 蓄力模式 — 按住开始
-  const handleChargeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+  // 按住开始 — 进入蓄力待判断
+  const handlePressStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     const state = stateRef.current;
-    if (state.mode !== 'charge' || state.phase !== 'idle') return;
+    if (state.phase !== 'idle' && state.phase !== 'aftermath') return;
+    if (state.phase === 'aftermath') {
+      state.phase = 'idle';
+      state.particles = []; state.debris = []; state.meteors = [];
+      state.smoke = []; state.embers = []; state.lava = [];
+      state.screenShake = 0; state.shotCount = 0; state.damageLevel = 0; state.fullChargeShot = false;
+      earthCache = null; nebulaCache = null;
+      state.stars = initStars(window.innerWidth, window.innerHeight);
+      state.startTime = performance.now();
+    }
     state.isCharging = true;
     state.chargeStartTime = performance.now();
     setChargeInsufficient(false);
-  }, []);
+  }, [initStars]);
 
-  // 蓄力模式 — 松手触发
-  const handleChargeEnd = useCallback(() => {
+  // 松手 — 判断点击 or 蓄力
+  const handlePressEnd = useCallback(() => {
     const state = stateRef.current;
-    if (!state.isCharging || state.mode !== 'charge') return;
+    if (!state.isCharging) return;
     const elapsed = performance.now() - state.chargeStartTime;
     state.isCharging = false;
-    if (elapsed >= 3000) {
-      // 蓄力完成 — 全力发射
+    setChargeLevel(0);
+
+    if (elapsed < 200) {
+      // 快速点击 → 触发射击
+      state.shotCount++;
+      state.fullChargeShot = false;
       state.phase = 'charging';
       state.phaseTime = performance.now();
       setShowButton(false);
       setPhase('charging');
-      setChargeLevel(0);
     } else {
-      // 蓄能不足
-      setChargeLevel(0);
-      setChargeInsufficient(true);
-      setTimeout(() => setChargeInsufficient(false), 1500);
+      const chargeTime = 0.5 + (1 - state.damageLevel) * 2.5;
+      if (elapsed >= chargeTime * 1000) {
+        // 蓄力完成 → 全力发射
+        state.fullChargeShot = true;
+        state.phase = 'charging';
+        state.phaseTime = performance.now();
+        setShowButton(false);
+        setPhase('charging');
+      } else {
+        // 蓄能不足
+        setChargeInsufficient(true);
+        setTimeout(() => setChargeInsufficient(false), 1500);
+      }
     }
   }, []);
-
-  const handleModeSwitch = useCallback((mode: 'multi' | 'charge') => {
-    const state = stateRef.current;
-    if (state.phase !== 'idle' && state.phase !== 'aftermath') return;
-    state.mode = mode;
-    state.phase = 'idle';
-    state.shotCount = 0; state.damageLevel = 0;
-    state.particles = []; state.debris = []; state.meteors = [];
-    state.smoke = []; state.embers = []; state.lava = [];
-    state.screenShake = 0; state.isCharging = false;
-    earthCache = null; nebulaCache = null;
-    state.stars = initStars(window.innerWidth, window.innerHeight);
-    state.startTime = performance.now();
-    setShowButton(true); setPhase('idle');
-    setChargeLevel(0); setChargeInsufficient(false);
-  }, [initStars]);
 
   return (
     <div className="min-h-screen relative z-10">
@@ -1627,27 +1634,8 @@ export default function EarthCannonPage() {
       <main className="relative w-full h-screen overflow-hidden">
         <canvas ref={canvasRef} className="absolute inset-0" />
         <div className="absolute inset-0 flex flex-col items-center justify-end pb-16 pointer-events-none">
-          {/* 模式选择 — 仅 idle/aftermath 显示 */}
-          {(stateRef.current.phase === 'idle' || stateRef.current.phase === 'aftermath') && (
-            <div className="flex gap-3 mb-4 pointer-events-auto">
-              {(['multi', 'charge'] as const).map(m => (
-                <button
-                  key={m}
-                  onClick={() => handleModeSwitch(m)}
-                  className={`px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
-                    stateRef.current.mode === m
-                      ? 'bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white shadow-lg shadow-orange-500/30'
-                      : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white/80'
-                  }`}
-                >
-                  {m === 'multi' ? '多次轰炸' : '蓄力轰炸'}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* 蓄力进度条 — charge 模式蓄力中 */}
-          {stateRef.current.mode === 'charge' && stateRef.current.isCharging && (
+          {/* 蓄力进度条 */}
+          {stateRef.current.isCharging && (
             <div className="mb-4 animate-fade-in">
               <p className="text-white/60 text-xs mb-1.5">蓄能中... {Math.floor(chargeLevel * 100)}%</p>
               <div className="w-52 h-2.5 rounded-full bg-white/10 overflow-hidden">
@@ -1667,34 +1655,26 @@ export default function EarthCannonPage() {
             </div>
           )}
 
-          {/* 主按钮区域 */}
+          {/* 主按钮 */}
           {showButton && (
             <div className="text-center pointer-events-auto animate-fade-in">
-              {stateRef.current.mode === 'charge' && stateRef.current.phase !== 'aftermath' ? (
-                <button
-                  onMouseDown={handleChargeStart}
-                  onMouseUp={handleChargeEnd}
-                  onMouseLeave={handleChargeEnd}
-                  onTouchStart={handleChargeStart}
-                  onTouchEnd={handleChargeEnd}
-                  className="px-12 py-4 text-xl font-bold text-white rounded-2xl bg-gradient-to-r from-[#fb6400] to-[#ff8c00] hover:scale-105 hover:shadow-[0_0_40px_rgba(251,100,0,0.5)] active:scale-95 transition-all duration-300 shadow-lg shadow-orange-500/30 mb-3 select-none"
-                >
-                  ⚡ 按住蓄力
-                </button>
-              ) : (
-                <button
-                  onClick={handleFire}
-                  className="px-12 py-4 text-xl font-bold text-white rounded-2xl bg-gradient-to-r from-[#fb6400] to-[#ff8c00] hover:scale-105 hover:shadow-[0_0_40px_rgba(251,100,0,0.5)] active:scale-95 transition-all duration-300 shadow-lg shadow-orange-500/30 mb-3"
-                >
-                  {stateRef.current.phase === 'aftermath' ? '🔥 再来一次' : `🔥 发射 (${stateRef.current.shotCount}/5)`}
-                </button>
-              )}
+              <button
+                onMouseDown={handlePressStart}
+                onMouseUp={handlePressEnd}
+                onMouseLeave={handlePressEnd}
+                onTouchStart={handlePressStart}
+                onTouchEnd={handlePressEnd}
+                className="px-12 py-4 text-xl font-bold text-white rounded-2xl bg-gradient-to-r from-[#fb6400] to-[#ff8c00] hover:scale-105 hover:shadow-[0_0_40px_rgba(251,100,0,0.5)] active:scale-95 transition-all duration-300 shadow-lg shadow-orange-500/30 mb-3 select-none"
+              >
+                {stateRef.current.phase === 'aftermath' ? '🔥 再来一次' :
+                  stateRef.current.shotCount > 0 ? `🔥 继续轰炸 (${stateRef.current.shotCount}/5)` :
+                  '🔥 发射'}
+              </button>
               <p className="text-white/40 text-sm">
                 {stateRef.current.phase === 'aftermath' ? '地球已被毁灭' :
                   chargeInsufficient ? '蓄能不足，充能失败' :
-                  stateRef.current.mode === 'charge' ? '按住按钮蓄力 3 秒，一发射穿地球' :
                   stateRef.current.damageLevel > 0 ? `已造成损伤 (${stateRef.current.shotCount}/5)` :
-                  '点击发射电磁炮，轰炸地球'}
+                  '点击发射，或按住蓄力一发毁灭地球'}
               </p>
             </div>
           )}
