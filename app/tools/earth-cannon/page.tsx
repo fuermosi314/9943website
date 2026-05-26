@@ -1236,8 +1236,7 @@ export default function EarthCannonPage() {
       // === 绘制场景 ===
       // 地球
       if (state.phase !== 'explosion' && state.phase !== 'aftermath') {
-        const isFullDestruction = state.fullChargeShot || state.shotCount >= 5;
-        const cracked = isFullDestruction && (state.phase === 'impact' || state.damageLevel > 0);
+        const cracked = state.phase === 'impact' || state.damageLevel > 0;
         const crackP = state.phase === 'impact'
           ? Math.min((now - state.phaseTime) / 500, 1) * (0.8 + state.damageLevel * 0.2)
           : state.damageLevel;

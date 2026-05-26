@@ -1,5 +1,5 @@
 // lib/simple-note-db.ts
-export type Mood = 'happy' | 'normal' | 'sad' | 'angry' | 'excited';
+export type Mood = string;
 
 export interface PhotoRef {
   id: string;

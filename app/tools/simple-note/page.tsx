@@ -10,18 +10,6 @@ import {
   generateThumbnail,
 } from '@/lib/simple-note-db';
 
-const MOODS: { value: Mood; emoji: string; color: string; label: string }[] = [
-  { value: 'happy', emoji: '😊', color: '#FFD93D', label: '开心' },
-  { value: 'excited', emoji: '🤩', color: '#FF6B6B', label: '兴奋' },
-  { value: 'normal', emoji: '😐', color: '#A0A0A0', label: '普通' },
-  { value: 'sad', emoji: '😢', color: '#74B9FF', label: '难过' },
-  { value: 'angry', emoji: '😠', color: '#E17055', label: '生气' },
-];
-
-function getMoodInfo(mood: Mood) {
-  return MOODS.find(m => m.value === mood) || MOODS[2];
-}
-
 function formatDate(date: string) {
   const d = new Date(date);
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
@@ -114,7 +102,6 @@ function EntryCard({
   onEdit: (entry: DiaryEntry) => void;
   onPhotoClick: (photoId: string) => void;
 }) {
-  const moodInfo = getMoodInfo(entry.mood);
   const summary = entry.content.length > 60
     ? entry.content.slice(0, 60) + '...'
     : entry.content || '(无内容)';
@@ -127,13 +114,10 @@ function EntryCard({
       className="w-full text-left glass-card p-4 hover:border-[rgba(251,100,0,0.3)] transition-all"
     >
       <div className="flex items-start gap-3">
-        <span className="text-2xl shrink-0">{moodInfo.emoji}</span>
+        {entry.mood && <span className="text-2xl shrink-0">{entry.mood}</span>}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-white/40 text-xs">{formatTime(entry.updatedAt)}</span>
-            <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ backgroundColor: moodInfo.color + '22', color: moodInfo.color }}>
-              {moodInfo.label}
-            </span>
           </div>
           <p className="text-white/80 text-sm leading-relaxed">{summary}</p>
           {entry.photos.length > 0 && (
@@ -202,34 +186,6 @@ function EntryList({
   );
 }
 
-function MoodPicker({
-  value,
-  onChange,
-}: {
-  value: Mood;
-  onChange: (mood: Mood) => void;
-}) {
-  return (
-    <div className="flex gap-2">
-      {MOODS.map(m => (
-        <button
-          key={m.value}
-          onClick={() => onChange(m.value)}
-          className={`w-10 h-10 rounded-full flex items-center justify-center text-xl transition-all ${
-            value === m.value
-              ? 'scale-110 ring-2'
-              : 'opacity-50 hover:opacity-80'
-          }`}
-          style={value === m.value ? { borderColor: m.color, boxShadow: `0 0 0 2px ${m.color}` } : undefined}
-          title={m.label}
-        >
-          {m.emoji}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 function PhotoGrid({
   photos,
   onAdd,
@@ -288,7 +244,7 @@ function EntryEditor({
   onClose: () => void;
 }) {
   const [date, setDate] = useState(entry?.date || selectedDate);
-  const [mood, setMood] = useState<Mood>(entry?.mood || 'normal');
+  const [mood, setMood] = useState<Mood>(entry?.mood || '😊');
   const [content, setContent] = useState(entry?.content || '');
   const [photos, setPhotos] = useState<{ id: string; thumbnail: string; blob?: Blob; width: number; height: number }[]>(
     entry?.photos.map(p => ({ ...p })) || []
@@ -355,7 +311,14 @@ function EntryEditor({
 
         <div>
           <label className="text-white/40 text-xs mb-1 block">心情</label>
-          <MoodPicker value={mood} onChange={setMood} />
+          <input
+            type="text"
+            value={mood}
+            onChange={(e) => setMood(e.target.value)}
+            placeholder="输入表情或颜文字，如 😊 (◕‿◕)"
+            maxLength={20}
+            className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#fb6400] placeholder-white/20"
+          />
         </div>
 
         <div>
