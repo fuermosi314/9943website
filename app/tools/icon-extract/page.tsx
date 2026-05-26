@@ -377,11 +377,13 @@ function extractIconFromLNK(buffer: ArrayBuffer): ExtractedIcon[] {
   const filePath = parts[0].trim();
   const iconIndex = parts.length > 1 ? parseInt(parts[1]) || 0 : 0;
 
-  // 返回提示信息（无法直接访问文件系统）
-  throw new Error(
-    `快捷方式指向：${filePath}${iconIndex !== 0 ? ` (图标索引 ${iconIndex})` : ''}。` +
-    `由于浏览器安全限制，无法直接读取该文件。请找到该文件并直接上传 ${filePath.split('\\').pop()} 来提取图标。`
-  );
+  // 返回路径信息（UI 层处理显示）
+  throw new Error(JSON.stringify({
+    type: 'lnk_target',
+    filePath,
+    fileName: filePath.split('\\').pop() || filePath.split('/').pop() || filePath,
+    iconIndex,
+  }));
 }
 
 // ===== 主处理函数 =====
@@ -417,12 +419,15 @@ export default function IconExtractPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
+  const [lnkTarget, setLnkTarget] = useState<{ filePath: string; fileName: string; iconIndex: number } | null>(null);
+  const [copied, setCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processFile = useCallback(async (selectedFile: File) => {
     setFile(selectedFile);
     setIcons([]);
     setError('');
+    setLnkTarget(null);
     setLoading(true);
 
     try {
@@ -434,7 +439,17 @@ export default function IconExtractPage() {
       results.sort((a, b) => b.width - a.width);
       setIcons(results);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '提取失败');
+      const msg = err instanceof Error ? err.message : '提取失败';
+      try {
+        const parsed = JSON.parse(msg);
+        if (parsed.type === 'lnk_target') {
+          setLnkTarget(parsed);
+        } else {
+          setError(msg);
+        }
+      } catch {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -531,6 +546,55 @@ export default function IconExtractPage() {
                 <h3 className="text-white font-medium mb-1">提取失败</h3>
                 <p className="text-sm text-white/50">{error}</p>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* LNK 快捷方式指引 */}
+        {lnkTarget && (
+          <div className="glass-card p-6 mb-6 animate-fade-in border border-[#fb6400]/30">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-[#fb6400]/20 flex items-center justify-center shrink-0">
+                <span className="text-lg">🔗</span>
+              </div>
+              <div>
+                <h3 className="text-white font-medium mb-1">快捷方式已解析</h3>
+                <p className="text-sm text-white/50">浏览器无法直接读取本地文件，请按以下步骤操作：</p>
+              </div>
+            </div>
+
+            {/* 操作步骤 */}
+            <div className="space-y-3 mb-4">
+              <div className="flex items-start gap-3 bg-white/5 rounded-xl px-4 py-3">
+                <span className="shrink-0 w-6 h-6 rounded-full bg-[#fb6400]/20 text-[#fb6400] text-xs font-bold flex items-center justify-center">1</span>
+                <div className="text-sm text-white/70">
+                  <span className="text-white/90">复制下方路径</span>，在文件资源管理器的地址栏粘贴并回车
+                </div>
+              </div>
+              <div className="flex items-start gap-3 bg-white/5 rounded-xl px-4 py-3">
+                <span className="shrink-0 w-6 h-6 rounded-full bg-[#fb6400]/20 text-[#fb6400] text-xs font-bold flex items-center justify-center">2</span>
+                <div className="text-sm text-white/70">
+                  找到文件 <span className="text-white font-medium">{lnkTarget.fileName}</span>，将其拖入上方上传区域
+                </div>
+              </div>
+            </div>
+
+            {/* 路径 + 复制按钮 */}
+            <div className="flex items-center gap-2 bg-black/30 rounded-xl px-4 py-3">
+              <div className="flex-1 overflow-hidden">
+                <p className="text-[10px] text-white/30 mb-1">文件路径</p>
+                <p className="text-sm text-[#fb6400] font-mono truncate">{lnkTarget.filePath}</p>
+              </div>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(lnkTarget.filePath);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-[#fb6400]/20 hover:bg-[#fb6400]/30 text-[#fb6400]"
+              >
+                {copied ? '✓ 已复制' : '复制路径'}
+              </button>
             </div>
           </div>
         )}
