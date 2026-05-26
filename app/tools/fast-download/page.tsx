@@ -213,7 +213,7 @@ export default function FastDownloadPage() {
         <div className="text-center mb-8 animate-fade-in">
           <div className="text-4xl mb-3">⚡</div>
           <h2 className="text-2xl font-bold text-white mb-2">高速下载</h2>
-          <p className="text-white/40 text-sm">多线程并行下载，榨干你的带宽</p>
+          <p className="text-white/40 text-sm">多线程并行下载，充分利用带宽</p>
         </div>
 
         {/* 输入区域 */}
