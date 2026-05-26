@@ -279,6 +279,11 @@ export default function Scene3D() {
     name: '', category: '日用', quantity: 1, price: 0,
     purchaseDate: '', note: '', photos: [] as PhotoRef[],
   });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<{
+    scene: Scene; furniture: Furniture; item: Item;
+  }>>([]);
+  const [pendingHighlight, setPendingHighlight] = useState<string | null>(null);
 
   // ── Load / init scenes ──────────────────────────────────────────
   useEffect(() => {
@@ -401,6 +406,41 @@ export default function Scene3D() {
     }
   }, [scenes, activeSceneId]);
 
+  // ── Pending highlight effect (after scene switch from search) ────
+  useEffect(() => {
+    if (!pendingHighlight) return;
+    const timer = setTimeout(() => {
+      const scene = sceneRef.current;
+      if (!scene) return;
+      scene.traverse(obj => {
+        if (obj.userData?.furnitureId === pendingHighlight) {
+          obj.traverse(child => {
+            if (child instanceof THREE.Mesh) {
+              child.userData._origMaterial = child.material;
+              child.material = new THREE.MeshBasicMaterial({
+                color: new THREE.Color('#fb6400'),
+                transparent: true,
+                opacity: 0.3,
+              });
+            }
+          });
+          highlightedRef.current = obj;
+          setTimeout(() => {
+            obj.traverse(child => {
+              if (child instanceof THREE.Mesh && child.userData._origMaterial) {
+                child.material = child.userData._origMaterial;
+                delete child.userData._origMaterial;
+              }
+            });
+            highlightedRef.current = null;
+          }, 3000);
+        }
+      });
+      setPendingHighlight(null);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [pendingHighlight, activeSceneId]);
+
   // ── Click handler for furniture detection ───────────────────────
   const handleClick = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const container = containerRef.current;
@@ -484,6 +524,46 @@ export default function Scene3D() {
             </option>
           ))}
         </select>
+      </div>
+
+      {/* Search bar */}
+      <div className="absolute top-4 left-4 z-10 max-w-xs w-64">
+        <input type="text" placeholder="🔍 搜索物品..."
+          value={searchQuery} onChange={e => {
+            const q = e.target.value;
+            setSearchQuery(q);
+            if (!q.trim()) { setSearchResults([]); return; }
+            const results: Array<{ scene: Scene; furniture: Furniture; item: Item }> = [];
+            for (const scene of scenes) {
+              for (const furniture of scene.furniture) {
+                for (const item of furniture.items) {
+                  if (item.name.toLowerCase().includes(q.toLowerCase())) {
+                    results.push({ scene, furniture, item });
+                  }
+                }
+              }
+            }
+            setSearchResults(results);
+          }}
+          className="w-full bg-black/50 backdrop-blur text-white px-3 py-2 rounded-lg border border-white/20 text-sm placeholder-white/40 focus:border-[#fb6400] outline-none" />
+
+        {/* Search results dropdown */}
+        {searchResults.length > 0 && (
+          <div className="mt-1 bg-[#1a1a2e] border border-white/10 rounded-xl max-h-60 overflow-y-auto">
+            {searchResults.map((r, i) => (
+              <button key={i} onClick={() => {
+                setActiveSceneId(r.scene.id);
+                setSearchQuery('');
+                setSearchResults([]);
+                setPendingHighlight(r.furniture.id);
+              }}
+                className="w-full px-4 py-3 text-left hover:bg-white/5 border-b border-white/5 last:border-0 transition-colors">
+                <div className="text-white text-sm">{r.item.name} ×{r.item.quantity}</div>
+                <div className="text-white/30 text-xs">{r.scene.emoji} {r.scene.name} › {r.furniture.name}</div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Bottom toolbar */}
