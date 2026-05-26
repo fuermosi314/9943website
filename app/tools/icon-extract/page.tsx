@@ -14,7 +14,6 @@ interface ExtractedIcon {
 // ===== PE 文件图标提取 =====
 function extractIconsFromPE(buffer: ArrayBuffer): ExtractedIcon[] {
   const view = new DataView(buffer);
-  const u8 = new Uint8Array(buffer);
 
   // 验证 MZ 头
   if (buffer.byteLength < 64 || view.getUint16(0, true) !== 0x5A4D) {
@@ -33,8 +32,9 @@ function extractIconsFromPE(buffer: ArrayBuffer): ExtractedIcon[] {
   const is64 = magic === 0x20B;
   const numSections = view.getUint16(peOffset + 6, true);
   const optHeaderSize = view.getUint16(peOffset + 20, true);
+  const sectionStart = optOffset + optHeaderSize;
 
-  // 资源目录 RVA 和 Size（在 DataDirectory 中的索引 2）
+  // 资源目录 RVA 和 Size（DataDirectory 索引 2）
   const dataDirOffset = optOffset + (is64 ? 112 : 96);
   const resRVA = view.getUint32(dataDirOffset + 8, true);
   const resSize = view.getUint32(dataDirOffset + 12, true);
@@ -43,208 +43,167 @@ function extractIconsFromPE(buffer: ArrayBuffer): ExtractedIcon[] {
     throw new Error('文件中未找到资源段');
   }
 
-  // 找到资源段的文件偏移
-  const sectionStart = optOffset + optHeaderSize;
-  let resFileBase = 0;
-
+  // 构建 section map: RVA -> file offset
+  type Section = { rva: number; size: number; raw: number };
+  const sections: Section[] = [];
   for (let i = 0; i < numSections; i++) {
     const secOff = sectionStart + i * 40;
     if (secOff + 40 > buffer.byteLength) break;
-    const secRVA = view.getUint32(secOff + 12, true);
-    const secSize = view.getUint32(secOff + 8, true);
-    const secRaw = view.getUint32(secOff + 20, true);
-    if (resRVA >= secRVA && resRVA < secRVA + secSize) {
-      resFileBase = secRaw + (resRVA - secRVA);
-      break;
-    }
+    sections.push({
+      rva: view.getUint32(secOff + 12, true),
+      size: view.getUint32(secOff + 8, true),
+      raw: view.getUint32(secOff + 20, true),
+    });
   }
 
-  if (resFileBase === 0) {
-    throw new Error('无法定位资源段');
-  }
-
-  // 读取资源目录条目
-  type DirEntry = { id: number; offset: number; isDir: boolean };
-  function readDirEntries(dirOffset: number): DirEntry[] {
-    if (dirOffset + 16 > buffer.byteLength) return [];
-    const numNamed = view.getUint16(dirOffset + 12, true);
-    const numId = view.getUint16(dirOffset + 14, true);
-    const entries: DirEntry[] = [];
-    for (let i = 0; i < numNamed + numId; i++) {
-      const entryOff = dirOffset + 16 + i * 8;
-      if (entryOff + 8 > buffer.byteLength) break;
-      const nameOrId = view.getUint32(entryOff, true);
-      const dataOrSubdir = view.getUint32(entryOff + 4, true);
-      const isDir = (dataOrSubdir & 0x80000000) !== 0;
-      const id = nameOrId & 0x7FFFFFFF;
-      const offset = dataOrSubdir & 0x7FFFFFFF;
-      entries.push({ id, offset, isDir });
-    }
-    return entries;
-  }
-
-  function readDataEntry(offset: number): { rva: number; size: number } | null {
-    if (offset + 16 > buffer.byteLength) return null;
-    return {
-      rva: view.getUint32(offset, true),
-      size: view.getUint32(offset + 4, true),
-    };
-  }
-
-  // RVA 转文件偏移
+  // RVA -> 文件偏移
   function rvaToFile(rva: number): number {
-    for (let i = 0; i < numSections; i++) {
-      const secOff = sectionStart + i * 40;
-      const secRVA = view.getUint32(secOff + 12, true);
-      const secSize = view.getUint32(secOff + 8, true);
-      const secRaw = view.getUint32(secOff + 20, true);
-      if (rva >= secRVA && rva < secRVA + secSize) {
-        return secRaw + (rva - secRVA);
+    for (const sec of sections) {
+      if (rva >= sec.rva && rva < sec.rva + sec.size) {
+        return sec.raw + (rva - sec.rva);
       }
     }
     return 0;
   }
 
-  // 第一层：找 RT_GROUP_ICON (14) 和 RT_ICON (3)
-  const typeEntries = readDirEntries(resFileBase);
-  const groupIconType = typeEntries.find((e) => e.id === 14 && e.isDir);
-  const iconType = typeEntries.find((e) => e.id === 3 && e.isDir);
-
-  if (!groupIconType) {
-    throw new Error('文件中未找到图标组');
+  // 资源段在文件中的起始偏移
+  const resFileBase = rvaToFile(resRVA);
+  if (resFileBase === 0) {
+    throw new Error('无法定位资源段');
   }
 
-  // 收集所有 RT_ICON 数据（id -> file offset + size）
-  const iconDataMap = new Map<number, { offset: number; size: number }>();
-  if (iconType) {
-    const iconNames = readDirEntries(resFileBase + iconType.offset);
+  // 读取资源目录，返回 { id, subOffset, isDir }[]
+  // subOffset 是相对于 resFileBase 的偏移
+  function readDir(fileOffset: number): { id: number; subOffset: number; isDir: boolean }[] {
+    if (fileOffset + 16 > buffer.byteLength) return [];
+    const numNamed = view.getUint16(fileOffset + 12, true);
+    const numId = view.getUint16(fileOffset + 14, true);
+    const entries: { id: number; subOffset: number; isDir: boolean }[] = [];
+    for (let i = 0; i < numNamed + numId; i++) {
+      const entryOff = fileOffset + 16 + i * 8;
+      if (entryOff + 8 > buffer.byteLength) break;
+      const nameOrId = view.getUint32(entryOff, true);
+      const dataOrSubdir = view.getUint32(entryOff + 4, true);
+      const isDir = (dataOrSubdir & 0x80000000) !== 0;
+      // 命名资源（高位为1）跳过，只处理数字 ID
+      if (nameOrId & 0x80000000) continue;
+      entries.push({
+        id: nameOrId,
+        subOffset: dataOrSubdir & 0x7FFFFFFF,
+        isDir,
+      });
+    }
+    return entries;
+  }
+
+  // 读取 IMAGE_RESOURCE_DATA_ENTRY，返回数据的文件偏移和大小
+  function readDataEntry(fileOffset: number): { dataFileOff: number; size: number } | null {
+    if (fileOffset + 16 > buffer.byteLength) return null;
+    const dataRVA = view.getUint32(fileOffset, true);
+    const size = view.getUint32(fileOffset + 4, true);
+    const dataFileOff = rvaToFile(dataRVA);
+    if (dataFileOff === 0) return null;
+    return { dataFileOff, size };
+  }
+
+  // === 第一层：读取资源类型目录 ===
+  const typeEntries = readDir(resFileBase);
+
+  // 找 RT_GROUP_ICON (14) 和 RT_ICON (3)
+  const groupIconDir = typeEntries.find((e) => e.id === 14 && e.isDir);
+  const iconDir = typeEntries.find((e) => e.id === 3 && e.isDir);
+
+  if (!groupIconDir) {
+    throw new Error('文件中未找到图标组资源（RT_GROUP_ICON）');
+  }
+
+  // === 收集所有 RT_ICON 数据 ===
+  // iconId -> { fileOffset, size }
+  const iconMap = new Map<number, { fileOffset: number; size: number }>();
+
+  if (iconDir) {
+    // 第二层：按名称遍历 RT_ICON
+    const iconNames = readDir(resFileBase + iconDir.subOffset);
     for (const nameEntry of iconNames) {
       if (!nameEntry.isDir) continue;
-      const langEntries = readDirEntries(resFileBase + nameEntry.offset);
+      // 第三层：按语言遍历
+      const langEntries = readDir(resFileBase + nameEntry.subOffset);
       for (const lang of langEntries) {
         if (lang.isDir) continue;
-        const de = readDataEntry(resFileBase + lang.offset);
+        const de = readDataEntry(resFileBase + lang.subOffset);
         if (de) {
-          const fileOff = rvaToFile(de.rva);
-          if (fileOff > 0) {
-            iconDataMap.set(nameEntry.id, { offset: fileOff, size: de.size });
-          }
+          iconMap.set(nameEntry.id, { fileOffset: de.dataFileOff, size: de.size });
         }
       }
     }
   }
 
-  // 第二层：解析 RT_GROUP_ICON
-  const groupNames = readDirEntries(resFileBase + groupIconType.offset);
+  // === 解析 RT_GROUP_ICON ===
+  const groupNames = readDir(resFileBase + groupIconDir.subOffset);
   const results: ExtractedIcon[] = [];
 
   for (const nameEntry of groupNames) {
     if (!nameEntry.isDir) continue;
-    const langEntries = readDirEntries(resFileBase + nameEntry.offset);
+    const langEntries = readDir(resFileBase + nameEntry.subOffset);
     for (const lang of langEntries) {
       if (lang.isDir) continue;
-      const de = readDataEntry(resFileBase + lang.offset);
+      const de = readDataEntry(resFileBase + lang.subOffset);
       if (!de) continue;
 
-      const groupFileOff = rvaToFile(de.rva);
-      if (groupFileOff === 0 || groupFileOff + 6 > buffer.byteLength) continue;
-
-      // GRPICONDIR
-      const count = view.getUint16(groupFileOff + 4, true);
+      // GRPICONDIR 结构: reserved(2) + type(2) + count(2) + GRPICONDIRENTRY[] * 14
+      if (de.dataFileOff + 6 > buffer.byteLength) continue;
+      const count = view.getUint16(de.dataFileOff + 4, true);
 
       // 取最大的图标
       let bestIdx = -1;
-      let bestSize = 0;
+      let bestPixels = 0;
       for (let i = 0; i < count; i++) {
-        const entryOff = groupFileOff + 6 + i * 14;
+        const entryOff = de.dataFileOff + 6 + i * 14;
         if (entryOff + 14 > buffer.byteLength) break;
         const w = view.getUint8(entryOff) || 256;
         const h = view.getUint8(entryOff + 1) || 256;
-        const pixelSize = w * h;
-        if (pixelSize > bestSize) {
-          bestSize = pixelSize;
+        if (w * h > bestPixels) {
+          bestPixels = w * h;
           bestIdx = i;
         }
       }
-
       if (bestIdx < 0) continue;
 
-      const entryOff = groupFileOff + 6 + bestIdx * 14;
-      const w = view.getUint8(entryOff) || 256;
-      const h = view.getUint8(entryOff + 1) || 256;
-      const iconId = view.getUint16(entryOff + 12, true);
+      const bestEntryOff = de.dataFileOff + 6 + bestIdx * 14;
+      const w = view.getUint8(bestEntryOff) || 256;
+      const h = view.getUint8(bestEntryOff + 1) || 256;
+      const iconId = view.getUint16(bestEntryOff + 12, true);
 
-      const iconInfo = iconDataMap.get(iconId);
+      const iconInfo = iconMap.get(iconId);
       if (!iconInfo) continue;
 
-      // 读取图标数据
-      const iconBuf = buffer.slice(iconInfo.offset, iconInfo.offset + iconInfo.size);
+      // 读取图标原始数据
+      const iconBuf = buffer.slice(iconInfo.fileOffset, iconInfo.fileOffset + iconInfo.size);
       const sig = new Uint8Array(iconBuf, 0, Math.min(4, iconBuf.byteLength));
       const isPng = sig[0] === 0x89 && sig[1] === 0x50 && sig[2] === 0x4E && sig[3] === 0x47;
 
       if (isPng) {
         const blob = new Blob([iconBuf], { type: 'image/png' });
-        results.push({
-          width: w,
-          height: h,
-          url: URL.createObjectURL(blob),
-          format: 'PNG',
-          size: blob.size,
-        });
+        results.push({ width: w, height: h, url: URL.createObjectURL(blob), format: 'PNG', size: blob.size });
       } else {
-        // BMP 格式：构造 ICO 文件头 + 数据
+        // BMP 数据：构造完整 ICO 文件让浏览器渲染
         const icoHeader = new ArrayBuffer(6);
-        const icoView = new DataView(icoHeader);
-        icoView.setUint16(0, 0, true); // reserved
-        icoView.setUint16(2, 1, true); // type = icon
-        icoView.setUint16(4, 1, true); // count = 1
+        const hv = new DataView(icoHeader);
+        hv.setUint16(0, 0, true);
+        hv.setUint16(2, 1, true);
+        hv.setUint16(4, 1, true);
 
         const icoEntry = new ArrayBuffer(16);
-        const entryView = new DataView(icoEntry);
-        entryView.setUint8(0, w === 256 ? 0 : w);
-        entryView.setUint8(1, h === 256 ? 0 : h);
-        entryView.setUint8(2, 0); // color count
-        entryView.setUint8(3, 0); // reserved
-        entryView.setUint16(4, 1, true); // planes
-        entryView.setUint16(6, 32, true); // bpp
-        entryView.setUint32(8, iconBuf.byteLength, true); // data size
-        entryView.setUint32(12, 22, true); // data offset (6 + 16)
+        const ev = new DataView(icoEntry);
+        ev.setUint8(0, w === 256 ? 0 : w);
+        ev.setUint8(1, h === 256 ? 0 : h);
+        ev.setUint16(4, 1, true);
+        ev.setUint16(6, 32, true);
+        ev.setUint32(8, iconBuf.byteLength, true);
+        ev.setUint32(12, 22, true);
 
         const blob = new Blob([icoHeader, icoEntry, iconBuf], { type: 'image/x-icon' });
-        const url = URL.createObjectURL(blob);
-
-        // 用 canvas 转成 PNG
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, w, h);
-            canvas.toBlob((pngBlob) => {
-              URL.revokeObjectURL(url);
-              if (pngBlob) {
-                const pngUrl = URL.createObjectURL(pngBlob);
-                const existing = results.find((r) => r.url === url);
-                if (existing) {
-                  existing.url = pngUrl;
-                  existing.format = 'PNG';
-                  existing.size = pngBlob.size;
-                }
-              }
-            }, 'image/png');
-          }
-        };
-        img.src = url;
-
-        results.push({
-          width: w,
-          height: h,
-          url,
-          format: 'ICO',
-          size: iconBuf.byteLength,
-        });
+        results.push({ width: w, height: h, url: URL.createObjectURL(blob), format: 'ICO', size: iconBuf.byteLength });
       }
     }
   }
