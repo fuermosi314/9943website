@@ -353,8 +353,12 @@ function extractIconFromLNK(buffer: ArrayBuffer): ExtractedIcon[] {
 
   const skipString = () => { readString(); };
 
-  // 按 LNK 规范顺序跳过前面的字符串字段
-  if (flags & 0x00000004) skipString(); // HasName
+  // 读取 Name 字段（用于在没有路径时作为提示）
+  let nameStr = '';
+  if (flags & 0x00000004) {
+    nameStr = readString() || '';
+  }
+
   if (flags & 0x00000008) skipString(); // HasRelativePath
   if (flags & 0x00000010) skipString(); // HasWorkingDir
   if (flags & 0x00000020) skipString(); // HasArguments
@@ -369,7 +373,14 @@ function extractIconFromLNK(buffer: ArrayBuffer): ExtractedIcon[] {
   const effectivePath = iconPath || targetPath;
 
   if (!effectivePath) {
-    throw new Error('该快捷方式没有自定义图标，也未能解析到目标程序路径');
+    // 没有路径信息，但可能有 Name，提示用户
+    throw new Error(JSON.stringify({
+      type: 'lnk_no_path',
+      name: nameStr,
+      message: nameStr
+        ? `快捷方式指向「${nameStr}」，但未找到完整文件路径。请右键查看快捷方式属性中的目标位置。`
+        : '该快捷方式未包含目标路径信息，请右键查看属性中的目标位置。',
+    }));
   }
 
   // 路径格式: "C:\path\file.exe,0" 或 "C:\path\file.exe"
@@ -378,6 +389,39 @@ function extractIconFromLNK(buffer: ArrayBuffer): ExtractedIcon[] {
   const iconIndex = parts.length > 1 ? parseInt(parts[1]) || 0 : 0;
 
   // 取文件所在目录（去掉末尾反斜杠后截取目录部分）
+  const lastSep = Math.max(fullPath.lastIndexOf('\\'), fullPath.lastIndexOf('/'));
+  const dirPath = lastSep > 0 ? fullPath.substring(0, lastSep + 1) : fullPath;
+  const fileName = fullPath.split('\\').pop() || fullPath.split('/').pop() || fullPath;
+
+  // 返回路径信息（UI 层处理显示）
+  throw new Error(JSON.stringify({
+    type: 'lnk_target',
+    filePath: dirPath,
+    fileName,
+    iconIndex,
+  }));
+}
+
+// ===== URL 快捷方式解析 (.url 文件是 INI 格式纯文本) =====
+function extractIconFromURL(buffer: ArrayBuffer): ExtractedIcon[] {
+  const text = new TextDecoder('utf-8', { fatal: false }).decode(buffer);
+
+  // 提取 IconFile 路径
+  const iconFileMatch = text.match(/IconFile\s*=\s*(.+)/i);
+  if (!iconFileMatch) {
+    // 没有 IconFile，尝试从 URL= 提取网页信息
+    throw new Error('该 .url 文件未指定图标文件（IconFile）');
+  }
+
+  const iconPath = iconFileMatch[1].trim();
+
+  // 提取 IconIndex
+  const iconIndexMatch = text.match(/IconIndex\s*=\s*(\d+)/i);
+  const iconIndex = iconIndexMatch ? parseInt(iconIndexMatch[1]) : 0;
+
+  // 路径格式: "C:\path\file.exe,0" 或 "C:\path\file.ico"
+  const parts = iconPath.split(',');
+  const fullPath = parts[0].trim();
   const lastSep = Math.max(fullPath.lastIndexOf('\\'), fullPath.lastIndexOf('/'));
   const dirPath = lastSep > 0 ? fullPath.substring(0, lastSep + 1) : fullPath;
   const fileName = fullPath.split('\\').pop() || fullPath.split('/').pop() || fullPath;
@@ -415,7 +459,16 @@ function detectAndExtract(buffer: ArrayBuffer): ExtractedIcon[] {
     return extractIconFromLNK(buffer);
   }
 
-  throw new Error('不支持的文件格式，支持：EXE、DLL、ICO、LNK 等');
+  // URL (.url 文件是纯文本，检测 [InternetShortcut] 或 URL= 特征)
+  try {
+    const textStart = new TextDecoder('utf-8', { fatal: false })
+      .decode(buffer.slice(0, Math.min(512, buffer.byteLength)));
+    if (textStart.includes('[InternetShortcut]') || textStart.includes('URL=') || textStart.includes('IconFile=')) {
+      return extractIconFromURL(buffer);
+    }
+  } catch { /* not text, continue */ }
+
+  throw new Error('不支持的文件格式，支持：EXE、DLL、ICO、LNK、URL 等');
 }
 
 export default function IconExtractPage() {
@@ -449,6 +502,8 @@ export default function IconExtractPage() {
         const parsed = JSON.parse(msg);
         if (parsed.type === 'lnk_target') {
           setLnkTarget(parsed);
+        } else if (parsed.type === 'lnk_no_path') {
+          setError(parsed.message || msg);
         } else {
           setError(msg);
         }
@@ -496,7 +551,7 @@ export default function IconExtractPage() {
         <div className="text-center mb-8 animate-fade-in">
           <div className="text-4xl mb-3">🎯</div>
           <h2 className="text-2xl font-bold text-white mb-2">图标提取</h2>
-          <p className="text-white/40 text-sm">从文件中提取高清图标，支持 EXE、DLL、ICO</p>
+          <p className="text-white/40 text-sm">从文件中提取高清图标，支持 EXE、DLL、ICO、LNK、URL</p>
         </div>
 
         {/* 上传区域 */}
@@ -510,7 +565,7 @@ export default function IconExtractPage() {
           <input
             ref={fileInputRef}
             type="file"
-            accept=".exe,.dll,.ico,.cpl,.scr,.lnk,.ocx,.sys,.drv"
+            accept=".exe,.dll,.ico,.cpl,.scr,.lnk,.ocx,.sys,.drv,.url"
             onChange={handleFileChange}
             className="hidden"
           />
@@ -522,7 +577,7 @@ export default function IconExtractPage() {
             <p className="text-white/40 text-sm">
               {file
                 ? `${(file.size / 1024).toFixed(1)} KB · 点击重新选择`
-                : '支持 EXE、DLL、ICO、LNK 等格式'}
+                : '支持 EXE、DLL、ICO、LNK、URL 等格式'}
             </p>
           </div>
         </div>
@@ -640,7 +695,8 @@ export default function IconExtractPage() {
           <ul className="space-y-2 text-white/50 text-sm">
             <li>• 支持 EXE、DLL、ICO、CPL、SCR 等 PE 格式文件</li>
             <li>• 自动提取最大尺寸的图标（通常是 256×256 高清版）</li>
-            <li>• LNK 快捷方式可读取图标路径，但需手动上传目标文件</li>
+            <li>• LNK 快捷方式可解析目标路径，引导你上传源文件提取图标</li>
+            <li>• URL 快捷方式可读取 IconFile 路径，引导你提取图标</li>
             <li>• 文件仅在浏览器本地处理，不会上传到服务器</li>
           </ul>
         </div>
