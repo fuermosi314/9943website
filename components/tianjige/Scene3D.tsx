@@ -6,6 +6,9 @@ import {
   Scene,
   Furniture,
   FurnitureType,
+  Item,
+  PhotoRef,
+  generateThumbnail,
   getAllScenes,
   saveScene,
 } from '@/lib/tianjige-db';
@@ -263,6 +266,12 @@ export default function Scene3D() {
   const [loading, setLoading] = useState(true);
   const [selectedFurniture, setSelectedFurniture] = useState<Furniture | null>(null);
   const [showItemPanel, setShowItemPanel] = useState(false);
+  const [showItemEditor, setShowItemEditor] = useState(false);
+  const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [itemForm, setItemForm] = useState({
+    name: '', category: '日用', quantity: 1, price: 0,
+    purchaseDate: '', note: '', photos: [] as PhotoRef[],
+  });
 
   // ── Load / init scenes ──────────────────────────────────────────
   useEffect(() => {
@@ -483,7 +492,20 @@ export default function Scene3D() {
               <p className="text-white/30 text-sm text-center py-8">还没有物品，点击下方添加</p>
             ) : (
               selectedFurniture.items.map(item => (
-                <div key={item.id} className="glass-card p-3 rounded-xl">
+                <div key={item.id} className="glass-card p-3 rounded-xl cursor-pointer hover:ring-1 hover:ring-[#fb6400]/50 transition-all"
+                  onClick={() => {
+                    setEditingItem(item);
+                    setItemForm({
+                      name: item.name,
+                      category: item.category,
+                      quantity: item.quantity,
+                      price: item.price,
+                      purchaseDate: item.purchaseDate,
+                      note: item.note,
+                      photos: item.photos,
+                    });
+                    setShowItemEditor(true);
+                  }}>
                   <div className="flex justify-between items-start">
                     <div>
                       <span className="text-white font-medium">{item.name}</span>
@@ -497,9 +519,185 @@ export default function Scene3D() {
             )}
           </div>
           <div className="p-4 border-t border-white/10">
-            <button className="w-full py-2 bg-[#fb6400] hover:bg-[#e55a00] text-white rounded-xl font-medium transition-colors">
+            <button onClick={() => {
+              setEditingItem(null);
+              setItemForm({ name: '', category: '日用', quantity: 1, price: 0, purchaseDate: '', note: '', photos: [] });
+              setShowItemEditor(true);
+            }} className="w-full py-2 bg-[#fb6400] hover:bg-[#e55a00] text-white rounded-xl font-medium transition-colors">
               + 添加物品
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Item Editor Modal */}
+      {showItemEditor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onPaste={async (e) => {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            for (let i = 0; i < items.length; i++) {
+              const item = items[i];
+              if (item.type.startsWith('image/')) {
+                const file = item.getAsFile();
+                if (file) {
+                  const { blob: _blob, ...photoData } = await generateThumbnail(file);
+                  setItemForm(f => ({
+                    ...f, photos: [...f.photos, { id: crypto.randomUUID(), ...photoData }]
+                  }));
+                }
+              }
+            }
+          }}>
+          <div className="bg-[#1a1a2e] rounded-2xl w-full max-w-md mx-4 border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="p-5 border-b border-white/10">
+              <h3 className="text-white text-lg font-bold">{editingItem ? '编辑物品' : '添加物品'}</h3>
+            </div>
+            <div className="p-5 space-y-4">
+              {/* Name */}
+              <div>
+                <label className="text-white/70 text-sm mb-1 block">名称</label>
+                <input type="text" value={itemForm.name} onChange={e => setItemForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#fb6400]" placeholder="物品名称" />
+              </div>
+              {/* Category */}
+              <div>
+                <label className="text-white/70 text-sm mb-1 block">分类</label>
+                <select value={itemForm.category} onChange={e => setItemForm(f => ({ ...f, category: e.target.value }))}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#fb6400]">
+                  {['衣物', '书籍', '电子', '食品', '日用', '其他'].map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+              {/* Quantity + Price */}
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-white/70 text-sm mb-1 block">数量</label>
+                  <input type="number" min={1} value={itemForm.quantity} onChange={e => setItemForm(f => ({ ...f, quantity: Math.max(1, Number(e.target.value)) }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#fb6400]" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-white/70 text-sm mb-1 block">价格 (¥)</label>
+                  <input type="number" min={0} step={0.01} value={itemForm.price} onChange={e => setItemForm(f => ({ ...f, price: Math.max(0, Number(e.target.value)) }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#fb6400]" />
+                </div>
+              </div>
+              {/* Date */}
+              <div>
+                <label className="text-white/70 text-sm mb-1 block">购买日期</label>
+                <input type="date" value={itemForm.purchaseDate} onChange={e => setItemForm(f => ({ ...f, purchaseDate: e.target.value }))}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#fb6400]" />
+              </div>
+              {/* Note */}
+              <div>
+                <label className="text-white/70 text-sm mb-1 block">备注</label>
+                <textarea value={itemForm.note} onChange={e => setItemForm(f => ({ ...f, note: e.target.value }))} rows={3}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#fb6400] resize-none" placeholder="备注信息..." />
+              </div>
+              {/* Photos */}
+              <div>
+                <label className="text-white/70 text-sm mb-1 block">照片</label>
+                <p className="text-white/40 text-xs mb-2">在输入框中可直接 Ctrl+V 粘贴图片</p>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {itemForm.photos.map(photo => (
+                    <div key={photo.id} className="relative w-16 h-16 rounded-lg overflow-hidden group">
+                      <img src={photo.thumbnail} alt="" className="w-full h-full object-cover" />
+                      <button onClick={() => setItemForm(f => ({ ...f, photos: f.photos.filter(p => p.id !== photo.id) }))}
+                        className="absolute top-0 right-0 w-5 h-5 bg-red-500/80 text-white text-xs rounded-bl-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">&times;</button>
+                    </div>
+                  ))}
+                  <label className="w-16 h-16 rounded-lg border-2 border-dashed border-white/20 flex items-center justify-center cursor-pointer hover:border-[#fb6400]/50 transition-colors">
+                    <span className="text-xl">📷</span>
+                    <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const { blob: _blob, ...photoData } = await generateThumbnail(file);
+                        setItemForm(f => ({ ...f, photos: [...f.photos, { id: crypto.randomUUID(), ...photoData }] }));
+                      }
+                      e.target.value = '';
+                    }} />
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div className="p-5 border-t border-white/10 flex gap-3">
+              <button onClick={() => {
+                // Save logic
+                const now = Date.now();
+                const newItem: Item = editingItem
+                  ? { ...editingItem, ...itemForm, updatedAt: now }
+                  : { id: crypto.randomUUID(), ...itemForm, createdAt: now, updatedAt: now };
+
+                setScenes(prev => prev.map(scene => {
+                  if (scene.id !== activeSceneId) return scene;
+                  return {
+                    ...scene,
+                    furniture: scene.furniture.map(f => {
+                      if (f.id !== selectedFurniture?.id) return f;
+                      const items = editingItem
+                        ? f.items.map(i => i.id === editingItem.id ? newItem : i)
+                        : [...f.items, newItem];
+                      return { ...f, items };
+                    }),
+                  };
+                }));
+                if (selectedFurniture) {
+                  const items = editingItem
+                    ? selectedFurniture.items.map(i => i.id === editingItem.id ? newItem : i)
+                    : [...selectedFurniture.items, newItem];
+                  const updated = { ...selectedFurniture, items };
+                  setSelectedFurniture(updated);
+                  // Persist
+                  const scene = scenes.find(s => s.id === activeSceneId);
+                  if (scene) {
+                    saveScene({
+                      ...scene,
+                      furniture: scene.furniture.map(f => f.id === updated.id ? updated : f),
+                    });
+                  }
+                }
+                setShowItemEditor(false);
+                setEditingItem(null);
+              }} className="flex-1 py-2 bg-[#fb6400] hover:bg-[#e55a00] text-white rounded-xl font-medium transition-colors">
+                保存
+              </button>
+              {editingItem && (
+                <button onClick={() => {
+                  // Delete logic
+                  setScenes(prev => prev.map(scene => {
+                    if (scene.id !== activeSceneId) return scene;
+                    return {
+                      ...scene,
+                      furniture: scene.furniture.map(f => {
+                        if (f.id !== selectedFurniture?.id) return f;
+                        return { ...f, items: f.items.filter(i => i.id !== editingItem.id) };
+                      }),
+                    };
+                  }));
+                  if (selectedFurniture) {
+                    const updated = { ...selectedFurniture, items: selectedFurniture.items.filter(i => i.id !== editingItem.id) };
+                    setSelectedFurniture(updated);
+                    const scene = scenes.find(s => s.id === activeSceneId);
+                    if (scene) {
+                      saveScene({
+                        ...scene,
+                        furniture: scene.furniture.map(f => f.id === updated.id ? updated : f),
+                      });
+                    }
+                  }
+                  setShowItemEditor(false);
+                  setEditingItem(null);
+                }} className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-xl font-medium transition-colors border border-red-500/30">
+                  删除
+                </button>
+              )}
+              <button onClick={() => { setShowItemEditor(false); setEditingItem(null); }}
+                className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white/70 rounded-xl font-medium transition-colors border border-white/10">
+                取消
+              </button>
+            </div>
           </div>
         </div>
       )}
