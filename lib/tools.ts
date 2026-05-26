@@ -252,6 +252,16 @@ export const tools: Tool[] = [
     keywords: ['加速下载', '下载加速', '多线程下载', '满速下载', '网速慢', '下载慢'],
   },
   {
+    id: 'tianjige',
+    name: '天机阁',
+    description: '3D场景式物品收纳管理，再也不找不到东西',
+    icon: '🏠',
+    category: 'life',
+    path: '/tools/tianjige',
+    tags: ['收纳', '物品管理', '3D', '整理', '查找'],
+    keywords: ['收纳', '物品管理', '找不到东西', '整理', '天机阁'],
+  },
+  {
     id: 'steam',
     name: 'Steam 下载',
     description: 'Steam 客户端官方下载地址，支持 Windows/Mac/Linux',
