@@ -357,11 +357,44 @@ export function getToolsByCategory(categoryId: string): Tool[] {
 }
 
 export function searchTools(query: string): Tool[] {
-  const q = query.toLowerCase();
-  return tools.filter(
-    (tool) =>
-      tool.name.toLowerCase().includes(q) ||
-      tool.description.toLowerCase().includes(q) ||
-      tool.tags.some((tag) => tag.toLowerCase().includes(q))
-  );
+  const q = query.toLowerCase().trim();
+  if (!q) return tools;
+
+  // 每个工具的匹配分数
+  const scored = tools.map((tool) => {
+    let score = 0;
+    const name = tool.name.toLowerCase();
+    const desc = tool.description.toLowerCase();
+    const tags = tool.tags.map((t) => t.toLowerCase());
+
+    // 名称匹配（权重最高）
+    if (name === q) score += 100;
+    else if (name.startsWith(q)) score += 80;
+    else if (name.includes(q)) score += 60;
+
+    // 标签匹配
+    for (const tag of tags) {
+      if (tag === q) score += 70;
+      else if (tag.startsWith(q)) score += 50;
+      else if (tag.includes(q)) score += 30;
+    }
+
+    // 描述匹配
+    if (desc.includes(q)) score += 20;
+
+    // 多关键词支持：将搜索词拆分，每个词都匹配则加分
+    const words = q.split(/\s+/);
+    if (words.length > 1) {
+      const allFields = `${name} ${desc} ${tags.join(' ')}`;
+      const matchCount = words.filter((w) => allFields.includes(w)).length;
+      score += (matchCount / words.length) * 40;
+    }
+
+    return { tool, score };
+  });
+
+  return scored
+    .filter((s) => s.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map((s) => s.tool);
 }
