@@ -1031,12 +1031,19 @@ export default function EarthCannonPage() {
     smoke: [] as Smoke[],
     embers: [] as Ember[],
     lava: [] as Lava[],
+    mode: 'multi' as 'multi' | 'charge',
+    shotCount: 0,
+    damageLevel: 0,
+    isCharging: false,
+    chargeStartTime: 0,
     startTime: 0,
     screenShake: 0,
     lastFrame: 0,
   });
   const [phase, setPhase] = useState<Phase>('idle');
   const [showButton, setShowButton] = useState(true);
+  const [chargeLevel, setChargeLevel] = useState(0);
+  const [chargeInsufficient, setChargeInsufficient] = useState(false);
 
   const initStars = useCallback((w: number, h: number): Star[] => {
     const stars: Star[] = [];
@@ -1208,11 +1215,28 @@ export default function EarthCannonPage() {
         if (l.life <= 0) state.lava.splice(i, 1);
       }
 
+      // 蓄力模式计时
+      if (state.isCharging && state.mode === 'charge') {
+        const cl = Math.min((now - state.chargeStartTime) / 3000, 1);
+        setChargeLevel(cl);
+        // 蓄力完成自动发射
+        if (cl >= 1) {
+          state.isCharging = false;
+          state.phase = 'charging';
+          state.phaseTime = now;
+          setShowButton(false);
+          setPhase('charging');
+          setChargeLevel(0);
+        }
+      }
+
       // === 绘制场景 ===
       // 地球
       if (state.phase !== 'explosion' && state.phase !== 'aftermath') {
-        const cracked = state.phase === 'impact';
-        const crackP = state.phase === 'impact' ? Math.min((now - state.phaseTime) / 500, 1) : 0;
+        const cracked = state.phase === 'impact' || state.damageLevel > 0;
+        const crackP = state.phase === 'impact'
+          ? Math.min((now - state.phaseTime) / 500, 1) * (0.8 + state.damageLevel * 0.2)
+          : state.damageLevel;
         drawEarth(ctx, earth.x, earth.y, earth.r, t, cracked, crackP);
       }
 
@@ -1381,76 +1405,130 @@ export default function EarthCannonPage() {
         state.phase = 'impact'; state.phaseTime = now; state.screenShake = 1.8;
         setPhase('impact');
       } else if (state.phase === 'impact' && now - state.phaseTime > 500) {
-        state.phase = 'explosion'; state.phaseTime = now; state.screenShake = 2.8;
-        // 碎片 — 80块
-        const colors = ['#1a5fa8', '#2d7dd2', '#227832', '#c4a862', '#d4a060', '#ff6600', '#ff4400', '#e8eef2'];
-        for (let i = 0; i < 80; i++) {
-          const a = Math.random() * Math.PI * 2;
-          const spd = Math.random() * 5 + 1.5;
-          state.debris.push({
-            x: earth.x + (Math.random() - 0.5) * 15,
-            y: earth.y + (Math.random() - 0.5) * 15,
-            vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
-            size: Math.random() * 10 + 3,
-            rotation: Math.random() * Math.PI * 2,
-            rotSpeed: (Math.random() - 0.5) * 0.25,
-            color: colors[Math.floor(Math.random() * colors.length)],
-            life: 1, trail: [],
-          });
+        const isFullDestruction = state.mode === 'charge' || state.shotCount >= 5;
+        if (isFullDestruction) {
+          // 全面爆炸
+          state.phase = 'explosion'; state.phaseTime = now; state.screenShake = 2.8;
+          state.damageLevel = 1;
+          // 碎片 — 80块
+          const colors = ['#1a5fa8', '#2d7dd2', '#227832', '#c4a862', '#d4a060', '#ff6600', '#ff4400', '#e8eef2'];
+          for (let i = 0; i < 80; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const spd = Math.random() * 5 + 1.5;
+            state.debris.push({
+              x: earth.x + (Math.random() - 0.5) * 15,
+              y: earth.y + (Math.random() - 0.5) * 15,
+              vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+              size: Math.random() * 10 + 3,
+              rotation: Math.random() * Math.PI * 2,
+              rotSpeed: (Math.random() - 0.5) * 0.25,
+              color: colors[Math.floor(Math.random() * colors.length)],
+              life: 1, trail: [],
+            });
+          }
+          // 爆炸粒子 — 120
+          for (let i = 0; i < 120; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const spd = Math.random() * 6 + 1;
+            state.particles.push({
+              x: earth.x, y: earth.y,
+              vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+              life: 1.2, maxLife: 1.2,
+              r: Math.random() * 3 + 1,
+              color: ['#f80', '#ff0', '#f44', '#fff'][Math.floor(Math.random() * 4)],
+            });
+          }
+          // 烟雾 — 30
+          for (let i = 0; i < 30; i++) {
+            const a = Math.random() * Math.PI * 2;
+            state.smoke.push({
+              x: earth.x + Math.cos(a) * Math.random() * 20,
+              y: earth.y + Math.sin(a) * Math.random() * 20,
+              vx: Math.cos(a) * (Math.random() * 1.5 + 0.3),
+              vy: Math.sin(a) * (Math.random() * 1.5 + 0.3) - 0.5,
+              r: Math.random() * 8 + 5,
+              life: 2 + Math.random() * 2,
+              maxLife: 4,
+            });
+          }
+          // 余烬 — 40
+          for (let i = 0; i < 40; i++) {
+            const a = Math.random() * Math.PI * 2;
+            state.embers.push({
+              x: earth.x + Math.cos(a) * Math.random() * 30,
+              y: earth.y + Math.sin(a) * Math.random() * 30,
+              vx: Math.cos(a) * (Math.random() * 2 + 0.5),
+              vy: -(Math.random() * 3 + 1),
+              life: 1.5 + Math.random() * 2,
+              maxLife: 3.5,
+              r: Math.random() * 1.5 + 0.5,
+            });
+          }
+          // 岩浆粒子 — 50
+          for (let i = 0; i < 50; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const spd = Math.random() * 3 + 0.8;
+            state.lava.push({
+              x: earth.x + Math.cos(a) * earth.r * (0.1 + Math.random() * 0.6),
+              y: earth.y + Math.sin(a) * earth.r * (0.1 + Math.random() * 0.6),
+              vx: Math.cos(a) * spd,
+              vy: Math.sin(a) * spd - Math.random() * 2,
+              life: 1.5 + Math.random() * 1.5,
+              maxLife: 3,
+              r: Math.random() * 3 + 1,
+            });
+          }
+          setPhase('explosion');
+        } else {
+          // 多击模式 — 小规模爆炸，回到 idle
+          state.damageLevel = state.shotCount / 5;
+          state.screenShake = 1.2;
+          // 小规模碎片 — 20
+          const colors = ['#1a5fa8', '#2d7dd2', '#227832', '#c4a862', '#d4a060', '#e8eef2'];
+          for (let i = 0; i < 20; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const spd = Math.random() * 3 + 1;
+            state.debris.push({
+              x: earth.x + Math.cos(a) * earth.r * 0.3,
+              y: earth.y + Math.sin(a) * earth.r * 0.3,
+              vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+              size: Math.random() * 6 + 2,
+              rotation: Math.random() * Math.PI * 2,
+              rotSpeed: (Math.random() - 0.5) * 0.2,
+              color: colors[Math.floor(Math.random() * colors.length)],
+              life: 0.6, trail: [],
+            });
+          }
+          // 小规模粒子 — 30
+          for (let i = 0; i < 30; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const spd = Math.random() * 4 + 0.5;
+            state.particles.push({
+              x: earth.x, y: earth.y,
+              vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+              life: 0.6, maxLife: 0.6,
+              r: Math.random() * 2 + 0.5,
+              color: ['#f80', '#ff0', '#4af'][Math.floor(Math.random() * 3)],
+            });
+          }
+          // 小规模烟雾 — 10
+          for (let i = 0; i < 10; i++) {
+            const a = Math.random() * Math.PI * 2;
+            state.smoke.push({
+              x: earth.x + Math.cos(a) * 15,
+              y: earth.y + Math.sin(a) * 15,
+              vx: Math.cos(a) * 0.8,
+              vy: Math.sin(a) * 0.8 - 0.3,
+              r: Math.random() * 5 + 3,
+              life: 1.5 + Math.random(),
+              maxLife: 2.5,
+            });
+          }
+          // 回到 idle
+          state.phase = 'idle';
+          setShowButton(true);
+          setPhase('idle');
         }
-        // 爆炸粒子 — 120
-        for (let i = 0; i < 120; i++) {
-          const a = Math.random() * Math.PI * 2;
-          const spd = Math.random() * 6 + 1;
-          state.particles.push({
-            x: earth.x, y: earth.y,
-            vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
-            life: 1.2, maxLife: 1.2,
-            r: Math.random() * 3 + 1,
-            color: ['#f80', '#ff0', '#f44', '#fff'][Math.floor(Math.random() * 4)],
-          });
-        }
-        // 烟雾 — 30
-        for (let i = 0; i < 30; i++) {
-          const a = Math.random() * Math.PI * 2;
-          state.smoke.push({
-            x: earth.x + Math.cos(a) * Math.random() * 20,
-            y: earth.y + Math.sin(a) * Math.random() * 20,
-            vx: Math.cos(a) * (Math.random() * 1.5 + 0.3),
-            vy: Math.sin(a) * (Math.random() * 1.5 + 0.3) - 0.5,
-            r: Math.random() * 8 + 5,
-            life: 2 + Math.random() * 2,
-            maxLife: 4,
-          });
-        }
-        // 余烬 — 40
-        for (let i = 0; i < 40; i++) {
-          const a = Math.random() * Math.PI * 2;
-          state.embers.push({
-            x: earth.x + Math.cos(a) * Math.random() * 30,
-            y: earth.y + Math.sin(a) * Math.random() * 30,
-            vx: Math.cos(a) * (Math.random() * 2 + 0.5),
-            vy: -(Math.random() * 3 + 1),
-            life: 1.5 + Math.random() * 2,
-            maxLife: 3.5,
-            r: Math.random() * 1.5 + 0.5,
-          });
-        }
-        // 岩浆粒子 — 50（沿裂纹喷出）
-        for (let i = 0; i < 50; i++) {
-          const a = Math.random() * Math.PI * 2;
-          const spd = Math.random() * 3 + 0.8;
-          state.lava.push({
-            x: earth.x + Math.cos(a) * earth.r * (0.1 + Math.random() * 0.6),
-            y: earth.y + Math.sin(a) * earth.r * (0.1 + Math.random() * 0.6),
-            vx: Math.cos(a) * spd,
-            vy: Math.sin(a) * spd - Math.random() * 2,
-            life: 1.5 + Math.random() * 1.5,
-            maxLife: 3,
-            r: Math.random() * 3 + 1,
-          });
-        }
-        setPhase('explosion');
       } else if (state.phase === 'explosion' && now - state.phaseTime > 3000) {
         state.phase = 'aftermath'; state.phaseTime = now;
         setShowButton(true);
@@ -1475,15 +1553,63 @@ export default function EarthCannonPage() {
       state.phase = 'idle';
       state.particles = []; state.debris = []; state.meteors = [];
       state.smoke = []; state.embers = []; state.lava = [];
-      state.screenShake = 0;
+      state.screenShake = 0; state.shotCount = 0; state.damageLevel = 0;
       earthCache = null; nebulaCache = null;
       state.stars = initStars(window.innerWidth, window.innerHeight);
       state.startTime = performance.now();
     }
     state.phase = 'charging';
     state.phaseTime = performance.now();
+    if (state.mode === 'multi') state.shotCount++;
     setShowButton(false);
     setPhase('charging');
+  }, [initStars]);
+
+  // 蓄力模式 — 按住开始
+  const handleChargeStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    const state = stateRef.current;
+    if (state.mode !== 'charge' || state.phase !== 'idle') return;
+    state.isCharging = true;
+    state.chargeStartTime = performance.now();
+    setChargeInsufficient(false);
+  }, []);
+
+  // 蓄力模式 — 松手触发
+  const handleChargeEnd = useCallback(() => {
+    const state = stateRef.current;
+    if (!state.isCharging || state.mode !== 'charge') return;
+    const elapsed = performance.now() - state.chargeStartTime;
+    state.isCharging = false;
+    if (elapsed >= 3000) {
+      // 蓄力完成 — 全力发射
+      state.phase = 'charging';
+      state.phaseTime = performance.now();
+      setShowButton(false);
+      setPhase('charging');
+      setChargeLevel(0);
+    } else {
+      // 蓄能不足
+      setChargeLevel(0);
+      setChargeInsufficient(true);
+      setTimeout(() => setChargeInsufficient(false), 1500);
+    }
+  }, []);
+
+  const handleModeSwitch = useCallback((mode: 'multi' | 'charge') => {
+    const state = stateRef.current;
+    if (state.phase !== 'idle' && state.phase !== 'aftermath') return;
+    state.mode = mode;
+    state.phase = 'idle';
+    state.shotCount = 0; state.damageLevel = 0;
+    state.particles = []; state.debris = []; state.meteors = [];
+    state.smoke = []; state.embers = []; state.lava = [];
+    state.screenShake = 0; state.isCharging = false;
+    earthCache = null; nebulaCache = null;
+    state.stars = initStars(window.innerWidth, window.innerHeight);
+    state.startTime = performance.now();
+    setShowButton(true); setPhase('idle');
+    setChargeLevel(0); setChargeInsufficient(false);
   }, [initStars]);
 
   return (
@@ -1500,20 +1626,80 @@ export default function EarthCannonPage() {
 
       <main className="relative w-full h-screen overflow-hidden">
         <canvas ref={canvasRef} className="absolute inset-0" />
-        <div className="absolute inset-0 flex flex-col items-center justify-end pb-20 pointer-events-none">
+        <div className="absolute inset-0 flex flex-col items-center justify-end pb-16 pointer-events-none">
+          {/* 模式选择 — 仅 idle/aftermath 显示 */}
+          {(stateRef.current.phase === 'idle' || stateRef.current.phase === 'aftermath') && (
+            <div className="flex gap-3 mb-4 pointer-events-auto">
+              {(['multi', 'charge'] as const).map(m => (
+                <button
+                  key={m}
+                  onClick={() => handleModeSwitch(m)}
+                  className={`px-5 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
+                    stateRef.current.mode === m
+                      ? 'bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white shadow-lg shadow-orange-500/30'
+                      : 'bg-white/10 text-white/60 hover:bg-white/20 hover:text-white/80'
+                  }`}
+                >
+                  {m === 'multi' ? '多次轰炸' : '蓄力轰炸'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* 蓄力进度条 — charge 模式蓄力中 */}
+          {stateRef.current.mode === 'charge' && stateRef.current.isCharging && (
+            <div className="mb-4 animate-fade-in">
+              <p className="text-white/60 text-xs mb-1.5">蓄能中... {Math.floor(chargeLevel * 100)}%</p>
+              <div className="w-52 h-2.5 rounded-full bg-white/10 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-100"
+                  style={{
+                    width: `${chargeLevel * 100}%`,
+                    background: chargeLevel < 0.5
+                      ? `linear-gradient(90deg, #4af, #8cf)`
+                      : chargeLevel < 0.8
+                        ? `linear-gradient(90deg, #4af, #fb6400)`
+                        : `linear-gradient(90deg, #fb6400, #f44)`,
+                  }}
+                />
+              </div>
+              <p className="text-white/40 text-xs mt-1">松手发射</p>
+            </div>
+          )}
+
+          {/* 主按钮区域 */}
           {showButton && (
             <div className="text-center pointer-events-auto animate-fade-in">
-              <button
-                onClick={handleFire}
-                className="px-12 py-4 text-xl font-bold text-white rounded-2xl bg-gradient-to-r from-[#fb6400] to-[#ff8c00] hover:scale-105 hover:shadow-[0_0_40px_rgba(251,100,0,0.5)] active:scale-95 transition-all duration-300 shadow-lg shadow-orange-500/30 mb-4"
-              >
-                {phase === 'aftermath' ? '再来一次' : '🔥 发射'}
-              </button>
+              {stateRef.current.mode === 'charge' && stateRef.current.phase !== 'aftermath' ? (
+                <button
+                  onMouseDown={handleChargeStart}
+                  onMouseUp={handleChargeEnd}
+                  onMouseLeave={handleChargeEnd}
+                  onTouchStart={handleChargeStart}
+                  onTouchEnd={handleChargeEnd}
+                  className="px-12 py-4 text-xl font-bold text-white rounded-2xl bg-gradient-to-r from-[#fb6400] to-[#ff8c00] hover:scale-105 hover:shadow-[0_0_40px_rgba(251,100,0,0.5)] active:scale-95 transition-all duration-300 shadow-lg shadow-orange-500/30 mb-3 select-none"
+                >
+                  ⚡ 按住蓄力
+                </button>
+              ) : (
+                <button
+                  onClick={handleFire}
+                  className="px-12 py-4 text-xl font-bold text-white rounded-2xl bg-gradient-to-r from-[#fb6400] to-[#ff8c00] hover:scale-105 hover:shadow-[0_0_40px_rgba(251,100,0,0.5)] active:scale-95 transition-all duration-300 shadow-lg shadow-orange-500/30 mb-3"
+                >
+                  {stateRef.current.phase === 'aftermath' ? '🔥 再来一次' : `🔥 发射 (${stateRef.current.shotCount}/5)`}
+                </button>
+              )}
               <p className="text-white/40 text-sm">
-                {phase === 'aftermath' ? '地球已被毁灭' : '点击发射电磁炮，毁灭地球'}
+                {stateRef.current.phase === 'aftermath' ? '地球已被毁灭' :
+                  chargeInsufficient ? '蓄能不足，充能失败' :
+                  stateRef.current.mode === 'charge' ? '按住按钮蓄力 3 秒，一发射穿地球' :
+                  stateRef.current.damageLevel > 0 ? `已造成损伤 (${stateRef.current.shotCount}/5)` :
+                  '点击发射电磁炮，轰炸地球'}
               </p>
             </div>
           )}
+
+          {/* 动画中状态提示 */}
           {!showButton && phase !== 'idle' && (
             <div className="text-center animate-fade-in">
               <p className="text-white/50 text-sm">
