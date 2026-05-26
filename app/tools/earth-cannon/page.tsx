@@ -69,6 +69,7 @@ interface Debris { x: number; y: number; vx: number; vy: number; size: number; r
 interface Meteor { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; len: number; }
 interface Smoke { x: number; y: number; vx: number; vy: number; r: number; life: number; maxLife: number; }
 interface Ember { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; r: number; }
+interface Lava { x: number; y: number; vx: number; vy: number; life: number; maxLife: number; r: number; }
 
 // ===== 缓存 =====
 let earthCache: HTMLCanvasElement | null = null;
@@ -319,6 +320,44 @@ function drawEarth(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: num
         ctx.stroke();
         ctx.restore();
       }
+      // 岩浆渗透 — 沿裂纹渗出熔岩
+      if (crackProgress > 0.5) {
+        const lavaAlpha = (crackProgress - 0.5) * 2;
+        const lavaW = 1.5 + crackProgress * 3;
+        // 岩浆主脉
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.shadowColor = '#ff3300';
+        ctx.shadowBlur = 6 + crackProgress * 10;
+        ctx.strokeStyle = `rgba(255,80,0,${lavaAlpha * 0.7})`;
+        ctx.lineWidth = lavaW;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(angle) * r * 0.05, cy + Math.sin(angle) * r * 0.05);
+        let lx = cx, ly = cy;
+        for (let j = 1; j <= steps; j++) {
+          const seg = j / steps;
+          const jitter = Math.sin(i * 17 + j * 13) * r * 0.06;
+          lx = cx + Math.cos(angle) * len * seg * 0.7 + jitter * Math.cos(angle + 1.5);
+          ly = cy + Math.sin(angle) * len * seg * 0.7 + jitter * Math.sin(angle + 1.5);
+          ctx.lineTo(lx, ly);
+        }
+        ctx.stroke();
+        // 岩浆亮芯
+        ctx.strokeStyle = `rgba(255,200,50,${lavaAlpha * 0.4})`;
+        ctx.lineWidth = lavaW * 0.4;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(angle) * r * 0.05, cy + Math.sin(angle) * r * 0.05);
+        lx = cx; ly = cy;
+        for (let j = 1; j <= steps; j++) {
+          const seg = j / steps;
+          const jitter = Math.sin(i * 17 + j * 13) * r * 0.06;
+          lx = cx + Math.cos(angle) * len * seg * 0.7 + jitter * Math.cos(angle + 1.5);
+          ly = cy + Math.sin(angle) * len * seg * 0.7 + jitter * Math.sin(angle + 1.5);
+          ctx.lineTo(lx, ly);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
     }
     ctx.shadowBlur = 0;
     ctx.restore();
@@ -336,221 +375,279 @@ function drawEarth(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: num
   ctx.restore();
 }
 
-// ===== 绘制：汪星人（kawaii 风格）=====
+// ===== 绘制：汪星人（超级 kawaii 风格）=====
 function drawDog(ctx: CanvasRenderingContext2D, x: number, y: number, t: number, phase: Phase, chargeP: number) {
   ctx.save();
   ctx.translate(x, y);
 
-  const breathe = Math.sin(t * 1.8) * 1.5;
-  const recoil = phase === 'firing' ? -8 : phase === 'beam' ? -4 : 0;
+  const breathe = Math.sin(t * 1.8) * 1.2;
+  const recoil = phase === 'firing' ? -6 : phase === 'beam' ? -3 : 0;
   const shake = phase === 'charging' ? Math.sin(t * 20) * chargeP * 1.5 : 0;
   ctx.translate(recoil + shake, breathe);
 
-  // === 身体（圆润太空服）===
-  const bodyGrad = ctx.createLinearGradient(-22, 5, 22, 42);
-  bodyGrad.addColorStop(0, '#f0f0f5');
-  bodyGrad.addColorStop(0.3, '#e0e0e8');
-  bodyGrad.addColorStop(0.7, '#d0d0da');
-  bodyGrad.addColorStop(1, '#b8b8c5');
+  // === 身体（小巧圆润太空服）===
+  const bodyGrad = ctx.createLinearGradient(-16, 8, 16, 32);
+  bodyGrad.addColorStop(0, '#f0f4f8');
+  bodyGrad.addColorStop(0.4, '#e4e8ee');
+  bodyGrad.addColorStop(1, '#c8cdd5');
   ctx.fillStyle = bodyGrad;
   ctx.beginPath();
-  ctx.ellipse(0, 20, 22, 18, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 18, 16, 14, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // 太空服胸口面板
-  ctx.fillStyle = '#3a3a4a';
+  // 白色肚皮
+  ctx.fillStyle = '#fff';
   ctx.beginPath();
-  ctx.roundRect(-10, 12, 20, 12, 3);
+  ctx.ellipse(0, 20, 10, 9, 0, 0, Math.PI * 2);
   ctx.fill();
-  // 指示灯
-  const blinkLight = Math.sin(t * 3) > 0 ? '#4f4' : '#222';
-  ctx.fillStyle = blinkLight;
-  ctx.beginPath(); ctx.arc(-4, 18, 2, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#f44';
-  ctx.beginPath(); ctx.arc(4, 18, 2, 0, Math.PI * 2); ctx.fill();
 
-  // === 头部（大头 kawaii 比例）===
-  ctx.fillStyle = '#d4a060';
+  // 太空服胸口星星徽章
+  ctx.fillStyle = '#fb6400';
+  drawStar5(ctx, 0, 15, 4, 2);
+
+  // 肩带装饰
+  ctx.strokeStyle = '#7EC8E3';
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(0, -8, 26, 0, Math.PI * 2);
+  ctx.moveTo(-6, 8); ctx.lineTo(-4, 14);
+  ctx.moveTo(6, 8); ctx.lineTo(4, 14);
+  ctx.stroke();
+
+  // === 头部（超大头 kawaii 比例 2.5:1）===
+  const headR = 24;
+  const headY = -5;
+  // 毛发基底
+  ctx.fillStyle = '#F5C563';
+  ctx.beginPath();
+  ctx.arc(0, headY, headR, 0, Math.PI * 2);
   ctx.fill();
 
-  // 毛发纹理
+  // 白色脸颊/口鼻区域
+  ctx.fillStyle = '#FFF5E0';
+  ctx.beginPath();
+  ctx.ellipse(0, headY + 4, 14, 10, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 毛发纹理（更细腻）
   ctx.save();
   ctx.beginPath();
-  ctx.arc(0, -8, 26, 0, Math.PI * 2);
+  ctx.arc(0, headY, headR, 0, Math.PI * 2);
   ctx.clip();
-  const furColors = ['#daa870', '#c89050', '#b88040', '#e0b080', '#cc9858'];
-  for (let i = 0; i < 80; i++) {
-    const angle = (i / 80) * Math.PI * 2 + Math.sin(i * 5) * 0.2;
-    const r2 = 6 + Math.abs(Math.sin(i * 3.3)) * 18;
-    const fx = Math.cos(angle) * r2;
-    const fy = -8 + Math.sin(angle) * r2;
-    const len = 2 + Math.abs(Math.sin(i * 4.7)) * 3;
+  const furColors = ['#F0B850', '#E8A840', '#DFA038', '#F8C868', '#E8B048'];
+  for (let i = 0; i < 60; i++) {
+    const angle = (i / 60) * Math.PI * 2;
+    const fr = 8 + Math.abs(Math.sin(i * 2.7)) * 14;
+    const fx = Math.cos(angle) * fr;
+    const fy = headY + Math.sin(angle) * fr;
+    const len = 2 + Math.abs(Math.sin(i * 3.3)) * 2;
     ctx.strokeStyle = furColors[i % furColors.length];
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 0.8;
     ctx.beginPath();
     ctx.moveTo(fx, fy);
-    ctx.lineTo(fx + Math.cos(angle + 0.4) * len, fy + Math.sin(angle + 0.4) * len);
+    ctx.lineTo(fx + Math.cos(angle + 0.3) * len, fy + Math.sin(angle + 0.3) * len);
     ctx.stroke();
   }
   ctx.restore();
 
-  // === 耳朵（圆润下垂）===
-  ctx.fillStyle = '#b08040';
-  ctx.beginPath();
-  ctx.ellipse(-18, -22, 8, 13, -0.2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#e8b8a0';
-  ctx.beginPath();
-  ctx.ellipse(-18, -21, 4.5, 8, -0.2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#b08040';
-  ctx.beginPath();
-  ctx.ellipse(18, -22, 8, 13, 0.2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#e8b8a0';
-  ctx.beginPath();
-  ctx.ellipse(18, -21, 4.5, 8, 0.2, 0, Math.PI * 2);
-  ctx.fill();
+  // === 耳朵（柴犬立耳，圆润）===
+  for (const side of [-1, 1]) {
+    // 外耳
+    ctx.fillStyle = '#DFA038';
+    ctx.beginPath();
+    ctx.ellipse(side * 16, headY - 14, 7, 12, side * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    // 内耳
+    ctx.fillStyle = '#FFB5C2';
+    ctx.beginPath();
+    ctx.ellipse(side * 16, headY - 13, 4, 7, side * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
-  // === 眼睛（大眼 kawaii）===
-  const eyeScale = phase === 'charging' ? 1 + chargeP * 0.12 : 1;
-  const blink = Math.sin(t * 0.35) > 0.96 ? 0.1 : 1;
+  // === 眼睛（超大 kawaii 大眼）===
+  const eyeScale = phase === 'charging' ? 1 + chargeP * 0.1 : 1;
+  const blink = Math.sin(t * 0.35) > 0.96 ? 0.05 : 1;
 
   for (const side of [-1, 1]) {
-    const ex = side * 9;
-    const ey = -10;
+    const ex = side * 8;
+    const ey = headY + 1;
     // 眼白
     ctx.fillStyle = '#fff';
     ctx.beginPath();
-    ctx.ellipse(ex, ey, 7 * eyeScale, 8 * eyeScale * blink, 0, 0, Math.PI * 2);
+    ctx.ellipse(ex, ey, 6.5 * eyeScale, 7.5 * eyeScale * blink, 0, 0, Math.PI * 2);
     ctx.fill();
-    // 瞳孔（大）
+    // 瞳孔（超大）
     ctx.fillStyle = '#1a1a1a';
     ctx.beginPath();
-    ctx.arc(ex + side * 0.3, ey + 0.5, 5 * eyeScale, 0, Math.PI * 2);
+    ctx.arc(ex + side * 0.2, ey + 0.3, 5 * eyeScale, 0, Math.PI * 2);
     ctx.fill();
-    // 虹膜
-    ctx.fillStyle = '#5a3a1a';
-    ctx.beginPath();
-    ctx.arc(ex + side * 0.3, ey + 0.5, 4 * eyeScale, 0, Math.PI * 2);
-    ctx.fill();
-    // 高光（大 + 小）
+    // 高光（大 + 小 — 10 点钟方向）
     ctx.fillStyle = '#fff';
     ctx.beginPath();
-    ctx.arc(ex + side * 2, ey - 2.5, 2.2, 0, Math.PI * 2);
+    ctx.arc(ex + side * 1.5 - 1, ey - 2, 2.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(ex - side * 1, ey + 2, 1, 0, Math.PI * 2);
+    ctx.arc(ex - side * 0.5 + 1.5, ey + 1.5, 1, 0, Math.PI * 2);
     ctx.fill();
+    // 小眼睑线
+    if (blink > 0.5) {
+      ctx.strokeStyle = '#8B6914';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(ex, ey, 6.5 * eyeScale, -Math.PI * 0.8, -Math.PI * 0.2);
+      ctx.stroke();
+    }
   }
 
-  // 眉毛
-  ctx.strokeStyle = '#6a4a20';
-  ctx.lineWidth = 1.8;
+  // 眉毛（萌态）
+  ctx.strokeStyle = '#8B6914';
+  ctx.lineWidth = 1.5;
   for (const side of [-1, 1]) {
-    const browY = phase === 'charging' ? -19 - chargeP * 2 : -18;
+    const browY = phase === 'charging' ? headY - 8 - chargeP * 2 : headY - 7;
     ctx.beginPath();
-    ctx.moveTo(side * 4, browY);
-    ctx.quadraticCurveTo(side * 9, browY - 1.5, side * 13, browY + (phase === 'charging' ? -1.5 : 1));
+    ctx.moveTo(side * 3, browY);
+    ctx.quadraticCurveTo(side * 7, browY - 2, side * 11, browY + (phase === 'charging' ? -2 : 0.5));
     ctx.stroke();
   }
 
-  // 腮红（kawaii 标志）
-  ctx.globalAlpha = 0.25;
-  ctx.fillStyle = '#ff8888';
+  // 腮红（kawaii 标志性粉色）
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = '#FFB5C2';
   ctx.beginPath();
-  ctx.ellipse(-14, -3, 5, 3, 0, 0, Math.PI * 2);
+  ctx.ellipse(-13, headY + 5, 5, 3, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
-  ctx.ellipse(14, -3, 5, 3, 0, 0, Math.PI * 2);
+  ctx.ellipse(13, headY + 5, 5, 3, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
 
-  // 鼻子
-  ctx.fillStyle = '#2a2a2a';
+  // 鼻子（小巧倒三角）
+  ctx.fillStyle = '#3a3a3a';
   ctx.beginPath();
-  ctx.ellipse(0, -3, 4, 3, 0, 0, Math.PI * 2);
+  ctx.moveTo(0, headY + 6);
+  ctx.lineTo(-3, headY + 3);
+  ctx.lineTo(3, headY + 3);
+  ctx.closePath();
   ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,0.3)';
   ctx.beginPath();
-  ctx.ellipse(-0.8, -4, 1.8, 1, -0.3, 0, Math.PI * 2);
+  ctx.ellipse(-0.5, headY + 4, 1.2, 0.6, -0.3, 0, Math.PI * 2);
   ctx.fill();
 
   // 嘴巴
   if (phase === 'firing') {
     ctx.fillStyle = '#4a2020';
     ctx.beginPath();
-    ctx.ellipse(0, 2, 4.5, 3.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, headY + 10, 4, 3, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#e88080';
+    ctx.fillStyle = '#FFB5C2';
     ctx.beginPath();
-    ctx.ellipse(0, 3, 2.5, 2, 0, 0, Math.PI);
+    ctx.ellipse(0, headY + 10.5, 2.5, 1.5, 0, 0, Math.PI);
     ctx.fill();
   } else {
-    ctx.strokeStyle = '#6a4a20';
-    ctx.lineWidth = 1.5;
+    // "w" 形嘴巴（经典 kawaii）
+    ctx.strokeStyle = '#8B6914';
+    ctx.lineWidth = 1.3;
     ctx.beginPath();
-    ctx.moveTo(-3.5, -0.5);
-    ctx.quadraticCurveTo(0, 2, 3.5, -0.5);
+    ctx.moveTo(-3, headY + 8.5);
+    ctx.quadraticCurveTo(-1.5, headY + 10.5, 0, headY + 8.5);
+    ctx.quadraticCurveTo(1.5, headY + 10.5, 3, headY + 8.5);
     ctx.stroke();
-    // 舌头
+    // 舌头（idle 时吐出）
     if (phase === 'idle') {
-      ctx.fillStyle = '#e88080';
+      ctx.fillStyle = '#FFB5C2';
       ctx.beginPath();
-      ctx.ellipse(0, 1.5, 2.5, 3.5, 0, 0, Math.PI);
+      ctx.ellipse(0, headY + 10, 2, 3, 0, 0, Math.PI);
       ctx.fill();
     }
   }
 
-  // === 头盔（玻璃质感）===
+  // === 头盔（玻璃质感 — 透明圆形）===
   ctx.save();
+  const helmR = headR + 5;
   ctx.beginPath();
-  ctx.ellipse(0, -10, 30, 30, 0, -Math.PI * 0.85, Math.PI * 0.85);
-  ctx.strokeStyle = 'rgba(150,200,255,0.4)';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.fillStyle = 'rgba(180,220,255,0.05)';
-  ctx.fill();
-  // 高光弧
-  ctx.beginPath();
-  ctx.ellipse(-8, -28, 18, 14, -0.3, -Math.PI * 0.55, Math.PI * 0.3);
-  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.arc(0, headY, helmR, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(150,200,255,0.35)';
   ctx.lineWidth = 1.8;
   ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.fillStyle = 'rgba(180,220,255,0.04)';
+  ctx.fill();
+  // 高光弧（左上角）
   ctx.beginPath();
-  ctx.arc(-10, -30, 2.5, 0, Math.PI * 2);
+  ctx.arc(0, headY, helmR - 1, -Math.PI * 0.75, -Math.PI * 0.15);
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // 高光点
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.beginPath();
+  ctx.arc(-8, headY - 20, 2, 0, Math.PI * 2);
+  ctx.fill();
+  // 天线
+  ctx.strokeStyle = '#aaa';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(0, headY - helmR);
+  ctx.lineTo(0, headY - helmR - 8);
+  ctx.stroke();
+  ctx.fillStyle = '#f44';
+  ctx.beginPath();
+  ctx.arc(0, headY - helmR - 8, 2, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 
-  // === 尾巴 ===
-  const tailWag = Math.sin(t * 4) * 15;
-  ctx.strokeStyle = '#d4a060';
-  ctx.lineWidth = 4.5;
+  // === 尾巴（蓬松卷尾）===
+  const tailWag = Math.sin(t * 4) * 12;
+  ctx.strokeStyle = '#F5C563';
+  ctx.lineWidth = 5;
   ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(-20, 25);
-  ctx.quadraticCurveTo(-32, 12 + tailWag, -28, -2 + tailWag);
+  ctx.moveTo(-14, 22);
+  ctx.quadraticCurveTo(-26, 10 + tailWag, -22, -2 + tailWag);
   ctx.stroke();
-  ctx.strokeStyle = '#b08040';
-  ctx.lineWidth = 2.5;
+  // 尾巴尖（白色蓬松）
+  ctx.strokeStyle = '#FFF5E0';
+  ctx.lineWidth = 6;
   ctx.beginPath();
-  ctx.moveTo(-30, 6 + tailWag);
-  ctx.quadraticCurveTo(-35, -1 + tailWag, -30, -6 + tailWag);
+  ctx.arc(-22, -2 + tailWag, 4, 0, Math.PI * 2);
   ctx.stroke();
 
-  // === 前爪 ===
-  ctx.fillStyle = '#d4a060';
+  // === 四肢（短胖可爱）===
+  // 后腿
+  ctx.fillStyle = '#DFA038';
   ctx.beginPath();
-  ctx.ellipse(18, 10, 7, 5.5, 0.2, 0, Math.PI * 2);
+  ctx.ellipse(-8, 28, 5, 4, -0.1, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
-  ctx.ellipse(18, 18, 6, 5, 0.15, 0, Math.PI * 2);
+  ctx.ellipse(8, 28, 5, 4, 0.1, 0, Math.PI * 2);
+  ctx.fill();
+  // 前爪
+  ctx.fillStyle = '#F5C563';
+  ctx.beginPath();
+  ctx.ellipse(14, 14, 5, 4, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(14, 20, 4.5, 3.5, 0.15, 0, Math.PI * 2);
+  ctx.fill();
+  // 爪垫
+  ctx.fillStyle = '#FFB5C2';
+  ctx.beginPath();
+  ctx.ellipse(14, 14, 2, 1.5, 0.2, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.restore();
+}
+
+// 辅助：五角星绘制
+function drawStar5(ctx: CanvasRenderingContext2D, cx: number, cy: number, outerR: number, innerR: number) {
+  ctx.beginPath();
+  for (let i = 0; i < 5; i++) {
+    const aOuter = (i * 72 - 90) * Math.PI / 180;
+    const aInner = ((i * 72 + 36) - 90) * Math.PI / 180;
+    ctx.lineTo(cx + Math.cos(aOuter) * outerR, cy + Math.sin(aOuter) * outerR);
+    ctx.lineTo(cx + Math.cos(aInner) * innerR, cy + Math.sin(aInner) * innerR);
+  }
+  ctx.closePath();
+  ctx.fill();
 }
 
 // ===== 绘制：电磁炮（小而精致）=====
@@ -769,7 +866,6 @@ function drawExplosion(ctx: CanvasRenderingContext2D, cx: number, cy: number, pr
   if (progress < 0.2) {
     const flashP = 1 - progress / 0.2;
     const flashR = r * 0.5 + progress * r * 5;
-    // 白色核心
     const flashGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, flashR);
     flashGrad.addColorStop(0, `rgba(255,255,255,${flashP * 0.95})`);
     flashGrad.addColorStop(0.15, `rgba(255,240,200,${flashP * 0.8})`);
@@ -780,11 +876,49 @@ function drawExplosion(ctx: CanvasRenderingContext2D, cx: number, cy: number, pr
     ctx.beginPath();
     ctx.arc(cx, cy, flashR, 0, Math.PI * 2);
     ctx.fill();
-    // 额外白屏闪光
     if (progress < 0.08) {
       ctx.fillStyle = `rgba(255,255,255,${(1 - progress / 0.08) * 0.3})`;
       ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     }
+  }
+
+  // 0.08-0.7: 大气层撕裂效果
+  if (progress > 0.08 && progress < 0.7) {
+    const atmoP = (progress - 0.08) / 0.62;
+    const atmoR = r * (1.18 + atmoP * 1.5);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    // 大气层碎片环 — 撕裂的蓝色光环
+    for (let i = 0; i < 8; i++) {
+      const aStart = (i / 8) * Math.PI * 2 + t * 0.3;
+      const aEnd = aStart + (0.3 + Math.sin(i * 2.1) * 0.2) * (1 - atmoP * 0.5);
+      const tearAlpha = Math.max(0, 0.4 - atmoP * 0.5) * (0.6 + Math.sin(i * 3.7 + t * 2) * 0.4);
+      if (tearAlpha > 0.02) {
+        ctx.strokeStyle = `rgba(100,180,255,${tearAlpha})`;
+        ctx.lineWidth = 3 + (1 - atmoP) * 4;
+        ctx.shadowColor = 'rgba(80,160,255,0.5)';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(cx, cy, atmoR, aStart, aEnd);
+        ctx.stroke();
+      }
+    }
+    // 撕裂碎片 — 小蓝色粒子向外飞散
+    if (atmoP < 0.6) {
+      const tearCount = Math.floor((1 - atmoP / 0.6) * 12);
+      for (let i = 0; i < tearCount; i++) {
+        const a = (i / tearCount) * Math.PI * 2 + t * 0.2;
+        const d = atmoR * (0.9 + Math.sin(i * 4.3 + t * 3) * 0.15);
+        const tx = cx + Math.cos(a) * d;
+        const ty = cy + Math.sin(a) * d;
+        const ta = (1 - atmoP / 0.6) * 0.5;
+        ctx.fillStyle = `rgba(120,200,255,${ta})`;
+        ctx.beginPath();
+        ctx.arc(tx, ty, 2 + Math.random() * 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
   }
 
   // 0.1-0.6: 冲击波环（4层）
@@ -824,26 +958,60 @@ function drawExplosion(ctx: CanvasRenderingContext2D, cx: number, cy: number, pr
     ctx.closePath(); ctx.fill();
   }
 
-  // 0.15-0.8: 翻滚火焰团
+  // 0.15-0.85: 翻滚火焰团（增强版 — Solar Smash 风格）
   if (progress > 0.12 && progress < 0.85) {
     const fp = (progress - 0.12) / 0.73;
-    const fireCount = 6;
-    for (let i = 0; i < fireCount; i++) {
-      const angle = (i / fireCount) * Math.PI * 2 + t * 0.5;
-      const dist = fp * r * 1.8 * (0.5 + Math.sin(i * 2.3) * 0.3);
+    // 外层火焰（大而暗）
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2 + t * 0.4 + Math.sin(i * 1.7) * 0.3;
+      const dist = fp * r * (2.0 + Math.sin(i * 2.3) * 0.5);
       const fx = cx + Math.cos(angle) * dist;
       const fy = cy + Math.sin(angle) * dist;
-      const fSize = r * (0.4 + Math.sin(i * 3.7) * 0.2) * (1 - fp * 0.5);
+      const fSize = r * (0.5 + Math.sin(i * 3.7) * 0.25) * (1 - fp * 0.4);
       const fGrad = ctx.createRadialGradient(fx, fy, 0, fx, fy, fSize);
-      const fAlpha = (1 - fp) * 0.4;
-      fGrad.addColorStop(0, `rgba(255,220,100,${fAlpha})`);
-      fGrad.addColorStop(0.4, `rgba(255,120,30,${fAlpha * 0.6})`);
-      fGrad.addColorStop(1, 'rgba(200,40,0,0)');
+      const fAlpha = (1 - fp) * 0.35;
+      fGrad.addColorStop(0, `rgba(255,200,80,${fAlpha})`);
+      fGrad.addColorStop(0.3, `rgba(255,100,20,${fAlpha * 0.6})`);
+      fGrad.addColorStop(0.7, `rgba(180,30,0,${fAlpha * 0.2})`);
+      fGrad.addColorStop(1, 'rgba(100,20,0,0)');
       ctx.fillStyle = fGrad;
       ctx.beginPath();
       ctx.arc(fx, fy, fSize, 0, Math.PI * 2);
       ctx.fill();
     }
+    // 内层火焰（小而亮）
+    for (let i = 0; i < 5; i++) {
+      const angle = (i / 5) * Math.PI * 2 + t * 0.8 + 0.5;
+      const dist = fp * r * (0.8 + Math.sin(i * 3.1) * 0.3);
+      const fx = cx + Math.cos(angle) * dist;
+      const fy = cy + Math.sin(angle) * dist;
+      const fSize = r * (0.2 + Math.sin(i * 2.7) * 0.1) * (1 - fp * 0.3);
+      const fGrad = ctx.createRadialGradient(fx, fy, 0, fx, fy, fSize);
+      const fAlpha = (1 - fp) * 0.5;
+      fGrad.addColorStop(0, `rgba(255,255,200,${fAlpha})`);
+      fGrad.addColorStop(0.5, `rgba(255,180,60,${fAlpha * 0.5})`);
+      fGrad.addColorStop(1, 'rgba(255,80,0,0)');
+      ctx.fillStyle = fGrad;
+      ctx.beginPath();
+      ctx.arc(fx, fy, fSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // 0.3-0.9: 岩浆球核心（Solar Smash 风格熔岩核心）
+  if (progress > 0.25 && progress < 0.9) {
+    const lavaP = (progress - 0.25) / 0.65;
+    const lavaR = r * (0.6 + lavaP * 1.2);
+    const lavaAlpha = Math.max(0, 0.6 - lavaP * 0.7);
+    const lGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, lavaR);
+    lGrad.addColorStop(0, `rgba(255,200,50,${lavaAlpha})`);
+    lGrad.addColorStop(0.4, `rgba(255,100,20,${lavaAlpha * 0.6})`);
+    lGrad.addColorStop(0.7, `rgba(200,40,0,${lavaAlpha * 0.3})`);
+    lGrad.addColorStop(1, 'rgba(100,20,0,0)');
+    ctx.fillStyle = lGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, lavaR, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   ctx.restore();
@@ -862,6 +1030,7 @@ export default function EarthCannonPage() {
     meteors: [] as Meteor[],
     smoke: [] as Smoke[],
     embers: [] as Ember[],
+    lava: [] as Lava[],
     startTime: 0,
     screenShake: 0,
     lastFrame: 0,
@@ -915,7 +1084,7 @@ export default function EarthCannonPage() {
     window.addEventListener('resize', resize);
 
     const getEarth = () => ({ x: w * 0.72, y: h * 0.38, r: Math.min(w, h) * 0.15 });
-    const getMuzzle = () => ({ x: w * 0.22 + 12 + 59, y: h * 0.58 });
+    const getMuzzle = () => ({ x: w * 0.20 + 18 + 59, y: h * 0.56 });
 
     state.startTime = performance.now();
     state.lastFrame = state.startTime;
@@ -1031,6 +1200,14 @@ export default function EarthCannonPage() {
         if (e.life <= 0) state.embers.splice(i, 1);
       }
 
+      // 更新岩浆
+      for (let i = state.lava.length - 1; i >= 0; i--) {
+        const l = state.lava[i];
+        l.x += l.vx; l.y += l.vy; l.vy += 0.02;
+        l.life -= dt * 0.5;
+        if (l.life <= 0) state.lava.splice(i, 1);
+      }
+
       // === 绘制场景 ===
       // 地球
       if (state.phase !== 'explosion' && state.phase !== 'aftermath') {
@@ -1043,24 +1220,42 @@ export default function EarthCannonPage() {
       if (state.phase === 'explosion') {
         const ep = Math.min((now - state.phaseTime) / 3000, 1);
         drawExplosion(ctx, earth.x, earth.y, ep, t, earth.r);
-        // 碎片
+        // 碎片（带冷却效果）
         for (const d of state.debris) {
           ctx.save();
           ctx.globalAlpha = d.life;
+          // 碎片冷却：炽热→暗灰
+          const heat = Math.max(0, d.life - 0.2) / 0.8;
+          const hotR = 255, hotG = 140 + Math.floor(heat * 60), hotB = 40;
+          const coolR = 80, coolG = 70, coolB = 65;
+          const r2 = Math.floor(hotR * heat + coolR * (1 - heat));
+          const g2 = Math.floor(hotG * heat + coolG * (1 - heat));
+          const b2 = Math.floor(hotB * heat + coolB * (1 - heat));
+          const coolColor = `rgb(${r2},${g2},${b2})`;
+          // 火焰拖尾（炽热时发光，冷却后消失）
           for (let ti = d.trail.length - 1; ti >= 0; ti--) {
             const tr = d.trail[ti];
-            const ta = (1 - ti / d.trail.length) * 0.3;
-            ctx.fillStyle = `rgba(255,${140 + ti * 12},40,${ta})`;
-            ctx.beginPath();
-            ctx.arc(tr.x, tr.y, d.size * 0.35 * (1 - ti / d.trail.length), 0, Math.PI * 2);
-            ctx.fill();
+            const ta = (1 - ti / d.trail.length) * 0.3 * heat;
+            if (ta > 0.02) {
+              ctx.fillStyle = `rgba(255,${140 + ti * 12},40,${ta})`;
+              ctx.beginPath();
+              ctx.arc(tr.x, tr.y, d.size * 0.35 * (1 - ti / d.trail.length), 0, Math.PI * 2);
+              ctx.fill();
+            }
           }
           ctx.translate(d.x, d.y);
           ctx.rotate(d.rotation);
-          ctx.fillStyle = d.color;
-          ctx.shadowColor = '#f80';
-          ctx.shadowBlur = 4;
+          ctx.fillStyle = coolColor;
+          if (heat > 0.3) {
+            ctx.shadowColor = '#f80';
+            ctx.shadowBlur = heat * 8;
+          }
           ctx.fillRect(-d.size / 2, -d.size / 2, d.size, d.size);
+          // 碎片内岩浆纹理（炽热时）
+          if (heat > 0.5) {
+            ctx.fillStyle = `rgba(255,120,20,${(heat - 0.5) * 0.6})`;
+            ctx.fillRect(-d.size * 0.3, -d.size * 0.2, d.size * 0.4, d.size * 0.3);
+          }
           ctx.restore();
         }
         // 烟雾
@@ -1073,6 +1268,21 @@ export default function EarthCannonPage() {
           ctx.fillStyle = sGrad;
           ctx.beginPath();
           ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+        // 岩浆粒子（炽热→暗红冷却）
+        for (const l of state.lava) {
+          ctx.save();
+          const heat = Math.max(0, l.life / l.maxLife);
+          const lr = Math.floor(255 * heat + 120 * (1 - heat));
+          const lg = Math.floor(80 * heat + 20 * (1 - heat));
+          ctx.globalAlpha = heat * 0.8;
+          ctx.fillStyle = `rgb(${lr},${lg},0)`;
+          ctx.shadowColor = `rgb(${lr},${lg},0)`;
+          ctx.shadowBlur = heat * 6;
+          ctx.beginPath();
+          ctx.arc(l.x, l.y, l.r * (0.5 + heat * 0.5), 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
         }
@@ -1099,6 +1309,16 @@ export default function EarthCannonPage() {
           ctx.fill();
           ctx.restore();
         }
+        for (const l of state.lava) {
+          ctx.save();
+          const heat = Math.max(0, l.life / l.maxLife);
+          ctx.globalAlpha = heat * 0.5 * (1 - ap);
+          ctx.fillStyle = `rgb(${Math.floor(200 * heat + 80)},${Math.floor(50 * heat + 10)},0)`;
+          ctx.beginPath();
+          ctx.arc(l.x, l.y, l.r * (0.5 + heat * 0.5), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
         if (ap < 0.5) {
           const remGrad = ctx.createRadialGradient(earth.x, earth.y, 0, earth.x, earth.y, 60);
           remGrad.addColorStop(0, `rgba(255,120,30,${(1 - ap * 2) * 0.2})`);
@@ -1112,8 +1332,8 @@ export default function EarthCannonPage() {
 
       // 汪星人 + 电磁炮
       if (state.phase !== 'aftermath') {
-        drawDog(ctx, w * 0.22, h * 0.58, t, state.phase, chargeProgress);
-        drawCannon(ctx, w * 0.22 + 12, h * 0.58, t, state.phase, chargeProgress);
+        drawDog(ctx, w * 0.20, h * 0.56, t, state.phase, chargeProgress);
+        drawCannon(ctx, w * 0.20 + 18, h * 0.56, t, state.phase, chargeProgress);
       }
 
       // 光束
@@ -1216,6 +1436,20 @@ export default function EarthCannonPage() {
             r: Math.random() * 1.5 + 0.5,
           });
         }
+        // 岩浆粒子 — 50（沿裂纹喷出）
+        for (let i = 0; i < 50; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const spd = Math.random() * 3 + 0.8;
+          state.lava.push({
+            x: earth.x + Math.cos(a) * earth.r * (0.1 + Math.random() * 0.6),
+            y: earth.y + Math.sin(a) * earth.r * (0.1 + Math.random() * 0.6),
+            vx: Math.cos(a) * spd,
+            vy: Math.sin(a) * spd - Math.random() * 2,
+            life: 1.5 + Math.random() * 1.5,
+            maxLife: 3,
+            r: Math.random() * 3 + 1,
+          });
+        }
         setPhase('explosion');
       } else if (state.phase === 'explosion' && now - state.phaseTime > 3000) {
         state.phase = 'aftermath'; state.phaseTime = now;
@@ -1240,7 +1474,7 @@ export default function EarthCannonPage() {
     if (state.phase === 'aftermath') {
       state.phase = 'idle';
       state.particles = []; state.debris = []; state.meteors = [];
-      state.smoke = []; state.embers = [];
+      state.smoke = []; state.embers = []; state.lava = [];
       state.screenShake = 0;
       earthCache = null; nebulaCache = null;
       state.stars = initStars(window.innerWidth, window.innerHeight);
