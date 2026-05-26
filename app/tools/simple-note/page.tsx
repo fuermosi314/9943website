@@ -319,7 +319,9 @@ function EntryEditor({
   }, []);
 
   // 粘贴图片上传
-  const handlePaste = useCallback(async (e: ClipboardEvent) => {
+  const editorRef = useRef<HTMLDivElement>(null);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
     const imageFiles: File[] = [];
@@ -335,11 +337,6 @@ function EntryEditor({
     imageFiles.forEach(f => fileList.items.add(f));
     handleAddPhotos(fileList.files);
   }, [handleAddPhotos]);
-
-  useEffect(() => {
-    document.addEventListener('paste', handlePaste);
-    return () => document.removeEventListener('paste', handlePaste);
-  }, [handlePaste]);
 
   const handleSave = useCallback(async () => {
     if (saving) return;
@@ -361,7 +358,7 @@ function EntryEditor({
   }, [date, content, mood, photos, entry, saving, onSave, clearDraft]);
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#0a0a1a]">
+    <div ref={editorRef} onPaste={handlePaste} className="fixed inset-0 z-50 flex flex-col bg-[#0a0a1a]">
       <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
         <button onClick={onClose} className="text-white/60 hover:text-white text-sm">取消</button>
         <span className="text-white text-sm font-medium">{entry ? '编辑日记' : '新建日记'}</span>
