@@ -284,6 +284,10 @@ export default function Scene3D() {
     scene: Scene; furniture: Furniture; item: Item;
   }>>([]);
   const [pendingHighlight, setPendingHighlight] = useState<string | null>(null);
+  const [showFurnitureEditor, setShowFurnitureEditor] = useState(false);
+  const [editingFurniture, setEditingFurniture] = useState<Furniture | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', color: '', x: 0, z: 0, rotation: 0, scale: 1 });
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Load / init scenes ──────────────────────────────────────────
   useEffect(() => {
@@ -500,6 +504,45 @@ export default function Scene3D() {
     setActiveSceneId(e.target.value);
   }, []);
 
+  // ── Furniture context menu handler ──────────────────────────────────
+  const handleFurnitureContext = useCallback((clientX: number, clientY: number) => {
+    const container = containerRef.current;
+    const camera = cameraRef.current;
+    const scene = sceneRef.current;
+    if (!container || !camera || !scene) return;
+
+    const rect = container.getBoundingClientRect();
+    pointer.current.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.current.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.current.setFromCamera(pointer.current, camera);
+
+    const meshes: THREE.Object3D[] = [];
+    scene.traverse(obj => { if (obj.userData?.furnitureId) meshes.push(obj); });
+    const intersects = raycaster.current.intersectObjects(meshes, true);
+
+    if (intersects.length > 0) {
+      let target = intersects[0].object as THREE.Object3D;
+      while (target && !target.userData?.furnitureId) target = target.parent!;
+      if (target?.userData?.furnitureId) {
+        const fid = target.userData.furnitureId as string;
+        const activeScene = scenes.find(s => s.id === activeSceneId);
+        const furniture = activeScene?.furniture.find(f => f.id === fid);
+        if (furniture) {
+          setEditingFurniture(furniture);
+          setEditForm({
+            name: furniture.name,
+            color: furniture.color,
+            x: furniture.position.x,
+            z: furniture.position.z,
+            rotation: furniture.rotation,
+            scale: furniture.scale,
+          });
+          setShowFurnitureEditor(true);
+        }
+      }
+    }
+  }, [scenes, activeSceneId]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center" style={{ height: 'calc(100vh - 140px)' }}>
@@ -510,7 +553,20 @@ export default function Scene3D() {
 
   return (
     <div className="relative w-full" style={{ height: 'calc(100vh - 140px)' }}>
-      <div ref={containerRef} className="w-full h-full" onPointerDown={handleClick} />
+      <div ref={containerRef} className="w-full h-full"
+        onPointerDown={(e) => {
+          handleClick(e);
+          longPressTimer.current = setTimeout(() => {
+            handleFurnitureContext(e.clientX, e.clientY);
+          }, 500);
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          handleFurnitureContext(e.clientX, e.clientY);
+        }}
+        onPointerUp={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
+        onPointerLeave={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
+      />
       {/* Scene switcher dropdown */}
       <div className="absolute top-4 right-4 z-10">
         <select
@@ -743,6 +799,133 @@ export default function Scene3D() {
                   } catch { alert('导入失败，数据格式不正确'); }
                 }} />
               </label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Furniture Editor Modal */}
+      {showFurnitureEditor && editingFurniture && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#1a1a2e] rounded-2xl w-full max-w-md mx-4 border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-5 border-b border-white/10 flex items-center justify-between">
+              <h3 className="text-white text-lg font-bold">编辑家具</h3>
+              <button onClick={() => setShowFurnitureEditor(false)}
+                className="text-white/50 hover:text-white text-xl">&times;</button>
+            </div>
+            <div className="p-5 space-y-4">
+              {/* Name */}
+              <div>
+                <label className="text-white/70 text-sm mb-1 block">名称</label>
+                <input type="text" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#fb6400]" />
+              </div>
+              {/* Color */}
+              <div>
+                <label className="text-white/70 text-sm mb-1 block">颜色</label>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={editForm.color || FURNITURE_DEFAULTS[editingFurniture.type].color}
+                    onChange={e => setEditForm(f => ({ ...f, color: e.target.value }))}
+                    className="w-10 h-10 rounded cursor-pointer bg-transparent border-0" />
+                  <span className="text-white/50 text-sm">{editForm.color || '默认'}</span>
+                  <button onClick={() => setEditForm(f => ({ ...f, color: '' }))}
+                    className="ml-auto px-3 py-1 text-xs text-white/70 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 transition-colors">
+                    恢复默认
+                  </button>
+                </div>
+              </div>
+              {/* Position */}
+              <div>
+                <label className="text-white/70 text-sm mb-1 block">位置</label>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="text-white/50 text-xs mb-1 block">X</label>
+                    <input type="number" step={0.5} value={editForm.x}
+                      onChange={e => setEditForm(f => ({ ...f, x: Number(e.target.value) }))}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#fb6400]" />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-white/50 text-xs mb-1 block">Z</label>
+                    <input type="number" step={0.5} value={editForm.z}
+                      onChange={e => setEditForm(f => ({ ...f, z: Number(e.target.value) }))}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#fb6400]" />
+                  </div>
+                </div>
+              </div>
+              {/* Rotation */}
+              <div>
+                <label className="text-white/70 text-sm mb-1 block">旋转 ({editForm.rotation}°)</label>
+                <div className="flex gap-2">
+                  <button onClick={() => setEditForm(f => ({ ...f, rotation: (f.rotation - 90 + 360) % 360 }))}
+                    className="flex-1 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg text-sm border border-white/10 transition-colors">
+                    ↺ 左旋
+                  </button>
+                  <button onClick={() => setEditForm(f => ({ ...f, rotation: (f.rotation + 90) % 360 }))}
+                    className="flex-1 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg text-sm border border-white/10 transition-colors">
+                    ↻ 右旋
+                  </button>
+                </div>
+              </div>
+              {/* Scale */}
+              <div>
+                <label className="text-white/70 text-sm mb-1 block">缩放 ({editForm.scale.toFixed(1)}x)</label>
+                <input type="range" min={0.5} max={2} step={0.1} value={editForm.scale}
+                  onChange={e => setEditForm(f => ({ ...f, scale: Number(e.target.value) }))}
+                  className="w-full accent-[#fb6400]" />
+              </div>
+            </div>
+            <div className="p-5 border-t border-white/10 flex gap-3">
+              <button onClick={() => {
+                if (!editingFurniture) return;
+                const updatedFurniture: Furniture = {
+                  ...editingFurniture,
+                  name: editForm.name,
+                  color: editForm.color,
+                  position: { x: editForm.x, z: editForm.z },
+                  rotation: editForm.rotation,
+                  scale: editForm.scale,
+                };
+                setScenes(prev => {
+                  const updated = prev.map(s => {
+                    if (s.id !== activeSceneId) return s;
+                    return {
+                      ...s,
+                      furniture: s.furniture.map(f => f.id === editingFurniture.id ? updatedFurniture : f),
+                    };
+                  });
+                  const active = updated.find(s => s.id === activeSceneId);
+                  if (active) saveScene(active);
+                  return updated;
+                });
+                setShowFurnitureEditor(false);
+                setEditingFurniture(null);
+              }} className="flex-1 py-2 bg-[#fb6400] hover:bg-[#e55a00] text-white rounded-xl font-medium transition-colors">
+                保存
+              </button>
+              <button onClick={() => {
+                if (!editingFurniture) return;
+                if (!confirm(`确定删除「${editingFurniture.name}」？此操作不可撤销。`)) return;
+                setScenes(prev => {
+                  const updated = prev.map(s => {
+                    if (s.id !== activeSceneId) return s;
+                    return {
+                      ...s,
+                      furniture: s.furniture.filter(f => f.id !== editingFurniture.id),
+                    };
+                  });
+                  const active = updated.find(s => s.id === activeSceneId);
+                  if (active) saveScene(active);
+                  return updated;
+                });
+                setShowFurnitureEditor(false);
+                setEditingFurniture(null);
+              }} className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-xl font-medium transition-colors border border-red-500/30">
+                删除
+              </button>
+              <button onClick={() => { setShowFurnitureEditor(false); setEditingFurniture(null); }}
+                className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white/70 rounded-xl font-medium transition-colors border border-white/10">
+                取消
+              </button>
             </div>
           </div>
         </div>
