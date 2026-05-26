@@ -65,6 +65,23 @@ export default function VideoUnwatermarkPage() {
     }
   }, [result]);
 
+  const handleDownloadImage = useCallback(async (imgUrl: string, index: number) => {
+    try {
+      const resp = await fetch(imgUrl);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${result?.title?.slice(0, 30) || 'image'}_${index + 1}.webp`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      window.open(imgUrl, '_blank');
+    }
+  }, [result]);
+
   const handlePaste = useCallback(async () => {
     try {
       const text = await navigator.clipboard.readText();
@@ -210,15 +227,13 @@ export default function VideoUnwatermarkPage() {
                 <div className="flex gap-2">
                   {result.type === 'images' && result.imageUrls ? (
                     result.imageUrls.map((imgUrl, i) => (
-                      <a
+                      <button
                         key={i}
-                        href={imgUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        onClick={() => handleDownloadImage(imgUrl, i)}
                         className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white font-medium rounded-xl text-center shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all"
                       >
                         🖼️ 下载图片 {result.imageUrls!.length > 1 ? `${i + 1}` : ''}
-                      </a>
+                      </button>
                     ))
                   ) : (
                     <>
