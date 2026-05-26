@@ -11,6 +11,9 @@ import {
   generateThumbnail,
   getAllScenes,
   saveScene,
+  deleteScene,
+  exportData,
+  importData,
 } from '@/lib/tianjige-db';
 
 // ── Furniture defaults ──────────────────────────────────────────────
@@ -268,6 +271,9 @@ export default function Scene3D() {
   const [showItemPanel, setShowItemPanel] = useState(false);
   const [showItemEditor, setShowItemEditor] = useState(false);
   const [showFurniturePicker, setShowFurniturePicker] = useState(false);
+  const [showSceneManager, setShowSceneManager] = useState(false);
+  const [newSceneName, setNewSceneName] = useState('');
+  const [newSceneEmoji, setNewSceneEmoji] = useState('🏠');
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [itemForm, setItemForm] = useState({
     name: '', category: '日用', quantity: 1, price: 0,
@@ -486,7 +492,8 @@ export default function Scene3D() {
           className="px-4 py-2 bg-[#fb6400] hover:bg-[#e55a00] text-white rounded-xl text-sm font-medium transition-colors shadow-lg">
           + 添加家具
         </button>
-        <button className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm font-medium transition-colors backdrop-blur">
+        <button onClick={() => setShowSceneManager(true)}
+          className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm font-medium transition-colors backdrop-blur">
           管理场景
         </button>
         <button className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm font-medium transition-colors backdrop-blur">
@@ -547,6 +554,116 @@ export default function Scene3D() {
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Scene Manager Modal */}
+      {showSceneManager && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#1a1a2e] rounded-t-2xl sm:rounded-2xl border border-white/10 w-full max-w-lg max-h-[70vh] overflow-y-auto p-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-white font-bold">场景管理</h3>
+              <button onClick={() => setShowSceneManager(false)}
+                className="text-white/50 hover:text-white text-xl">&times;</button>
+            </div>
+
+            {/* Scene list */}
+            <div className="space-y-2 mb-4">
+              {[...scenes].sort((a, b) => a.sortOrder - b.sortOrder).map(scene => (
+                <div key={scene.id} className="glass-card p-3 rounded-xl flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">{scene.emoji}</span>
+                    <span className="text-white">{scene.name}</span>
+                    {!scene.isCustom && <span className="text-white/30 text-xs">(预设)</span>}
+                  </div>
+                  <div className="flex gap-1">
+                    {scene.isCustom && (
+                      <button onClick={async () => {
+                        if (!confirm(`确定删除场景「${scene.name}」？`)) return;
+                        await deleteScene(scene.id);
+                        setScenes(prev => {
+                          const updated = prev.filter(s => s.id !== scene.id);
+                          if (activeSceneId === scene.id && updated.length > 0) {
+                            setActiveSceneId(updated[0].id);
+                          }
+                          return updated;
+                        });
+                      }}
+                        className="px-2 py-1 text-red-400 hover:bg-red-500/10 rounded text-xs">
+                        删除
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Add new scene */}
+            <div className="border-t border-white/10 pt-4">
+              <h4 className="text-white/50 text-xs mb-2">添加新场景</h4>
+              <div className="flex gap-2">
+                <input type="text" placeholder="场景名称" value={newSceneName}
+                  onChange={e => setNewSceneName(e.target.value)}
+                  className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm placeholder-white/30 focus:border-[#fb6400] outline-none" />
+                <input type="text" placeholder="🏠" value={newSceneEmoji} maxLength={2}
+                  onChange={e => setNewSceneEmoji(e.target.value)}
+                  className="w-14 bg-white/5 border border-white/10 rounded-xl px-2 py-2 text-white text-sm text-center focus:border-[#fb6400] outline-none" />
+                <button onClick={async () => {
+                  if (!newSceneName.trim()) return;
+                  const newScene: Scene = {
+                    id: crypto.randomUUID(),
+                    name: newSceneName.trim(),
+                    emoji: newSceneEmoji || '🏠',
+                    isCustom: true,
+                    sortOrder: scenes.length,
+                    thumbnail: '',
+                    furniture: [],
+                  };
+                  await saveScene(newScene);
+                  setScenes(prev => [...prev, newScene]);
+                  setActiveSceneId(newScene.id);
+                  setNewSceneName('');
+                  setNewSceneEmoji('🏠');
+                  setShowSceneManager(false);
+                }}
+                  className="px-4 py-2 bg-[#fb6400] hover:bg-[#e55a00] text-white rounded-xl text-sm font-medium transition-colors whitespace-nowrap">
+                  添加
+                </button>
+              </div>
+            </div>
+
+            {/* Import/Export */}
+            <div className="border-t border-white/10 pt-4 mt-4 flex gap-2">
+              <button onClick={async () => {
+                const json = await exportData();
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `tianjige-backup-${new Date().toISOString().slice(0, 10)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+                className="flex-1 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm transition-colors">
+                📤 导出数据
+              </button>
+              <label className="flex-1 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-sm transition-colors text-center cursor-pointer">
+                📥 导入数据
+                <input type="file" accept=".json" className="hidden" onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const text = await file.text();
+                  try {
+                    await importData(text, 'merge');
+                    const updated = await getAllScenes();
+                    setScenes(updated);
+                    if (updated.length > 0) setActiveSceneId(updated[0].id);
+                    alert('导入成功！');
+                  } catch { alert('导入失败，数据格式不正确'); }
+                }} />
+              </label>
+            </div>
           </div>
         </div>
       )}
