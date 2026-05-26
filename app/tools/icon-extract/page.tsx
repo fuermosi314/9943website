@@ -51,7 +51,7 @@ function extractIconsFromPE(buffer: ArrayBuffer): ExtractedIcon[] {
     if (secOff + 40 > buffer.byteLength) break;
     sections.push({
       rva: view.getUint32(secOff + 12, true),
-      size: view.getUint32(secOff + 8, true),
+      size: view.getUint32(secOff + 16, true),
       raw: view.getUint32(secOff + 20, true),
     });
   }
@@ -261,7 +261,6 @@ function extractIconsFromICO(buffer: ArrayBuffer): ExtractedIcon[] {
 // ===== LNK 快捷方式解析 =====
 function extractIconFromLNK(buffer: ArrayBuffer): ExtractedIcon[] {
   const view = new DataView(buffer);
-  const u8 = new Uint8Array(buffer);
 
   // 验证 LNK 签名
   if (buffer.byteLength < 76 || view.getUint32(0, true) !== 0x0000004C) {
@@ -275,49 +274,50 @@ function extractIconFromLNK(buffer: ArrayBuffer): ExtractedIcon[] {
     throw new Error('该快捷方式没有自定义图标');
   }
 
-  // ShellLinkHeader 固定 76 字节，后面是 LinkInfo 和 StringData
-  // 跳过 LinkInfo
+  // ShellLinkHeader 固定 76 字节
   let offset = 76;
 
+  // 跳过 LinkInfo（如果有）
   const hasLinkInfo = (flags & 0x00000002) !== 0;
   if (hasLinkInfo && offset + 4 <= buffer.byteLength) {
     const linkInfoSize = view.getUint32(offset, true);
-    offset += linkInfoSize;
-  }
-
-  // StringData: NameString, RelativePath, WorkingDir, CommandLineArguments, IconLocation
-  const hasName = (flags & 0x00000004) !== 0;
-  const hasRelativePath = (flags & 0x00000008) !== 0;
-  const hasWorkingDir = (flags & 0x00000010) !== 0;
-  const hasArguments = (flags & 0x00000020) !== 0;
-  const hasIconLocationFlag = (flags & 0x00000400) !== 0;
-
-  // 跳过前面的字符串
-  const skipString = () => {
-    if (offset + 2 > buffer.byteLength) return;
-    const len = view.getUint16(offset, true);
-    offset += 2 + len * 2; // Unicode 字符串
-  };
-
-  if (hasName) skipString();
-  if (hasRelativePath) skipString();
-  if (hasWorkingDir) skipString();
-  if (hasArguments) skipString();
-
-  // IconLocation
-  let iconPath = '';
-  if (hasIconLocationFlag && offset + 2 <= buffer.byteLength) {
-    const len = view.getUint16(offset, true);
-    offset += 2;
-    if (offset + len * 2 <= buffer.byteLength) {
-      // 解码 UTF-16LE 字符串
-      const chars: string[] = [];
-      for (let i = 0; i < len; i++) {
-        chars.push(String.fromCharCode(view.getUint16(offset + i * 2, true)));
-      }
-      iconPath = chars.join('');
+    if (linkInfoSize >= 4) {
+      offset += linkInfoSize;
     }
   }
+
+  // 跳过 LinkTargetIDList（如果有）
+  const hasTargetIDList = (flags & 0x00000001) !== 0;
+  if (hasTargetIDList && offset + 2 <= buffer.byteLength) {
+    const idListSize = view.getUint16(offset, true);
+    offset += 2 + idListSize;
+  }
+
+  // StringData: 按顺序读取 UTF-16LE 字符串
+  // 每个字符串: 2字节字符数 + 字符数*2字节 UTF-16LE 数据
+  const readString = (): string | null => {
+    if (offset + 2 > buffer.byteLength) return null;
+    const charCount = view.getUint16(offset, true);
+    offset += 2;
+    if (offset + charCount * 2 > buffer.byteLength) return null;
+    const chars: string[] = [];
+    for (let i = 0; i < charCount; i++) {
+      chars.push(String.fromCharCode(view.getUint16(offset + i * 2, true)));
+    }
+    offset += charCount * 2;
+    return chars.join('');
+  };
+
+  const skipString = () => { readString(); };
+
+  // 按 LNK 规范顺序跳过前面的字符串字段
+  if (flags & 0x00000004) skipString(); // HasName
+  if (flags & 0x00000008) skipString(); // HasRelativePath
+  if (flags & 0x00000010) skipString(); // HasWorkingDir
+  if (flags & 0x00000020) skipString(); // HasArguments
+
+  // 读取 IconLocation
+  const iconPath = readString();
 
   if (!iconPath) {
     throw new Error('快捷方式中未找到图标路径');
