@@ -92,6 +92,16 @@ export const tools: Tool[] = [
     keywords: ['算数', '数学', '三角函数', '对数', '进制转换', '二进制', '十六进制', '日期计算'],
   },
   {
+    id: 'simple-note',
+    name: '简单记',
+    description: '简单好用的日记工具，记录每天的心情和故事',
+    icon: '📝',
+    category: 'life',
+    path: '/tools/simple-note',
+    tags: ['日记', '笔记', '记录', '心情', '照片'],
+    keywords: ['日记', '笔记', '记事', '心情', '简单记'],
+  },
+  {
     id: 'image-convert',
     name: '图片格式转换',
     description: 'JPG/PNG/WebP/BMP 格式互转',
