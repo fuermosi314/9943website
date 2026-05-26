@@ -243,14 +243,66 @@ function EntryEditor({
   onDelete: (id: string) => void;
   onClose: () => void;
 }) {
-  const [date, setDate] = useState(entry?.date || selectedDate);
-  const [mood, setMood] = useState<Mood>(entry?.mood || '😊');
-  const [content, setContent] = useState(entry?.content || '');
+  const draftKey = `simple-note-draft-${entry?.id || 'new'}`;
+
+  // 从草稿恢复
+  const [date, setDate] = useState(() => {
+    if (entry) return entry.date;
+    try {
+      const draft = JSON.parse(localStorage.getItem(draftKey) || 'null');
+      if (draft?.date) return draft.date;
+    } catch {}
+    return selectedDate;
+  });
+  const [mood, setMood] = useState<Mood>(() => {
+    if (entry) return entry.mood || '😊';
+    try {
+      const draft = JSON.parse(localStorage.getItem(draftKey) || 'null');
+      if (draft?.mood) return draft.mood;
+    } catch {}
+    return '😊';
+  });
+  const [content, setContent] = useState(() => {
+    if (entry) return entry.content || '';
+    try {
+      const draft = JSON.parse(localStorage.getItem(draftKey) || 'null');
+      if (draft?.content) return draft.content;
+    } catch {}
+    return '';
+  });
   const [photos, setPhotos] = useState<{ id: string; thumbnail: string; blob?: Blob; width: number; height: number }[]>(
     entry?.photos.map(p => ({ ...p })) || []
   );
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [hasDraft, setHasDraft] = useState(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 检查是否有草稿（仅新建时提示）
+  useEffect(() => {
+    if (!entry) {
+      try {
+        const draft = JSON.parse(localStorage.getItem(draftKey) || 'null');
+        if (draft?.content || draft?.mood) setHasDraft(true);
+      } catch {}
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 自动保存草稿（防抖 1 秒）
+  useEffect(() => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      if (content || mood !== '😊') {
+        localStorage.setItem(draftKey, JSON.stringify({ date, mood, content }));
+      }
+    }, 1000);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, [date, mood, content, draftKey]);
+
+  // 清除草稿
+  const clearDraft = useCallback(() => {
+    localStorage.removeItem(draftKey);
+  }, [draftKey]);
 
   const handleAddPhotos = useCallback(async (files: FileList) => {
     const newPhotos = await Promise.all(
@@ -279,10 +331,11 @@ function EntryEditor({
       createdAt: entry?.createdAt || now,
       updatedAt: now,
     };
+    clearDraft();
     onSave(diaryEntry, photos.filter(p => p.blob).map(p => ({
       id: p.id, thumbnail: p.thumbnail, blob: p.blob!, width: p.width, height: p.height,
     })));
-  }, [date, content, mood, photos, entry, saving, onSave]);
+  }, [date, content, mood, photos, entry, saving, onSave, clearDraft]);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-[#0a0a1a]">
@@ -297,6 +350,12 @@ function EntryEditor({
           {saving ? '保存中...' : '保存'}
         </button>
       </div>
+
+      {hasDraft && (
+        <div className="px-4 py-1.5 bg-[#fb6400]/10 border-b border-[#fb6400]/20 text-[#fb6400] text-xs text-center">
+          已自动恢复上次未保存的草稿
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         <div>
@@ -439,6 +498,19 @@ export default function SimpleNotePage() {
   useEffect(() => { loadDatesWithEntries(); }, [loadDatesWithEntries]);
   useEffect(() => { loadEntries(); }, [loadEntries]);
 
+  // 浏览器返回键：编辑器打开时先关闭编辑器，不退出工具
+  useEffect(() => {
+    if (showEditor) {
+      window.history.pushState({ editor: true }, '');
+      const handlePopState = () => {
+        setShowEditor(false);
+        setEditingEntry(null);
+      };
+      window.addEventListener('popstate', handlePopState);
+      return () => window.removeEventListener('popstate', handlePopState);
+    }
+  }, [showEditor]);
+
   const handleSaveEntry = useCallback(async (
     entry: DiaryEntry,
     photosToAdd: { id: string; thumbnail: string; blob: Blob; width: number; height: number }[],
@@ -461,6 +533,7 @@ export default function SimpleNotePage() {
   }, [editingEntry, loadEntries, loadDatesWithEntries]);
 
   const handleDeleteEntry = useCallback(async (id: string) => {
+    localStorage.removeItem(`simple-note-draft-${id}`);
     await deletePhotosByEntryId(id);
     await deleteEntry(id);
     setShowEditor(false);

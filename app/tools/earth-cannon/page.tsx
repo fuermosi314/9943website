@@ -282,13 +282,15 @@ function drawEarth(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: num
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.clip();
     ctx.shadowColor = '#ff4400';
-    ctx.shadowBlur = 15 + crackProgress * 30;
-    ctx.strokeStyle = `rgba(255,100,10,${Math.min(crackProgress * 1.5, 0.95)})`;
-    ctx.lineWidth = 2 + crackProgress * 5;
-    const crackCount = Math.floor(crackProgress * 15);
+    ctx.shadowBlur = 10 + crackProgress * 35;
+    // 提高基础可见度：低损伤时也清晰可见
+    const alpha = Math.min(0.4 + crackProgress * 1.2, 0.95);
+    ctx.strokeStyle = `rgba(255,100,10,${alpha})`;
+    ctx.lineWidth = 2.5 + crackProgress * 5;
+    const crackCount = Math.max(3, Math.floor(crackProgress * 15));
     for (let i = 0; i < crackCount; i++) {
-      const angle = (i / 15) * Math.PI * 2 + 0.5;
-      const len = r * (0.15 + 0.8 * crackProgress);
+      const angle = (i / crackCount) * Math.PI * 2 + 0.5;
+      const len = r * (0.2 + 0.75 * crackProgress);
       ctx.beginPath();
       ctx.moveTo(cx + Math.cos(angle) * r * 0.03, cy + Math.sin(angle) * r * 0.03);
       let px2 = cx, py2 = cy;
@@ -301,11 +303,11 @@ function drawEarth(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: num
         ctx.lineTo(px2, py2);
       }
       ctx.stroke();
-      // 裂纹内部发光
-      if (crackProgress > 0.3) {
+      // 裂纹内部发光 — 更早出现
+      if (crackProgress > 0.15) {
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
-        ctx.strokeStyle = `rgba(255,200,50,${(crackProgress - 0.3) * 0.5})`;
+        ctx.strokeStyle = `rgba(255,200,50,${(crackProgress - 0.15) * 0.6})`;
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(cx + Math.cos(angle) * r * 0.03, cy + Math.sin(angle) * r * 0.03);
