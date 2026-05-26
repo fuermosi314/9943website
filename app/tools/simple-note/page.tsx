@@ -413,6 +413,7 @@ function EntryEditor({
         <div>
           <label className="text-white/40 text-xs mb-1 block">照片</label>
           <PhotoGrid photos={photos} onAdd={handleAddPhotos} onRemove={handleRemovePhoto} />
+          <p className="text-white/25 text-[10px] mt-1.5">💡 也可以直接 Ctrl+V 粘贴图片</p>
         </div>
       </div>
 
