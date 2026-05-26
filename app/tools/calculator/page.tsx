@@ -29,6 +29,9 @@ export default function CalculatorPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
+  // Help state
+  const [showHelp, setShowHelp] = useState(false);
+
   // ---- Standard / Scientific helpers ----
   const inputDigit = useCallback((digit: string) => {
     if (waitingForOperand) {
@@ -370,6 +373,112 @@ export default function CalculatorPage() {
   const funcClass = 'bg-white/10 hover:bg-white/15 text-white/80';
   const hexClass = 'bg-purple-500/15 hover:bg-purple-500/25 text-purple-300';
 
+  // Help data for each mode
+  type HelpItem = { label: string; desc: string };
+  const helpData: Record<CalcMode, { title: string; items: HelpItem[] }> = {
+    standard: {
+      title: '标准计算器',
+      items: [
+        { label: 'C', desc: '清除当前输入和计算' },
+        { label: '±', desc: '正负号切换' },
+        { label: '%', desc: '百分比（除以 100）' },
+        { label: '÷ × - +', desc: '四则运算' },
+        { label: '=', desc: '计算结果' },
+        { label: '← 退格', desc: '删除最后一位数字' },
+        { label: '.', desc: '输入小数点' },
+      ],
+    },
+    scientific: {
+      title: '科学计算器',
+      items: [
+        { label: 'sin / cos / tan', desc: '三角函数（弧度/角度取决于 RAD/DEG 设置）' },
+        { label: 'π', desc: '圆周率常数 3.14159...' },
+        { label: 'e', desc: '自然常数 2.71828...' },
+        { label: 'log', desc: '以 10 为底的对数' },
+        { label: 'ln', desc: '自然对数（以 e 为底）' },
+        { label: 'x²', desc: '平方（x 的 2 次方）' },
+        { label: 'x³', desc: '立方（x 的 3 次方）' },
+        { label: 'xⁿ', desc: 'x 的 n 次方（先输 x，按 xⁿ，再输 n，按 =）' },
+        { label: '√', desc: '平方根' },
+        { label: '∛', desc: '立方根' },
+        { label: '1/x', desc: '倒数' },
+        { label: 'n!', desc: '阶乘（n × (n-1) × ... × 1）' },
+        { label: 'RAD / DEG', desc: '角度模式切换：弧度 / 角度' },
+      ],
+    },
+    programmer: {
+      title: '程序员计算器',
+      items: [
+        { label: '二/八/十/十六进制', desc: '切换输入和显示的数字进制' },
+        { label: 'AND', desc: '按位与（两位都为 1 才得 1）' },
+        { label: 'OR', desc: '按位或（任一位为 1 就得 1）' },
+        { label: 'XOR', desc: '按位异或（两位不同得 1）' },
+        { label: 'NOT', desc: '按位取反（0 变 1，1 变 0）' },
+        { label: '<<', desc: '左移（二进制位左移，相当于 ×2）' },
+        { label: '>>', desc: '右移（二进制位右移，相当于 ÷2）' },
+        { label: '多进制显示', desc: '同时显示当前值的二、八、十、十六进制' },
+      ],
+    },
+    date: {
+      title: '日期计算器',
+      items: [
+        { label: '起始日期', desc: '选择计算的起始日期' },
+        { label: '结束日期', desc: '选择计算的结束日期' },
+        { label: '天数', desc: '两个日期之间的总天数' },
+        { label: '年/月/日', desc: '天数拆分为年、月、日的近似值' },
+        { label: '总周数', desc: '总天数 ÷ 7' },
+        { label: '总小时', desc: '总天数 × 24' },
+        { label: '总分钟', desc: '总天数 × 24 × 60' },
+      ],
+    },
+  };
+
+  // Help button & modal
+  const HelpButton = () => (
+    <button
+      onClick={() => setShowHelp(true)}
+      className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white/50 hover:text-white flex items-center justify-center text-sm transition-colors"
+    >
+      ?
+    </button>
+  );
+
+  const HelpModal = () => {
+    if (!showHelp) return null;
+    const data = helpData[mode];
+    return (
+      <div
+        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        onClick={() => setShowHelp(false)}
+      >
+        <div
+          className="bg-[#1a1a2e]/95 backdrop-blur-xl border border-white/10 rounded-2xl w-[90vw] max-w-md max-h-[80vh] overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+            <h3 className="text-white font-semibold">{data.title} · 功能说明</h3>
+            <button
+              onClick={() => setShowHelp(false)}
+              className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white/60 hover:text-white flex items-center justify-center text-sm transition-colors"
+            >
+              ×
+            </button>
+          </div>
+          <div className="p-5 overflow-y-auto max-h-[calc(80vh-64px)] space-y-2.5">
+            {data.items.map((item, i) => (
+              <div key={i} className="flex items-start gap-3">
+                <code className="shrink-0 px-2 py-0.5 rounded bg-[#fb6400]/15 text-[#fb6400] text-xs font-mono min-w-[60px] text-center">
+                  {item.label}
+                </code>
+                <span className="text-white/60 text-sm leading-relaxed">{item.desc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen relative z-10 calculator-page">
       {/* 禁用 glass-card hover 效果，防止手机触摸闪烁 */}
@@ -410,6 +519,9 @@ export default function CalculatorPage() {
           {/* ========== Standard Mode ========== */}
           {mode === 'standard' && (
             <div className="glass-card p-5">
+              <div className="flex items-center justify-end mb-2">
+                <HelpButton />
+              </div>
               <div className="mb-4 text-right">
                 <div className="text-sm text-white/40 h-6 truncate">{expression}</div>
                 <div className="text-4xl font-light text-white truncate">{display}</div>
@@ -458,6 +570,7 @@ export default function CalculatorPage() {
                   {isRadian ? 'RAD' : 'DEG'}
                 </button>
                 <div className="text-sm text-white/40 truncate ml-4 flex-1 text-right">{expression}</div>
+                <HelpButton />
               </div>
 
               <div className="mb-4 text-right">
@@ -520,6 +633,9 @@ export default function CalculatorPage() {
           {mode === 'programmer' && (
             <div className="glass-card p-4 sm:p-5 ">
               {/* Base selector */}
+              <div className="flex items-center justify-end mb-2">
+                <HelpButton />
+              </div>
               <div className="grid grid-cols-4 gap-1.5 mb-4">
                 {([2, 8, 10, 16] as Base[]).map((b) => (
                   <button
@@ -615,7 +731,10 @@ export default function CalculatorPage() {
           {/* ========== Date Mode ========== */}
           {mode === 'date' && (
             <div className="glass-card p-6 ">
-              <h2 className="text-base font-semibold text-white mb-5">日期计算</h2>
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-base font-semibold text-white">日期计算</h2>
+                <HelpButton />
+              </div>
 
               <div className="space-y-4 mb-6">
                 <div>
@@ -685,6 +804,7 @@ export default function CalculatorPage() {
           )}
         </div>
       </main>
+      <HelpModal />
     </div>
   );
 }
