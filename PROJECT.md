@@ -124,7 +124,7 @@
 | ID | 名称 | 图标 | 说明 |
 |----|------|------|------|
 | `all` | 全部 | 🔥 | 默认视图，显示所有工具 |
-| `image` | 图片工具 | 🖼️ | 图片压缩、格式转换、裁剪、缩放、旋转 |
+| `image` | 图片工具 | 🖼️ | 图片压缩、格式转换、裁剪、缩放、旋转、图标提取 |
 | `document` | 文档工具 | 📄 | PDF 系列 + 字数统计（原"文本工具"已合并至此） |
 | `dev` | 开发工具 | 🔧 | 在线编译器导航 |
 | `life` | 生活工具 | 🎯 | BMI 计算器、单位换算、专业计算器、视频去水印 |
@@ -235,6 +235,13 @@ const backUrl = `/?category=${tool.category}`;
 - 抖音解析流程: 短链重定向 → 提取 aweme_id → 调用详情 API → 获取无水印视频 URL
 - Bilibili 解析: 提取 BV ID → 获取视频信息 → 获取播放地址（DASH 格式）
 - 解析失败时推荐第三方去水印网站
+
+### 7.5 图标提取 (icon-extract)
+- 纯前端解析，支持 PE (EXE/DLL/CPL/SCR/OCX/SYS/DRV)、ICO、LNK、URL 格式
+- **PE 解析**: 手动解析 IMAGE_RESOURCE_DIRECTORY，支持命名资源（如 MAINICON）和数字 ID 资源
+- **LNK 解析**: 读取 LinkInfo 提取 LocalBasePath（GBK 编码），支持自定义图标路径
+- **URL 解析**: 读取 INI 格式的 IconFile 字段
+- LNK/URL 无完整路径时显示友好提示，引导用户手动定位文件
 
 ---
 
