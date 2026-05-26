@@ -253,10 +253,16 @@ export default function Scene3D() {
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const animFrameRef = useRef<number>(0);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const raycaster = useRef(new THREE.Raycaster());
+  const pointer = useRef(new THREE.Vector2());
+  const highlightedRef = useRef<THREE.Object3D | null>(null);
 
   const [scenes, setScenes] = useState<Scene[]>([]);
   const [activeSceneId, setActiveSceneId] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  const [selectedFurniture, setSelectedFurniture] = useState<Furniture | null>(null);
+  const [showItemPanel, setShowItemPanel] = useState(false);
 
   // ── Load / init scenes ──────────────────────────────────────────
   useEffect(() => {
@@ -298,6 +304,7 @@ export default function Scene3D() {
     );
     camera.position.set(6, 6, 6);
     camera.lookAt(0, 0.5, 0);
+    cameraRef.current = camera;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -378,6 +385,60 @@ export default function Scene3D() {
     }
   }, [scenes, activeSceneId]);
 
+  // ── Click handler for furniture detection ───────────────────────
+  const handleClick = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const container = containerRef.current;
+    const camera = cameraRef.current;
+    const scene = sceneRef.current;
+    if (!container || !camera || !scene) return;
+
+    const rect = container.getBoundingClientRect();
+    pointer.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.current.setFromCamera(pointer.current, camera);
+
+    const meshes: THREE.Object3D[] = [];
+    scene.traverse(obj => { if (obj.userData?.furnitureId) meshes.push(obj); });
+    const intersects = raycaster.current.intersectObjects(meshes, true);
+
+    // Remove previous highlight
+    if (highlightedRef.current) {
+      highlightedRef.current.traverse(obj => {
+        if (obj instanceof THREE.Mesh && obj.userData._origMaterial) {
+          obj.material = obj.userData._origMaterial;
+          delete obj.userData._origMaterial;
+        }
+      });
+      highlightedRef.current = null;
+    }
+
+    if (intersects.length > 0) {
+      let target = intersects[0].object as THREE.Object3D;
+      while (target && !target.userData?.furnitureId) target = target.parent!;
+      if (target?.userData?.furnitureId) {
+        const fid = target.userData.furnitureId as string;
+        const activeScene = scenes.find(s => s.id === activeSceneId);
+        const furniture = activeScene?.furniture.find(f => f.id === fid);
+        if (furniture) {
+          setSelectedFurniture(furniture);
+          setShowItemPanel(true);
+          // Highlight with orange tint
+          target.traverse(obj => {
+            if (obj instanceof THREE.Mesh) {
+              obj.userData._origMaterial = obj.material;
+              obj.material = new THREE.MeshBasicMaterial({
+                color: new THREE.Color('#fb6400'),
+                transparent: true,
+                opacity: 0.3,
+              });
+            }
+          });
+          highlightedRef.current = target;
+        }
+      }
+    }
+  }, [scenes, activeSceneId]);
+
   // ── Scene switcher ──────────────────────────────────────────────
   const handleSceneChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
     setActiveSceneId(e.target.value);
@@ -393,7 +454,7 @@ export default function Scene3D() {
 
   return (
     <div className="relative w-full" style={{ height: 'calc(100vh - 140px)' }}>
-      <div ref={containerRef} className="w-full h-full" />
+      <div ref={containerRef} className="w-full h-full" onPointerDown={handleClick} />
       {/* Scene switcher dropdown */}
       <div className="absolute top-4 right-4 z-10">
         <select
@@ -408,6 +469,40 @@ export default function Scene3D() {
           ))}
         </select>
       </div>
+
+      {/* Item Panel */}
+      {showItemPanel && selectedFurniture && (
+        <div className="absolute top-0 right-0 h-full w-80 max-w-[85vw] bg-[#0a0a1a]/95 backdrop-blur-md border-l border-white/10 z-20 flex flex-col animate-slide-in-right">
+          <div className="p-4 border-b border-white/10 flex items-center justify-between">
+            <h2 className="text-white font-bold">{FURNITURE_DEFAULTS[selectedFurniture.type].emoji} {selectedFurniture.name}</h2>
+            <button onClick={() => { setShowItemPanel(false); setSelectedFurniture(null); }}
+              className="text-white/50 hover:text-white text-xl">&times;</button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            {selectedFurniture.items.length === 0 ? (
+              <p className="text-white/30 text-sm text-center py-8">还没有物品，点击下方添加</p>
+            ) : (
+              selectedFurniture.items.map(item => (
+                <div key={item.id} className="glass-card p-3 rounded-xl">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <span className="text-white font-medium">{item.name}</span>
+                      <span className="text-white/50 text-sm ml-2">×{item.quantity}</span>
+                    </div>
+                    {item.price > 0 && <span className="text-[#fb6400] text-sm">¥{item.price}</span>}
+                  </div>
+                  {item.category && <span className="text-white/30 text-xs">{item.category}</span>}
+                </div>
+              ))
+            )}
+          </div>
+          <div className="p-4 border-t border-white/10">
+            <button className="w-full py-2 bg-[#fb6400] hover:bg-[#e55a00] text-white rounded-xl font-medium transition-colors">
+              + 添加物品
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
