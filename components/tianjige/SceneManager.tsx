@@ -9,9 +9,13 @@ interface SceneManagerProps {
   newSceneName: string;
   newSceneEmoji: string;
   newSceneRoomSize: number;
+  newSceneRoomWidth: number;
+  newSceneRoomDepth: number;
   editSceneName: string;
   editSceneEmoji: string;
   editSceneRoomSize: number;
+  editSceneRoomWidth: number;
+  editSceneRoomDepth: number;
   editingSceneId: string | null;
   showSceneEditor: boolean;
   onClose: () => void;
@@ -26,18 +30,22 @@ interface SceneManagerProps {
   setNewSceneName: (name: string) => void;
   setNewSceneEmoji: (emoji: string) => void;
   setNewSceneRoomSize: (size: number) => void;
+  setNewSceneRoomWidth: (width: number) => void;
+  setNewSceneRoomDepth: (depth: number) => void;
   setEditSceneName: (name: string) => void;
   setEditSceneEmoji: (emoji: string) => void;
   setEditSceneRoomSize: (size: number) => void;
+  setEditSceneRoomWidth: (width: number) => void;
+  setEditSceneRoomDepth: (depth: number) => void;
 }
 
 export default function SceneManager({
-  show, scenes, newSceneName, newSceneEmoji, newSceneRoomSize,
-  editSceneName, editSceneEmoji, editSceneRoomSize, editingSceneId, showSceneEditor,
+  show, scenes, newSceneName, newSceneEmoji, newSceneRoomSize, newSceneRoomWidth, newSceneRoomDepth,
+  editSceneName, editSceneEmoji, editSceneRoomSize, editSceneRoomWidth, editSceneRoomDepth, editingSceneId, showSceneEditor,
   onClose, onAddScene, onDeleteScene, onCopyScene, onSaveSceneEdit,
   onOpenSceneEditor, onCloseSceneEditor, onExport, onImport,
-  setNewSceneName, setNewSceneEmoji, setNewSceneRoomSize,
-  setEditSceneName, setEditSceneEmoji, setEditSceneRoomSize,
+  setNewSceneName, setNewSceneEmoji, setNewSceneRoomSize, setNewSceneRoomWidth, setNewSceneRoomDepth,
+  setEditSceneName, setEditSceneEmoji, setEditSceneRoomSize, setEditSceneRoomWidth, setEditSceneRoomDepth,
 }: SceneManagerProps) {
   const [showExportConfirm, setShowExportConfirm] = useState(false);
   const [showImportMode, setShowImportMode] = useState(false);
@@ -142,7 +150,7 @@ export default function SceneManager({
                 { value: 7, label: '大 (7x7)' },
               ].map(opt => (
                 <button key={opt.value}
-                  onClick={() => setNewSceneRoomSize(opt.value)}
+                  onClick={() => { setNewSceneRoomSize(opt.value); setNewSceneRoomWidth(opt.value); setNewSceneRoomDepth(opt.value); }}
                   className={`px-2 py-1 rounded text-xs transition-colors ${
                     newSceneRoomSize === opt.value
                       ? 'bg-[#fb6400] text-white'
@@ -153,10 +161,19 @@ export default function SceneManager({
               ))}
               <div className="flex items-center gap-1">
                 <input type="number" min={2} max={20} step={1}
-                  value={newSceneRoomSize}
+                  value={newSceneRoomWidth}
                   onChange={e => {
                     const v = Math.max(2, Math.min(20, Number(e.target.value) || 2));
+                    setNewSceneRoomWidth(v);
                     setNewSceneRoomSize(v);
+                  }}
+                  className="w-14 bg-white/5 border border-white/10 rounded px-2 py-1 text-white text-xs text-center focus:border-[#fb6400] outline-none" />
+                <span className="text-white/30 text-xs">×</span>
+                <input type="number" min={2} max={20} step={1}
+                  value={newSceneRoomDepth}
+                  onChange={e => {
+                    const v = Math.max(2, Math.min(20, Number(e.target.value) || 2));
+                    setNewSceneRoomDepth(v);
                   }}
                   className="w-14 bg-white/5 border border-white/10 rounded px-2 py-1 text-white text-xs text-center focus:border-[#fb6400] outline-none" />
                 <span className="text-white/30 text-xs">米</span>
@@ -322,7 +339,7 @@ export default function SceneManager({
                     { value: 7, label: '大 (7x7)' },
                   ].map(opt => (
                     <button key={opt.value}
-                      onClick={() => setEditSceneRoomSize(opt.value)}
+                      onClick={() => { setEditSceneRoomSize(opt.value); setEditSceneRoomWidth(opt.value); setEditSceneRoomDepth(opt.value); }}
                       className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
                         editSceneRoomSize === opt.value
                           ? 'bg-[#fb6400] text-white'
@@ -333,10 +350,19 @@ export default function SceneManager({
                   ))}
                   <div className="flex items-center gap-1">
                     <input type="number" min={2} max={20} step={1}
-                      value={editSceneRoomSize}
+                      value={editSceneRoomWidth}
                       onChange={e => {
                         const v = Math.max(2, Math.min(20, Number(e.target.value) || 2));
+                        setEditSceneRoomWidth(v);
                         setEditSceneRoomSize(v);
+                      }}
+                      className="w-16 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-white text-sm text-center focus:border-[#fb6400] outline-none" />
+                    <span className="text-white/40 text-sm">×</span>
+                    <input type="number" min={2} max={20} step={1}
+                      value={editSceneRoomDepth}
+                      onChange={e => {
+                        const v = Math.max(2, Math.min(20, Number(e.target.value) || 2));
+                        setEditSceneRoomDepth(v);
                       }}
                       className="w-16 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-white text-sm text-center focus:border-[#fb6400] outline-none" />
                     <span className="text-white/40 text-sm">米</span>

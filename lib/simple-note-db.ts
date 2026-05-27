@@ -76,6 +76,17 @@ export async function getEntriesByDate(date: string): Promise<DiaryEntry[]> {
   });
 }
 
+export async function getAllEntries(): Promise<DiaryEntry[]> {
+  return new Promise(async (resolve, reject) => {
+    const db = await openDB();
+    const tx = db.transaction('entries', 'readonly');
+    const req = tx.objectStore('entries').getAll();
+    req.onsuccess = () => resolve(req.result.sort((a, b) => b.createdAt - a.createdAt));
+    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => db.close();
+  });
+}
+
 export async function getAllDatesWithEntries(): Promise<string[]> {
   return new Promise(async (resolve, reject) => {
     const db = await openDB();

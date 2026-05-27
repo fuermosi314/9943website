@@ -12,7 +12,7 @@
 - **技术栈**: Next.js 14 + React 18 + Tailwind CSS 3 + TypeScript
 - **项目路径**: `/home/huang/claude/vs/work/9943小工具大全`
 - **部署计划**: 本地开发 → Git → Vercel 发布
-- **当前工具数量**: 38 个（自动统计自 `lib/tools.ts`）
+- **当前工具数量**: 39 个（自动统计自 `lib/tools.ts`）
 
 ---
 
@@ -135,7 +135,7 @@
 | `image` | 图片工具 | 🖼️ | 图片压缩、格式转换、裁剪、缩放、旋转、图标提取 |
 | `document` | 文档工具 | 📄 | PDF 系列 + 字数统计（原"文本工具"已合并至此） |
 | `dev` | 开发工具 | 🔧 | 在线编译器导航 |
-| `life` | 生活工具 | 🎯 | BMI 计算器、单位换算、专业计算器、视频去水印、简单记 |
+| `life` | 生活工具 | 🎯 | BMI 计算器、单位换算、专业计算器、视频去水印、简单记、耗知通 |
 | `entertainment` | 娱乐工具 | 🎮 | 大转盘、二维码生成、随机数生成器、爆款开头生成器、毁灭地球的电磁炮 |
 | `website` | 网站工具 | 🌐 | Excalidraw, Carbon, JSON, CodeSandbox, Photopea, KMS, PDF24, S7资源库, FMHY, 便民查询网, 爱看机器人, Steam 下载, 图吧工具箱 |
 
@@ -282,11 +282,21 @@ const backUrl = `/?category=${tool.category}`;
 - 未配置 alist 时网盘解析不可用，直链下载不受影响
 
 ### 7.9 天机阁 (tianjige)
-- 3D 家居收纳工具，使用 Three.js 渲染房间和家具
+- 3D 家居收纳工具，使用 Three.js 渲染房间和家具，一览无余
 - **数据存储**: IndexedDB（`lib/tianjige-db.ts`）
 - **核心组件**: `components/tianjige/Scene3D.tsx`
 - **功能**: 预设场景（客厅/卧室/厨房等）、自定义场景管理、家具添加/移动、家具编辑（右键/长按打开，支持重命名、改色、移动位置、旋转、缩放、删除）、物品记录（名称/分类/数量/价格/照片）、场景数据导入/导出
 - **场景管理**: 底部工具栏"管理场景"按钮打开场景管理弹窗，支持新建/删除自定义场景、JSON 导出/导入（merge 模式）
+
+### 7.10 耗知通 (consumables)
+- 消耗品管理工具，记录和追踪日常消耗品库存
+- **数据存储**: IndexedDB（`lib/consumables-db.ts`）
+- **数据结构**: Consumable（id, name, quantity, price, category, storageDate, expiryDate?, note?, createdAt, updatedAt）
+- **分类**: 日用/食品/电子/办公/清洁/其他，每类有对应图标
+- **功能**: 添加/编辑/删除消耗品、按名称/备注搜索、按分类筛选、多字段排序（名称/数量/金额/日期）、统计概览（总数量/总价值/物品种类）
+- **导入导出**: JSON 格式，支持合并导入（只添加新条目）和替换导入（清空现有数据）
+- **备份提醒**: localStorage 记录上次备份时间，超过 24 小时提醒用户
+- **UI**: 响应式布局，全屏编辑器弹窗，删除确认对话框，Toast 提示
 
 ---
 
@@ -304,6 +314,7 @@ const backUrl = `/?category=${tool.category}`;
 | `hook-generator-auth` | hook-generator 页面 | 密码验证状态 | 无 |
 | `ai-hook-lab-history` | storage.ts | 爆款开头生成历史 | 50 条 |
 | `ai-hook-lab-favorites` | storage.ts | 收藏的生成结果 | 无 |
+| `consumables-last-backup` | consumables 页面 | 上次备份时间戳 | 无 |
 
 > 注意：`lib/storage.ts` 的键名仍保留 `ai-hook-lab-` 前缀（从 Ai Hook Lab 迁移而来）
 

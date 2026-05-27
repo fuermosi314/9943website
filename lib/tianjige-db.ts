@@ -51,7 +51,9 @@ export interface Scene {
   sortOrder: number;
   thumbnail: string;
   furniture: Furniture[];
-  roomSize: number; // 3 | 5 | 7
+  roomSize: number; // 3 | 5 | 7 (保留兼容)
+  roomWidth?: number; // 自定义宽度
+  roomDepth?: number; // 自定义深度
 }
 
 export interface PhotoRecord {

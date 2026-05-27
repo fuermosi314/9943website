@@ -64,11 +64,11 @@ export default function Scene3D() {
 
       {/* Backup reminder */}
       {state.showBackupReminder && (
-        <div className="absolute top-14 left-0 right-0 z-30 bg-yellow-500/20 border-b border-yellow-500/30 px-4 py-2 flex items-center justify-between">
-          <span className="text-yellow-300 text-sm">建议导出备份数据，防止数据丢失</span>
+        <div className="absolute top-14 left-0 right-0 z-30 bg-yellow-500/30 border-b border-yellow-500/40 px-4 py-2 flex items-center justify-between">
+          <span className="text-yellow-100 text-sm font-medium">建议导出备份数据，防止数据丢失</span>
           <div className="flex gap-2">
-            <button onClick={state.handleExport} className="text-yellow-300 text-sm underline">立即备份</button>
-            <button onClick={() => state.setShowBackupReminder(false)} className="text-yellow-300/50 text-sm">忽略</button>
+            <button onClick={state.handleExport} className="text-yellow-100 text-sm underline">立即备份</button>
+            <button onClick={() => state.setShowBackupReminder(false)} className="text-yellow-100/50 text-sm">忽略</button>
           </div>
         </div>
       )}
@@ -84,11 +84,11 @@ export default function Scene3D() {
 
       {/* Move mode indicator */}
       {state.isMovingFurniture && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-[#fb6400] text-white px-4 py-2 rounded-xl text-sm font-medium shadow-lg flex items-center gap-3">
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 bg-[#fb6400] text-white px-3 py-1.5 rounded-lg text-xs font-medium shadow-lg flex items-center gap-2 whitespace-nowrap">
           <span>拖拽移动家具中</span>
           <RotationButtons onRotate={state.rotateMovingFurniture} size="sm" />
           <button onClick={state.stopMoveMode}
-            className="px-2 py-0.5 bg-white/20 hover:bg-white/30 rounded-lg text-xs transition-colors">
+            className="px-2 py-0.5 bg-white/20 hover:bg-white/30 rounded-md text-xs transition-colors">
             完成
           </button>
         </div>
@@ -120,7 +120,7 @@ export default function Scene3D() {
       </div>
 
       {/* Search bar + camera toggle */}
-      <div className="absolute top-4 left-4 z-10 flex items-start gap-2">
+      <div className="absolute top-4 left-4 z-10 flex items-start gap-3">
         <SearchBar
           searchQuery={state.searchQuery}
           searchResults={state.searchResults}
@@ -135,7 +135,7 @@ export default function Scene3D() {
       </div>
 
       {/* Bottom toolbar */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex flex-wrap gap-2 justify-center max-w-[90vw]">
+      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-wrap gap-2 justify-center max-w-[90vw]" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         <button onClick={() => state.setShowFurniturePicker(true)}
           className="px-3 sm:px-4 py-2 bg-[#fb6400] hover:bg-[#e55a00] text-white rounded-xl text-xs sm:text-sm font-medium transition-colors shadow-lg">
           <span className="sm:hidden">🛋️+</span>
@@ -176,9 +176,13 @@ export default function Scene3D() {
         newSceneName={state.newSceneName}
         newSceneEmoji={state.newSceneEmoji}
         newSceneRoomSize={state.newSceneRoomSize}
+        newSceneRoomWidth={state.newSceneRoomWidth}
+        newSceneRoomDepth={state.newSceneRoomDepth}
         editSceneName={state.editSceneName}
         editSceneEmoji={state.editSceneEmoji}
         editSceneRoomSize={state.editSceneRoomSize}
+        editSceneRoomWidth={state.editSceneRoomWidth}
+        editSceneRoomDepth={state.editSceneRoomDepth}
         editingSceneId={state.editingSceneId}
         showSceneEditor={state.showSceneEditor}
         onClose={() => state.setShowSceneManager(false)}
@@ -193,9 +197,13 @@ export default function Scene3D() {
         setNewSceneName={state.setNewSceneName}
         setNewSceneEmoji={state.setNewSceneEmoji}
         setNewSceneRoomSize={state.setNewSceneRoomSize}
+        setNewSceneRoomWidth={state.setNewSceneRoomWidth}
+        setNewSceneRoomDepth={state.setNewSceneRoomDepth}
         setEditSceneName={state.setEditSceneName}
         setEditSceneEmoji={state.setEditSceneEmoji}
         setEditSceneRoomSize={state.setEditSceneRoomSize}
+        setEditSceneRoomWidth={state.setEditSceneRoomWidth}
+        setEditSceneRoomDepth={state.setEditSceneRoomDepth}
       />
 
       {/* Furniture Editor Modal */}

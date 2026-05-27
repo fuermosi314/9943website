@@ -256,12 +256,22 @@ export const tools: Tool[] = [
   {
     id: 'tianjige',
     name: '天机阁',
-    description: '天机阁，一览所有',
+    description: '天机阁，一览无余',
     icon: '🏠',
     category: 'life',
     path: '/tools/tianjige',
     tags: ['收纳', '物品管理', '3D', '整理', '查找'],
     keywords: ['收纳', '物品管理', '找不到东西', '整理', '天机阁'],
+  },
+  {
+    id: 'consumables',
+    name: '耗知通',
+    description: '记录你的消耗品，清楚库存',
+    icon: '📦',
+    category: 'life',
+    path: '/tools/consumables',
+    tags: ['消耗品', '库存', '记录', '日用品', '补货'],
+    keywords: ['消耗品管理', '库存记录', '日用品', '补货提醒', '消耗品'],
   },
   {
     id: 'steam',

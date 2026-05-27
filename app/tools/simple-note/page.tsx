@@ -6,7 +6,7 @@ import BackButton from '@/components/BackButton';
 import {
   type DiaryEntry, type Mood, type PhotoRef,
   addEntry, updateEntry, deleteEntry,
-  getEntriesByDate, getAllDatesWithEntries,
+  getEntriesByDate, getAllDatesWithEntries, getAllEntries,
   addPhoto, getPhoto, deletePhotosByEntryId,
   generateThumbnail,
   exportAllData, importAllData,
@@ -156,18 +156,32 @@ function EntryList({
   onNew,
   selectedDate,
   onPhotoClick,
+  filterDate,
 }: {
   entries: DiaryEntry[];
   onEdit: (entry: DiaryEntry) => void;
   onNew: () => void;
   selectedDate: string;
   onPhotoClick: (photoId: string) => void;
+  filterDate?: string | null;
 }) {
+  // 按日期分组
+  const grouped = entries.reduce<Record<string, DiaryEntry[]>>((acc, entry) => {
+    (acc[entry.date] ??= []).push(entry);
+    return acc;
+  }, {});
+
+  // 排序日期：最新在上
+  const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
+  // 如果有筛选日期，只显示该日期
+  const datesToShow = filterDate ? [filterDate] : sortedDates;
+
   if (entries.length === 0) {
     return (
       <div className="text-center py-16">
         <div className="text-4xl mb-3">📝</div>
-        <p className="text-white/40 text-sm mb-4">这天还没有记录</p>
+        <p className="text-white/40 text-sm mb-4">{filterDate ? '这天还没有记录' : '还没有任何记录'}</p>
         <button
           onClick={onNew}
           className="px-5 py-2 rounded-full bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white text-sm font-medium hover:scale-105 transition-all"
@@ -179,9 +193,12 @@ function EntryList({
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-white/60 text-sm font-medium">{formatDate(selectedDate)}</h2>
+    <div className="space-y-6">
+      {/* 新建按钮 */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-white/60 text-sm font-medium">
+          {filterDate ? formatDate(filterDate) : '全部日记'}
+        </h2>
         <button
           onClick={onNew}
           className="px-4 py-1.5 rounded-full bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white text-xs font-medium hover:scale-105 transition-all"
@@ -189,9 +206,24 @@ function EntryList({
           + 新建
         </button>
       </div>
-      {entries.map(entry => (
-        <EntryCard key={entry.id} entry={entry} onEdit={onEdit} onPhotoClick={onPhotoClick} />
-      ))}
+
+      {/* 按日期分组显示 */}
+      {datesToShow.map(date => {
+        const dateEntries = grouped[date] || [];
+        if (dateEntries.length === 0) return null;
+        return (
+          <div key={date} className="space-y-3">
+            <h3 className="text-white/50 text-xs font-medium flex items-center gap-2">
+              <span className="w-8 h-px bg-white/20" />
+              {formatDate(date)}
+              <span className="text-white/30">({dateEntries.length})</span>
+            </h3>
+            {dateEntries.map(entry => (
+              <EntryCard key={entry.id} entry={entry} onEdit={onEdit} onPhotoClick={onPhotoClick} />
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -518,6 +550,7 @@ export default function SimpleNotePage() {
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [filterDate, setFilterDate] = useState<string | null>(null);
 
   const loadDatesWithEntries = useCallback(async () => {
     const dates = await getAllDatesWithEntries();
@@ -525,9 +558,14 @@ export default function SimpleNotePage() {
   }, []);
 
   const loadEntries = useCallback(async () => {
-    const result = await getEntriesByDate(selectedDate);
-    setEntries(result);
-  }, [selectedDate]);
+    if (filterDate) {
+      const result = await getEntriesByDate(filterDate);
+      setEntries(result);
+    } else {
+      const result = await getAllEntries();
+      setEntries(result);
+    }
+  }, [filterDate]);
 
   useEffect(() => { loadDatesWithEntries(); }, [loadDatesWithEntries]);
   useEffect(() => { loadEntries(); }, [loadEntries]);
@@ -676,8 +714,8 @@ export default function SimpleNotePage() {
           {/* Desktop calendar */}
           <div className="hidden md:block w-[280px] shrink-0 sticky top-24 self-start">
             <CalendarPanel
-              selectedDate={selectedDate}
-              onSelectDate={setSelectedDate}
+              selectedDate={filterDate || selectedDate}
+              onSelectDate={(date) => setFilterDate(date === filterDate ? null : date)}
               calendarMonth={calendarMonth}
               onChangeMonth={setCalendarMonth}
               datesWithEntries={datesWithEntries}
@@ -719,12 +757,24 @@ export default function SimpleNotePage() {
           </div>
           {/* Entry list area */}
           <div className="flex-1 min-w-0">
+            {filterDate && (
+              <div className="mb-4 flex items-center gap-2">
+                <button
+                  onClick={() => setFilterDate(null)}
+                  className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/60 text-xs hover:bg-white/10 hover:text-white transition-all"
+                >
+                  ← 返回全部
+                </button>
+                <span className="text-white/40 text-xs">正在查看：{formatDate(filterDate)}</span>
+              </div>
+            )}
             <EntryList
               entries={entries}
               selectedDate={selectedDate}
               onEdit={(e) => { setEditingEntry(e); setShowEditor(true); }}
               onNew={() => { setEditingEntry(null); setShowEditor(true); }}
               onPhotoClick={(id) => setViewingPhoto(id)}
+              filterDate={filterDate}
             />
           </div>
         </div>
@@ -735,8 +785,8 @@ export default function SimpleNotePage() {
             <div className="absolute inset-0 bg-black/60" onClick={() => setShowMobileCalendar(false)} />
             <div className="absolute bottom-0 left-0 right-0 p-4 animate-slide-up">
               <CalendarPanel
-                selectedDate={selectedDate}
-                onSelectDate={(d) => { setSelectedDate(d); setShowMobileCalendar(false); }}
+                selectedDate={filterDate || selectedDate}
+                onSelectDate={(d) => { setFilterDate(d === filterDate ? null : d); setShowMobileCalendar(false); }}
                 calendarMonth={calendarMonth}
                 onChangeMonth={setCalendarMonth}
                 datesWithEntries={datesWithEntries}

@@ -67,9 +67,10 @@ function createWoodTexture(): THREE.CanvasTexture {
 }
 
 // ── Room builder ────────────────────────────────────────────────────
-export function createRoom(size: number = 5): THREE.Group {
+export function createRoom(width: number = 5, depth?: number): THREE.Group {
   const room = new THREE.Group();
-  const ROOM = size;
+  const W = width;
+  const D = depth ?? width; // 如果没有提供 depth，使用 width（正方形）
   const WALL_H = 2.8;
 
   const hemiLight = new THREE.HemisphereLight(0x87CEEB, 0x8B7355, 0.4);
@@ -83,7 +84,7 @@ export function createRoom(size: number = 5): THREE.Group {
     metalness: 0.0,
   });
   const floorBase = new THREE.Mesh(
-    new THREE.BoxGeometry(ROOM, 0.12, ROOM),
+    new THREE.BoxGeometry(W, 0.12, D),
     floorMat,
   );
   floorBase.position.set(0, -0.06, 0);
@@ -92,7 +93,7 @@ export function createRoom(size: number = 5): THREE.Group {
 
   const ceilingMat = new THREE.MeshStandardMaterial({ color: 0xF8F5F0, roughness: 0.9, metalness: 0.0 });
   const ceiling = new THREE.Mesh(
-    new THREE.BoxGeometry(ROOM, 0.08, ROOM),
+    new THREE.BoxGeometry(W, 0.08, D),
     ceilingMat,
   );
   ceiling.position.set(0, WALL_H + 0.04, 0);
@@ -103,54 +104,54 @@ export function createRoom(size: number = 5): THREE.Group {
   const wallUpper = new THREE.MeshStandardMaterial({ color: 0xF0EDE5, roughness: 0.85, metalness: 0.0 });
   const wallLower = new THREE.MeshStandardMaterial({ color: 0xE8E4DA, roughness: 0.85, metalness: 0.0 });
 
-  const backUpper = new THREE.Mesh(new THREE.BoxGeometry(ROOM, WALL_H * 0.6, 0.12), wallUpper);
-  backUpper.position.set(0, WALL_H * 0.3 + 0.8, -ROOM / 2);
+  const backUpper = new THREE.Mesh(new THREE.BoxGeometry(W, WALL_H * 0.6, 0.12), wallUpper);
+  backUpper.position.set(0, WALL_H * 0.3 + 0.8, -D / 2);
   backUpper.receiveShadow = true;
   room.add(backUpper);
-  const backLower = new THREE.Mesh(new THREE.BoxGeometry(ROOM, 0.8, 0.14), wallLower);
-  backLower.position.set(0, 0.4, -ROOM / 2);
+  const backLower = new THREE.Mesh(new THREE.BoxGeometry(W, 0.8, 0.14), wallLower);
+  backLower.position.set(0, 0.4, -D / 2);
   backLower.receiveShadow = true;
   room.add(backLower);
 
-  const leftUpper = new THREE.Mesh(new THREE.BoxGeometry(0.12, WALL_H * 0.6, ROOM), wallUpper);
-  leftUpper.position.set(-ROOM / 2, WALL_H * 0.3 + 0.8, 0);
+  const leftUpper = new THREE.Mesh(new THREE.BoxGeometry(0.12, WALL_H * 0.6, D), wallUpper);
+  leftUpper.position.set(-W / 2, WALL_H * 0.3 + 0.8, 0);
   leftUpper.receiveShadow = true;
   room.add(leftUpper);
-  const leftLower = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.8, ROOM), wallLower);
-  leftLower.position.set(-ROOM / 2, 0.4, 0);
+  const leftLower = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.8, D), wallLower);
+  leftLower.position.set(-W / 2, 0.4, 0);
   leftLower.receiveShadow = true;
   room.add(leftLower);
 
-  const rightUpper = new THREE.Mesh(new THREE.BoxGeometry(0.12, WALL_H * 0.6, ROOM), wallUpper);
-  rightUpper.position.set(ROOM / 2, WALL_H * 0.3 + 0.8, 0);
+  const rightUpper = new THREE.Mesh(new THREE.BoxGeometry(0.12, WALL_H * 0.6, D), wallUpper);
+  rightUpper.position.set(W / 2, WALL_H * 0.3 + 0.8, 0);
   rightUpper.receiveShadow = true;
   room.add(rightUpper);
-  const rightLower = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.8, ROOM), wallLower);
-  rightLower.position.set(ROOM / 2, 0.4, 0);
+  const rightLower = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.8, D), wallLower);
+  rightLower.position.set(W / 2, 0.4, 0);
   rightLower.receiveShadow = true;
   room.add(rightLower);
 
   const baseMat = new THREE.MeshStandardMaterial({ color: 0xF5F0E8, roughness: 0.7, metalness: 0.0 });
   const bh = 0.12;
-  const bb = new THREE.Mesh(new THREE.BoxGeometry(ROOM + 0.04, bh, 0.06), baseMat);
-  bb.position.set(0, bh / 2, -ROOM / 2 + 0.09);
+  const bb = new THREE.Mesh(new THREE.BoxGeometry(W + 0.04, bh, 0.06), baseMat);
+  bb.position.set(0, bh / 2, -D / 2 + 0.09);
   room.add(bb);
-  const bl = new THREE.Mesh(new THREE.BoxGeometry(0.06, bh, ROOM + 0.04), baseMat);
-  bl.position.set(-ROOM / 2 + 0.09, bh / 2, 0);
+  const bl = new THREE.Mesh(new THREE.BoxGeometry(0.06, bh, D + 0.04), baseMat);
+  bl.position.set(-W / 2 + 0.09, bh / 2, 0);
   room.add(bl);
-  const br = new THREE.Mesh(new THREE.BoxGeometry(0.06, bh, ROOM + 0.04), baseMat);
-  br.position.set(ROOM / 2 - 0.09, bh / 2, 0);
+  const br = new THREE.Mesh(new THREE.BoxGeometry(0.06, bh, D + 0.04), baseMat);
+  br.position.set(W / 2 - 0.09, bh / 2, 0);
   room.add(br);
 
   const railMat = new THREE.MeshStandardMaterial({ color: 0xEDE8DD, roughness: 0.8, metalness: 0.0 });
-  const rb = new THREE.Mesh(new THREE.BoxGeometry(ROOM + 0.04, 0.04, 0.04), railMat);
-  rb.position.set(0, 0.82, -ROOM / 2 + 0.09);
+  const rb = new THREE.Mesh(new THREE.BoxGeometry(W + 0.04, 0.04, 0.04), railMat);
+  rb.position.set(0, 0.82, -D / 2 + 0.09);
   room.add(rb);
-  const rl = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, ROOM + 0.04), railMat);
-  rl.position.set(-ROOM / 2 + 0.09, 0.82, 0);
+  const rl = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, D + 0.04), railMat);
+  rl.position.set(-W / 2 + 0.09, 0.82, 0);
   room.add(rl);
-  const rr = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, ROOM + 0.04), railMat);
-  rr.position.set(ROOM / 2 - 0.09, 0.82, 0);
+  const rr = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, D + 0.04), railMat);
+  rr.position.set(W / 2 - 0.09, 0.82, 0);
   room.add(rr);
 
   const frameMat = new THREE.MeshStandardMaterial({ color: 0xF5F0E8, roughness: 0.6, metalness: 0.0 });
@@ -165,7 +166,7 @@ export function createRoom(size: number = 5): THREE.Group {
   });
   const ww = 1.6, wh = 1.2;
   const wy = 1.6;
-  const wz = -ROOM / 2 + 0.08;
+  const wz = -D / 2 + 0.08;
   const ft = new THREE.Mesh(new THREE.BoxGeometry(ww + 0.12, 0.08, 0.08), frameMat);
   ft.position.set(0, wy + wh / 2, wz); room.add(ft);
   const fb = new THREE.Mesh(new THREE.BoxGeometry(ww + 0.12, 0.08, 0.08), frameMat);
@@ -190,12 +191,12 @@ export function createRoom(size: number = 5): THREE.Group {
 
   const crownMat = new THREE.MeshStandardMaterial({ color: 0xF8F5F0, roughness: 0.8, metalness: 0.0 });
   const ch = 0.1;
-  const cmb = new THREE.Mesh(new THREE.BoxGeometry(ROOM + 0.08, ch, 0.08), crownMat);
-  cmb.position.set(0, WALL_H - ch / 2, -ROOM / 2 + 0.06); room.add(cmb);
-  const cml = new THREE.Mesh(new THREE.BoxGeometry(0.08, ch, ROOM + 0.08), crownMat);
-  cml.position.set(-ROOM / 2 + 0.06, WALL_H - ch / 2, 0); room.add(cml);
-  const cmr = new THREE.Mesh(new THREE.BoxGeometry(0.08, ch, ROOM + 0.08), crownMat);
-  cmr.position.set(ROOM / 2 - 0.06, WALL_H - ch / 2, 0); room.add(cmr);
+  const cmb = new THREE.Mesh(new THREE.BoxGeometry(W + 0.08, ch, 0.08), crownMat);
+  cmb.position.set(0, WALL_H - ch / 2, -D / 2 + 0.06); room.add(cmb);
+  const cml = new THREE.Mesh(new THREE.BoxGeometry(0.08, ch, D + 0.08), crownMat);
+  cml.position.set(-W / 2 + 0.06, WALL_H - ch / 2, 0); room.add(cml);
+  const cmr = new THREE.Mesh(new THREE.BoxGeometry(0.08, ch, D + 0.08), crownMat);
+  cmr.position.set(W / 2 - 0.06, WALL_H - ch / 2, 0); room.add(cmr);
 
   const rug = new THREE.Mesh(
     new THREE.BoxGeometry(2.4, 0.015, 1.6),
@@ -926,6 +927,8 @@ export function createPresetScenes(): Scene[] {
       sortOrder: 0,
       thumbnail: '',
       roomSize: 5,
+      roomWidth: 5,
+      roomDepth: 5,
       furniture: [
         createFurnitureItem('sofa', 0, -1.5, 0),
         createFurnitureItem('coffee-table', 0, -0.3, 0),
@@ -940,6 +943,8 @@ export function createPresetScenes(): Scene[] {
       sortOrder: 1,
       thumbnail: '',
       roomSize: 5,
+      roomWidth: 5,
+      roomDepth: 5,
       furniture: [
         createFurnitureItem('bed', 0, -0.5, 0),
         createFurnitureItem('nightstand', -1.4, -1.5, 0),
@@ -955,6 +960,8 @@ export function createPresetScenes(): Scene[] {
       sortOrder: 2,
       thumbnail: '',
       roomSize: 5,
+      roomWidth: 5,
+      roomDepth: 5,
       furniture: [
         createFurnitureItem('dining-table', 0, 0, 0),
         createFurnitureItem('fridge', -2.0, 1.5, 90),
@@ -969,6 +976,8 @@ export function createPresetScenes(): Scene[] {
       sortOrder: 3,
       thumbnail: '',
       roomSize: 3,
+      roomWidth: 3,
+      roomDepth: 3,
       furniture: [
         createFurnitureItem('sink', -0.8, 0.8, 180),
         createFurnitureItem('washing-machine', 0.8, 0.8, 180),
@@ -982,6 +991,8 @@ export function createPresetScenes(): Scene[] {
       sortOrder: 4,
       thumbnail: '',
       roomSize: 5,
+      roomWidth: 5,
+      roomDepth: 5,
       furniture: [
         createFurnitureItem('bed', -1.2, -1.0, 0, 0.8),
         createFurnitureItem('bed', 1.2, -1.0, 0, 0.8),

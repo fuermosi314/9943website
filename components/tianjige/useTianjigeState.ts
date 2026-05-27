@@ -77,6 +77,8 @@ export function useTianjigeState() {
   const historyIndexRef = useRef<number>(-1);
   const skipHistoryRef = useRef(false);
   const roomSizeRef = useRef(5);
+  const roomWidthRef = useRef(5);
+  const roomDepthRef = useRef(5);
 
   // ── State ────────────────────────────────────────────────────────
   const [scenes, setScenes] = useState<Scene[]>([]);
@@ -112,7 +114,11 @@ export function useTianjigeState() {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [showBackupReminder, setShowBackupReminder] = useState(false);
   const [editSceneRoomSize, setEditSceneRoomSize] = useState(5);
+  const [editSceneRoomWidth, setEditSceneRoomWidth] = useState(5);
+  const [editSceneRoomDepth, setEditSceneRoomDepth] = useState(5);
   const [newSceneRoomSize, setNewSceneRoomSize] = useState(5);
+  const [newSceneRoomWidth, setNewSceneRoomWidth] = useState(5);
+  const [newSceneRoomDepth, setNewSceneRoomDepth] = useState(5);
   const [cameraMode, setCameraMode] = useState<'orbit' | 'topdown'>('orbit');
   const [confirmState, setConfirmState] = useState<{ message: string; resolve: (v: boolean) => void } | null>(null);
   const [toast, setToast] = useState<{ message: string; type?: 'info' | 'success' } | null>(null);
@@ -383,11 +389,16 @@ export function useTianjigeState() {
   }, [scenes, activeSceneId]);
 
   // ── Active room size ───────────────────────────────────────────
-  const activeRoomSize = scenes.find(s => s.id === activeSceneId)?.roomSize ?? 5;
+  const activeScene = scenes.find(s => s.id === activeSceneId);
+  const activeRoomSize = activeScene?.roomSize ?? 5;
+  const activeRoomWidth = activeScene?.roomWidth ?? activeRoomSize;
+  const activeRoomDepth = activeScene?.roomDepth ?? activeRoomSize;
 
   useEffect(() => {
     roomSizeRef.current = activeRoomSize;
-  }, [activeRoomSize]);
+    roomWidthRef.current = activeRoomWidth;
+    roomDepthRef.current = activeRoomDepth;
+  }, [activeRoomSize, activeRoomWidth, activeRoomDepth]);
 
   // ── Rebuild room when size changes ─────────────────────────────
   useEffect(() => {
@@ -396,10 +407,10 @@ export function useTianjigeState() {
     const toRemove: THREE.Object3D[] = [];
     threeScene.traverse(obj => { if (obj.userData.isRoom) toRemove.push(obj); });
     for (const obj of toRemove) threeScene.remove(obj);
-    const room = createRoom(activeRoomSize);
+    const room = createRoom(activeRoomWidth, activeRoomDepth);
     room.userData.isRoom = true;
     threeScene.add(room);
-  }, [activeRoomSize]);
+  }, [activeRoomWidth, activeRoomDepth]);
 
   // ── Grid helper for move mode ──────────────────────────────────
   useEffect(() => {
@@ -409,14 +420,16 @@ export function useTianjigeState() {
     threeScene.traverse(obj => { if (obj.userData.isGrid) toRemove.push(obj); });
     for (const obj of toRemove) threeScene.remove(obj);
     if (isMovingFurniture) {
-      const grid = new THREE.GridHelper(activeRoomSize, activeRoomSize * 2, 0x888888, 0xcccccc);
+      // 使用较大的尺寸创建网格，覆盖整个房间
+      const maxSize = Math.max(activeRoomWidth, activeRoomDepth);
+      const grid = new THREE.GridHelper(maxSize, maxSize * 2, 0x888888, 0xcccccc);
       grid.userData.isGrid = true;
       grid.position.y = 0.01;
       const mats = Array.isArray(grid.material) ? grid.material : [grid.material];
       mats.forEach((m: THREE.Material) => { m.transparent = true; m.opacity = 0.3; });
       threeScene.add(grid);
     }
-  }, [isMovingFurniture, activeRoomSize]);
+  }, [isMovingFurniture, activeRoomWidth, activeRoomDepth]);
 
   // ── Undo / Redo ───────────────────────────────────────────────
   useEffect(() => {
@@ -858,6 +871,8 @@ export function useTianjigeState() {
       thumbnail: '',
       furniture: [],
       roomSize: newSceneRoomSize,
+      roomWidth: newSceneRoomWidth,
+      roomDepth: newSceneRoomDepth,
     };
     setSaveStatus('saving');
     await saveScene(newScene);
@@ -867,14 +882,14 @@ export function useTianjigeState() {
     setNewSceneName('');
     setNewSceneEmoji('🏠');
     setShowSceneManager(false);
-  }, [newSceneName, newSceneEmoji, scenes.length]);
+  }, [newSceneName, newSceneEmoji, newSceneRoomSize, newSceneRoomWidth, newSceneRoomDepth, scenes.length]);
 
   const handleSaveSceneEdit = useCallback(async () => {
     if (!editSceneName.trim()) return;
     setScenes(prev => {
       const updated = prev.map(s => {
         if (s.id !== editingSceneId) return s;
-        return { ...s, name: editSceneName.trim(), emoji: editSceneEmoji || '🏠', roomSize: editSceneRoomSize };
+        return { ...s, name: editSceneName.trim(), emoji: editSceneEmoji || '🏠', roomSize: editSceneRoomSize, roomWidth: editSceneRoomWidth, roomDepth: editSceneRoomDepth };
       });
       const scene = updated.find(s => s.id === editingSceneId);
       if (scene) {
@@ -884,7 +899,7 @@ export function useTianjigeState() {
       return updated;
     });
     setShowSceneEditor(false);
-  }, [editSceneName, editSceneEmoji, editSceneRoomSize, editingSceneId]);
+  }, [editSceneName, editSceneEmoji, editSceneRoomSize, editSceneRoomWidth, editSceneRoomDepth, editingSceneId]);
 
   const handleDeleteScene = useCallback(async (sceneId: string) => {
     if (!await customConfirm(`确定删除场景「${scenes.find(s => s.id === sceneId)?.name}」？`)) return;
@@ -1035,6 +1050,8 @@ export function useTianjigeState() {
     setEditSceneName(scene.name);
     setEditSceneEmoji(scene.emoji);
     setEditSceneRoomSize(scene.roomSize ?? 5);
+    setEditSceneRoomWidth(scene.roomWidth ?? scene.roomSize ?? 5);
+    setEditSceneRoomDepth(scene.roomDepth ?? scene.roomSize ?? 5);
     setShowSceneEditor(true);
   }, []);
 
@@ -1043,13 +1060,13 @@ export function useTianjigeState() {
     movingFurnitureRef.current = furniture;
     setIsMovingFurniture(true);
     setShowItemPanel(false);
-    if (controlsRef.current) controlsRef.current.enabled = false;
+    // Don't disable controls — allow camera movement when not dragging furniture
   }, []);
 
   const stopMoveMode = useCallback(() => {
     setIsMovingFurniture(false);
     movingFurnitureRef.current = null;
-    if (controlsRef.current) controlsRef.current.enabled = true;
+    draggingFurniture.current = null;
   }, []);
 
   // ── Camera mode toggle ─────────────────────────────────────────
@@ -1124,7 +1141,7 @@ export function useTianjigeState() {
     pointerMoved.current = false;
     draggingFurniture.current = null;
 
-    // Move mode: start furniture drag (works in both camera modes)
+    // Move mode: check if clicking on the moving furniture to start drag
     if (isMovingFurniture && movingFurnitureRef.current) {
       const container = containerRef.current;
       const camera = cameraRef.current;
@@ -1134,15 +1151,32 @@ export function useTianjigeState() {
         pointer.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
         raycaster.current.setFromCamera(pointer.current, camera);
 
-        const intersectPoint = new THREE.Vector3();
-        raycaster.current.ray.intersectPlane(dragPlane.current, intersectPoint);
-        const furniture = movingFurnitureRef.current;
-        dragOffset.current.set(
-          furniture.position.x - intersectPoint.x,
-          0,
-          furniture.position.z - intersectPoint.z,
-        );
-        draggingFurniture.current = furniture;
+        // Check if clicking on the moving furniture
+        const intersects = raycaster.current.intersectObjects(furnitureMeshesRef.current, true);
+        let clickedOnMovingFurniture = false;
+        if (intersects.length > 0) {
+          let target = intersects[0].object as THREE.Object3D;
+          while (target && !target.userData?.furnitureId) target = target.parent!;
+          if (target?.userData?.furnitureId === movingFurnitureRef.current.id) {
+            clickedOnMovingFurniture = true;
+          }
+        }
+
+        if (clickedOnMovingFurniture) {
+          // Start furniture drag
+          const intersectPoint = new THREE.Vector3();
+          raycaster.current.ray.intersectPlane(dragPlane.current, intersectPoint);
+          const furniture = movingFurnitureRef.current;
+          dragOffset.current.set(
+            furniture.position.x - intersectPoint.x,
+            0,
+            furniture.position.z - intersectPoint.z,
+          );
+          draggingFurniture.current = furniture;
+          // Disable controls during furniture drag
+          if (controlsRef.current) controlsRef.current.enabled = false;
+        }
+        // If not clicking on furniture, let controls handle the pointer for camera movement
       }
     }
   }, [isMovingFurniture, showFurniturePicker, showFurnitureEditor, showItemEditor, showSceneManager, showStats]);
@@ -1195,7 +1229,8 @@ export function useTianjigeState() {
       if (camera) {
         const dx = e.clientX - previousPointerPos.current.x;
         const dy = e.clientY - previousPointerPos.current.y;
-        const scale = camera.position.y * 0.0012;
+        // Use stable scale based on room size, not camera height
+        const scale = roomSizeRef.current * 0.004;
         const halfBound = roomSizeRef.current * 0.8;
         const newX = Math.max(-halfBound, Math.min(halfBound, camera.position.x - dx * scale));
         const newZ = Math.max(-halfBound, Math.min(halfBound, camera.position.z - dy * scale));
@@ -1209,6 +1244,10 @@ export function useTianjigeState() {
   const commitDragPosition = useCallback(() => {
     const pos = dragFinalPosRef.current;
     if (pos) {
+      // Update movingFurnitureRef position so next drag starts from current position
+      if (movingFurnitureRef.current && movingFurnitureRef.current.id === pos.id) {
+        movingFurnitureRef.current = { ...movingFurnitureRef.current, position: { x: pos.x, z: pos.z } };
+      }
       setScenes(prev => {
         const updated = prev.map(s => {
           if (s.id !== activeSceneId) return s;
@@ -1236,6 +1275,8 @@ export function useTianjigeState() {
 
     if (draggingFurniture.current) {
       commitDragPosition();
+      // Re-enable controls after furniture drag
+      if (controlsRef.current && isMovingFurniture) controlsRef.current.enabled = true;
     } else if (!pointerMoved.current && !isMovingFurniture) {
       handleClick(e);
     }
@@ -1382,7 +1423,11 @@ export function useTianjigeState() {
     showToast,
     handleDeleteFurnitureConfirm,
     editSceneRoomSize,
+    editSceneRoomWidth,
+    editSceneRoomDepth,
     newSceneRoomSize,
+    newSceneRoomWidth,
+    newSceneRoomDepth,
     // Setters (for simple state changes)
     setShowItemPanel,
     setShowItemEditor,
@@ -1403,7 +1448,11 @@ export function useTianjigeState() {
     setEditingItem,
     setEditingFurniture,
     setEditSceneRoomSize,
+    setEditSceneRoomWidth,
+    setEditSceneRoomDepth,
     setNewSceneRoomSize,
+    setNewSceneRoomWidth,
+    setNewSceneRoomDepth,
     setCameraMode,
     // Handlers
     handleSceneChange,
