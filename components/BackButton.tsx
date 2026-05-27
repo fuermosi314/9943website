@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { tools } from '@/lib/tools';
@@ -9,7 +10,7 @@ interface BackButtonProps {
   className?: string;
 }
 
-export default function BackButton({ toolId, className }: BackButtonProps) {
+function BackButtonContent({ toolId, className }: BackButtonProps) {
   const searchParams = useSearchParams();
   const fromCategory = searchParams.get('from');
   const tool = tools.find((t) => t.id === toolId);
@@ -30,5 +31,13 @@ export default function BackButton({ toolId, className }: BackButtonProps) {
       </svg>
       返回
     </Link>
+  );
+}
+
+export default function BackButton({ toolId, className }: BackButtonProps) {
+  return (
+    <Suspense fallback={null}>
+      <BackButtonContent toolId={toolId} className={className} />
+    </Suspense>
   );
 }
