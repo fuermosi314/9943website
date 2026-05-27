@@ -79,7 +79,7 @@ const CLOUD_DRIVE_PATTERNS: Array<{
   },
 ];
 
-export function detectCloudDrive(url: string): CloudDriveInfo | null {
+function detectCloudDrive(url: string): CloudDriveInfo | null {
   for (const dp of CLOUD_DRIVE_PATTERNS) {
     if (dp.pattern.test(url)) {
       const shareId = dp.extractId(url);

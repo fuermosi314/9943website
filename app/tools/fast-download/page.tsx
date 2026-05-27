@@ -116,7 +116,7 @@ export default function FastDownloadPage() {
           setError(`解析成功但探测失败: ${probeData.error}`);
         } else {
           // 保存直链用于后续下载
-          (window as Record<string, unknown>).__cloudDirectUrl = parseData.downloadUrl;
+          (window as unknown as Record<string, unknown>).__cloudDirectUrl = parseData.downloadUrl;
           setProbeResult({
             ...probeData,
             cloudService: parseData.service,
@@ -147,7 +147,7 @@ export default function FastDownloadPage() {
     if (!probeResult) return;
 
     // 获取实际下载地址（网盘直链或原始URL）
-    const directUrl = (window as Record<string, unknown>).__cloudDirectUrl as string | undefined;
+    const directUrl = (window as unknown as Record<string, unknown>).__cloudDirectUrl as string | undefined;
     const downloadUrl = directUrl || url.trim();
 
     if (!probeResult.supportsRange) {
