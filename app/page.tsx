@@ -6,7 +6,7 @@ import Header from '@/components/Header';
 import CategoryNav from '@/components/CategoryNav';
 import ToolCard from '@/components/ToolCard';
 import { tools, getToolsByCategory, searchTools } from '@/lib/tools';
-import { getToolFavorites, getToolHistory } from '@/lib/storage';
+import { getToolFavorites, setToolFavorites, getToolHistory } from '@/lib/storage';
 
 export default function Home() {
   return (
@@ -23,6 +23,10 @@ function HomeContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [historyIds, setHistoryIds] = useState<string[]>([]);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isDraggingRef = useRef(false);
 
   // 刷新收藏和历史数据
   const refreshData = useCallback(() => {
@@ -59,6 +63,120 @@ function HomeContent() {
       }
     });
   }, []);
+
+  // 长按拖拽排序 - 仅在收藏分类下生效
+  const handleDragStart = useCallback((toolId: string) => {
+    if (activeCategory !== 'favorites') return;
+    isDraggingRef.current = true;
+    setDraggingId(toolId);
+  }, [activeCategory]);
+
+  const handleDragOver = useCallback((toolId: string) => {
+    if (!isDraggingRef.current || !draggingId || toolId === draggingId) return;
+    setDragOverId(toolId);
+  }, [draggingId]);
+
+  const handleDragEnd = useCallback(() => {
+    if (!isDraggingRef.current || !draggingId || !dragOverId || draggingId === dragOverId) {
+      setDraggingId(null);
+      setDragOverId(null);
+      isDraggingRef.current = false;
+      return;
+    }
+
+    setFavoriteIds(prev => {
+      const newIds = [...prev];
+      const dragIndex = newIds.indexOf(draggingId);
+      const overIndex = newIds.indexOf(dragOverId);
+      if (dragIndex === -1 || overIndex === -1) return prev;
+      newIds.splice(dragIndex, 1);
+      newIds.splice(overIndex, 0, draggingId);
+      setToolFavorites(newIds);
+      return newIds;
+    });
+
+    setDraggingId(null);
+    setDragOverId(null);
+    isDraggingRef.current = false;
+  }, [draggingId, dragOverId]);
+
+  // 触摸事件处理
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+  const touchedId = useRef<string | null>(null);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent, toolId: string) => {
+    if (activeCategory !== 'favorites') return;
+    const touch = e.touches[0];
+    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+    touchedId.current = toolId;
+
+    longPressTimerRef.current = setTimeout(() => {
+      handleDragStart(toolId);
+      // 触发振动反馈
+      if (navigator.vibrate) navigator.vibrate(50);
+    }, 500);
+  }, [activeCategory, handleDragStart]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchStartPos.current) return;
+    const touch = e.touches[0];
+    const dx = Math.abs(touch.clientX - touchStartPos.current.x);
+    const dy = Math.abs(touch.clientY - touchStartPos.current.y);
+
+    // 移动超过 10px 取消长按
+    if (dx > 10 || dy > 10) {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    }
+
+    // 如果正在拖拽，找到当前触摸位置下的元素
+    if (isDraggingRef.current) {
+      const element = document.elementFromPoint(touch.clientX, touch.clientY);
+      const card = element?.closest('[data-tool-id]');
+      if (card) {
+        const targetId = card.getAttribute('data-tool-id');
+        if (targetId) handleDragOver(targetId);
+      }
+    }
+  }, [handleDragOver]);
+
+  const handleTouchEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    touchStartPos.current = null;
+    touchedId.current = null;
+    handleDragEnd();
+  }, [handleDragEnd]);
+
+  // 鼠标事件处理（桌面端）
+  const handleMouseDown = useCallback((e: React.MouseEvent, toolId: string) => {
+    if (activeCategory !== 'favorites' || e.button !== 0) return;
+    longPressTimerRef.current = setTimeout(() => {
+      handleDragStart(toolId);
+    }, 500);
+  }, [activeCategory, handleDragStart]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isDraggingRef.current) return;
+    const element = document.elementFromPoint(e.clientX, e.clientY);
+    const card = element?.closest('[data-tool-id]');
+    if (card) {
+      const targetId = card.getAttribute('data-tool-id');
+      if (targetId) handleDragOver(targetId);
+    }
+  }, [handleDragOver]);
+
+  const handleMouseUp = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    handleDragEnd();
+  }, [handleDragEnd]);
 
   const animatedCatsRef = useRef<Set<string> | null>(null);
   if (!animatedCatsRef.current) {
@@ -106,7 +224,10 @@ function HomeContent() {
   const getDisplayTools = () => {
     if (searchQuery) return searchTools(searchQuery);
     if (activeCategory === 'favorites') {
-      return tools.filter((tool) => favoriteIds.includes(tool.id));
+      // 按收藏顺序显示，而不是按 tools 数组顺序
+      return favoriteIds
+        .map(id => tools.find(tool => tool.id === id))
+        .filter(Boolean) as typeof tools;
     }
     if (activeCategory === 'history') {
       // 按最新使用时间排序
@@ -160,17 +281,33 @@ function HomeContent() {
         </div>
 
         {/* Tools Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <div
+          className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+        >
           {displayTools.map((tool, index) => (
-            <ToolCard
+            <div
               key={tool.id}
-              tool={tool}
-              index={index}
-              animated={animated}
-              isFavorite={favoriteIds.includes(tool.id)}
-              onFavoriteChange={handleFavoriteChange}
-              fromCategory={activeCategory}
-            />
+              data-tool-id={tool.id}
+              onTouchStart={(e) => handleTouchStart(e, tool.id)}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={(e) => handleMouseDown(e, tool.id)}
+              className={`transition-transform duration-200 ${
+                draggingId === tool.id ? 'opacity-50 scale-95' : ''
+              } ${dragOverId === tool.id ? 'scale-105' : ''}`}
+            >
+              <ToolCard
+                tool={tool}
+                index={index}
+                animated={animated}
+                isFavorite={favoriteIds.includes(tool.id)}
+                onFavoriteChange={handleFavoriteChange}
+                fromCategory={activeCategory}
+              />
+            </div>
           ))}
         </div>
 

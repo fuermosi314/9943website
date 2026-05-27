@@ -1,6 +1,7 @@
 'use client';
 
 import { Item, PhotoRef } from '@/lib/tianjige-db';
+import CategorySelector from '@/components/CategorySelector';
 
 interface ItemForm {
   name: string;
@@ -33,7 +34,7 @@ export default function ItemEditor({
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
       onPaste={onPaste}>
       <div className="bg-[#1a1a2e] rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md mx-0 sm:mx-4 border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}>
@@ -51,12 +52,11 @@ export default function ItemEditor({
           {/* Category */}
           <div>
             <label className="text-white/70 text-sm mb-1 block">分类</label>
-            <select value={itemForm.category} onChange={e => setItemForm(f => ({ ...f, category: e.target.value }))}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#fb6400]">
-              {['衣物', '书籍', '电子', '食品', '日用', '其他'].map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+            <CategorySelector
+              toolId="tianjige"
+              value={itemForm.category}
+              onChange={(cat) => setItemForm(f => ({ ...f, category: cat }))}
+            />
           </div>
           {/* Quantity + Price */}
           <div className="flex gap-3">

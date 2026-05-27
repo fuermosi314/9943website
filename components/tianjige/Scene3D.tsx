@@ -101,15 +101,40 @@ export default function Scene3D() {
         </div>
       )}
 
-      {/* Scene switcher dropdown + save status */}
-      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-        {state.saveStatus === 'saving' && <span className="text-white/60 text-sm">保存中...</span>}
-        {state.saveStatus === 'saved' && <span className="text-green-400/80 text-sm">已保存</span>}
-        {state.saveStatus === 'unsaved' && <span className="text-yellow-400 text-sm font-medium">未保存</span>}
+      {/* Top bar: search + camera toggle + scene switcher */}
+      <div className="absolute top-2 left-2 right-2 z-10 flex items-center gap-2">
+        {/* Search bar */}
+        <div className="flex-1 min-w-0">
+          <SearchBar
+            searchQuery={state.searchQuery}
+            searchResults={state.searchResults}
+            onSearch={state.handleSearch}
+            onSelect={state.handleSearchSelect}
+          />
+        </div>
+        {/* Camera toggle */}
+        <button onClick={state.toggleCameraMode}
+          className="p-2 bg-[#1a1a2e]/90 rounded-lg border border-white/20 text-white/70 hover:text-white hover:border-[#fb6400]/30 transition-colors shrink-0"
+          title={state.cameraMode === 'orbit' ? '切换到上帝视角' : '切换到自由视角'}>
+          {state.cameraMode === 'orbit' ? '🔭' : '⬇️'}
+        </button>
+        {/* Fullscreen toggle */}
+        <button onClick={() => {
+          if (document.fullscreenElement) {
+            document.exitFullscreen();
+          } else {
+            document.documentElement.requestFullscreen();
+          }
+        }}
+          className="p-2 bg-[#1a1a2e]/90 rounded-lg border border-white/20 text-white/70 hover:text-white hover:border-[#fb6400]/30 transition-colors shrink-0"
+          title="全屏">
+          {document.fullscreenElement ? '🔲' : '⛶'}
+        </button>
+        {/* Scene switcher */}
         <select
           value={state.activeSceneId}
           onChange={state.handleSceneChange}
-          className="bg-[#1a1a2e] border border-white/20 rounded-lg px-3 py-2 text-sm shadow-md text-white focus:outline-none focus:ring-2 focus:ring-[#fb6400]"
+          className="bg-[#1a1a2e]/90 border border-white/20 rounded-lg px-2 py-2 text-xs shadow-md text-white focus:outline-none focus:ring-2 focus:ring-[#fb6400] shrink-0 max-w-[100px]"
         >
           {state.scenes.map((s) => (
             <option key={s.id} value={s.id} className="bg-[#1a1a2e] text-white">
@@ -119,23 +144,34 @@ export default function Scene3D() {
         </select>
       </div>
 
-      {/* Search bar + camera toggle */}
-      <div className="absolute top-4 left-4 z-10 flex items-start gap-3">
-        <SearchBar
-          searchQuery={state.searchQuery}
-          searchResults={state.searchResults}
-          onSearch={state.handleSearch}
-          onSelect={state.handleSearchSelect}
-        />
-        <button onClick={state.toggleCameraMode}
-          className="p-2 bg-[#1a1a2e]/90 rounded-lg border border-white/20 text-white/70 hover:text-white hover:border-[#fb6400]/30 transition-colors shrink-0"
-          title={state.cameraMode === 'orbit' ? '切换到上帝视角' : '切换到自由视角'}>
-          {state.cameraMode === 'orbit' ? '🔭' : '⬇️'}
-        </button>
+      {/* Save status - below top bar */}
+      <div className="absolute top-12 left-1/2 -translate-x-1/2 z-10">
+        {state.saveStatus === 'saving' && <span className="text-white/60 text-xs bg-black/40 px-2 py-1 rounded">保存中...</span>}
+        {state.saveStatus === 'saved' && <span className="text-green-400/80 text-xs bg-black/40 px-2 py-1 rounded">已保存</span>}
+        {state.saveStatus === 'unsaved' && <span className="text-yellow-400 text-xs font-medium bg-black/40 px-2 py-1 rounded">未保存</span>}
       </div>
 
+      {/* Move mode indicator */}
+      {state.isMovingFurniture && (
+        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 bg-[#fb6400] text-white px-3 py-1.5 rounded-lg text-xs font-medium shadow-lg flex items-center gap-2 whitespace-nowrap">
+          <span>拖拽移动家具中</span>
+          <RotationButtons onRotate={state.rotateMovingFurniture} size="sm" />
+          <button onClick={state.stopMoveMode}
+            className="px-2 py-0.5 bg-white/20 hover:bg-white/30 rounded-md text-xs transition-colors">
+            完成
+          </button>
+        </div>
+      )}
+
+      {/* Top-down rotation buttons */}
+      {state.cameraMode === 'topdown' && !state.isMovingFurniture && (
+        <div className="absolute bottom-24 right-4 z-10">
+          <RotationButtons onRotate={state.rotateCamera} />
+        </div>
+      )}
+
       {/* Bottom toolbar */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex flex-wrap gap-2 justify-center max-w-[90vw]" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex flex-wrap gap-2 justify-center max-w-[90vw]" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         <button onClick={() => state.setShowFurniturePicker(true)}
           className="px-3 sm:px-4 py-2 bg-[#fb6400] hover:bg-[#e55a00] text-white rounded-xl text-xs sm:text-sm font-medium transition-colors shadow-lg">
           <span className="sm:hidden">🛋️+</span>
@@ -153,9 +189,9 @@ export default function Scene3D() {
         </button>
       </div>
 
-      {/* Mobile hint */}
-      {isTouchDevice && (
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-10 text-white/30 text-xs text-center pointer-events-none">
+      {/* Mobile hint - above bottom toolbar */}
+      {isTouchDevice && !state.isMovingFurniture && (
+        <div className="absolute bottom-14 left-1/2 -translate-x-1/2 z-10 text-white/30 text-xs text-center pointer-events-none">
           {state.cameraMode === 'topdown' ? '拖动屏幕平移视角 · 双指缩放' : '点击家具查看物品和编辑'}
         </div>
       )}

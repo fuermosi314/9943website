@@ -35,6 +35,11 @@ export function isToolFavorite(toolId: string): boolean {
   return getToolFavorites().includes(toolId);
 }
 
+export function setToolFavorites(favorites: string[]): void {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(TOOL_FAVORITES_KEY, JSON.stringify(favorites));
+}
+
 export interface ToolHistoryRecord {
   toolId: string;
   timestamp: number;

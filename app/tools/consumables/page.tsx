@@ -2,11 +2,13 @@
 import { useToolHistory } from '@/lib/useToolHistory';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import BackButton from '@/components/BackButton';
+import CategorySelector from '@/components/CategorySelector';
 import {
   Consumable, Category, CATEGORIES, CATEGORY_ICONS,
   genId, getAllItems, addItem, updateItem, deleteItem,
   exportAllData, importAllData, replaceAllData, calculateStats
 } from '@/lib/consumables-db';
+import { getCategories, getCategoryIcons, CategoryItem } from '@/lib/category-manager';
 
 type SortField = 'name' | 'quantity' | 'price' | 'storageDate';
 type SortDir = 'asc' | 'desc';
@@ -27,11 +29,21 @@ export default function ConsumablesPage() {
   const [showHelp, setShowHelp] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [customCategories, setCustomCategories] = useState<CategoryItem[]>([]);
+  const [categoryIcons, setCategoryIcons] = useState<Record<string, string>>(CATEGORY_ICONS);
 
   // 加载数据
   useEffect(() => {
     loadItems();
+    loadCategories();
   }, []);
+
+  async function loadCategories() {
+    const cats = await getCategories('consumables');
+    setCustomCategories(cats);
+    const icons = await getCategoryIcons('consumables');
+    setCategoryIcons(icons);
+  }
 
   async function loadItems() {
     try {
@@ -233,13 +245,13 @@ export default function ConsumablesPage() {
             >
               全部
             </button>
-            {CATEGORIES.map(cat => (
+            {customCategories.map(cat => (
               <button
-                key={cat}
-                onClick={() => setFilterCat(cat)}
-                className={`px-3 py-1 rounded-full text-xs transition-colors ${filterCat === cat ? 'bg-[#fb6400] text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
+                key={cat.id}
+                onClick={() => setFilterCat(cat.name as Category)}
+                className={`px-3 py-1 rounded-full text-xs transition-colors ${filterCat === cat.name ? 'bg-[#fb6400] text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
               >
-                {CATEGORY_ICONS[cat]} {cat}
+                {cat.icon} {cat.name}
               </button>
             ))}
           </div>
@@ -272,7 +284,7 @@ export default function ConsumablesPage() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm">{CATEGORY_ICONS[item.category]}</span>
+                      <span className="text-sm">{categoryIcons[item.category] || '📦'}</span>
                       <span className="text-white font-medium truncate">{item.name}</span>
                       <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/60">{item.category}</span>
                     </div>
@@ -396,7 +408,7 @@ function ItemEditor({ item, onSave, onClose }: {
   const [quantity, setQuantity] = useState(item?.quantity?.toString() || '1');
   const [price, setPrice] = useState(item?.price?.toString() || '0');
   const [category, setCategory] = useState<Category>(item?.category || '日用');
-  const [storageDate, setStorageDate] = useState(item?.storageDate || new Date().toISOString().slice(0, 10));
+  const [storageDate, setStorageDate] = useState(item?.storageDate || new Date().toISOString().slice(0, 16));
   const [expiryDate, setExpiryDate] = useState(item?.expiryDate || '');
   const [note, setNote] = useState(item?.note || '');
 
@@ -408,7 +420,7 @@ function ItemEditor({ item, onSave, onClose }: {
       quantity: parseInt(quantity) || 1,
       price: parseFloat(price) || 0,
       category,
-      storageDate,
+      storageDate: storageDate.slice(0, 10), // 只保存日期部分
       expiryDate: expiryDate || undefined,
       note: note.trim() || undefined,
     });
@@ -467,18 +479,11 @@ function ItemEditor({ item, onSave, onClose }: {
           {/* 分类 */}
           <div>
             <label className="block text-sm text-white/60 mb-1">分类</label>
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map(cat => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setCategory(cat)}
-                  className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${category === cat ? 'bg-[#fb6400] text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
-                >
-                  {CATEGORY_ICONS[cat]} {cat}
-                </button>
-              ))}
-            </div>
+            <CategorySelector
+              toolId="consumables"
+              value={category}
+              onChange={(cat) => setCategory(cat as Category)}
+            />
           </div>
 
           {/* 日期 */}
@@ -486,7 +491,7 @@ function ItemEditor({ item, onSave, onClose }: {
             <div>
               <label className="block text-sm text-white/60 mb-1">存入日期</label>
               <input
-                type="date"
+                type="datetime-local"
                 value={storageDate}
                 onChange={e => setStorageDate(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-[#fb6400] [color-scheme:dark]"
