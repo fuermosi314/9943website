@@ -6,6 +6,7 @@ import Header from '@/components/Header';
 import CategoryNav from '@/components/CategoryNav';
 import ToolCard from '@/components/ToolCard';
 import { tools, getToolsByCategory, searchTools } from '@/lib/tools';
+import { getToolFavorites, getToolHistory } from '@/lib/storage';
 
 export default function Home() {
   return (
@@ -20,7 +21,45 @@ function HomeContent() {
   const router = useRouter();
   const [activeCategory, setActiveCategory] = useState(searchParams.get('category') || 'all');
   const [searchQuery, setSearchQuery] = useState('');
-  // 追踪哪些分页面已经播放过动画
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [historyIds, setHistoryIds] = useState<string[]>([]);
+
+  // 刷新收藏和历史数据
+  const refreshData = useCallback(() => {
+    setFavoriteIds(getToolFavorites());
+    setHistoryIds(getToolHistory().map((r) => r.toolId));
+  }, []);
+
+  // 初始加载和页面可见性变化时刷新数据
+  useEffect(() => {
+    refreshData();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', refreshData);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', refreshData);
+    };
+  }, [refreshData]);
+
+  // 收藏状态变化时的回调
+  const handleFavoriteChange = useCallback((toolId: string, isFavorite: boolean) => {
+    setFavoriteIds(prev => {
+      if (isFavorite) {
+        return prev.includes(toolId) ? prev : [...prev, toolId];
+      } else {
+        return prev.filter(id => id !== toolId);
+      }
+    });
+  }, []);
+
   const animatedCatsRef = useRef<Set<string> | null>(null);
   if (!animatedCatsRef.current) {
     if (typeof window !== 'undefined') {
@@ -35,11 +74,13 @@ function HomeContent() {
     }
   }
   const animatedCats = animatedCatsRef.current;
-  const [animated, setAnimated] = useState(true);
+  const [animated, setAnimated] = useState(false);
 
   useEffect(() => {
     const cat = searchParams.get('category') || 'all';
     setActiveCategory(cat);
+    // 切换分类时刷新数据
+    refreshData();
     if (!animatedCats.has(cat)) {
       animatedCats.add(cat);
       sessionStorage.setItem('tools-animated-categories', JSON.stringify(Array.from(animatedCats)));
@@ -47,7 +88,7 @@ function HomeContent() {
     } else {
       setAnimated(false);
     }
-  }, [searchParams, animatedCats]);
+  }, [searchParams, animatedCats, refreshData]);
 
   const handleCategoryChange = useCallback((id: string) => {
     setActiveCategory(id);
@@ -62,9 +103,29 @@ function HomeContent() {
     router.replace(qs ? `/?${qs}` : '/', { scroll: false });
   }, [searchParams, router]);
 
-  const displayTools = searchQuery
-    ? searchTools(searchQuery)
-    : getToolsByCategory(activeCategory);
+  const getDisplayTools = () => {
+    if (searchQuery) return searchTools(searchQuery);
+    if (activeCategory === 'favorites') {
+      return tools.filter((tool) => favoriteIds.includes(tool.id));
+    }
+    if (activeCategory === 'history') {
+      // 按最新使用时间排序
+      const history = getToolHistory();
+      const sortedTools = history
+        .map(record => tools.find(tool => tool.id === record.toolId))
+        .filter(Boolean) as typeof tools;
+      return sortedTools;
+    }
+    return getToolsByCategory(activeCategory);
+  };
+
+  const displayTools = getDisplayTools();
+
+  const getEmptyMessage = () => {
+    if (activeCategory === 'favorites') return '还没有收藏任何工具';
+    if (activeCategory === 'history') return '还没有使用过任何工具';
+    return '没有找到匹配的工具';
+  };
 
   return (
     <div className="min-h-screen relative z-10">
@@ -101,7 +162,15 @@ function HomeContent() {
         {/* Tools Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {displayTools.map((tool, index) => (
-            <ToolCard key={tool.id} tool={tool} index={index} animated={animated} />
+            <ToolCard
+              key={tool.id}
+              tool={tool}
+              index={index}
+              animated={animated}
+              isFavorite={favoriteIds.includes(tool.id)}
+              onFavoriteChange={handleFavoriteChange}
+              fromCategory={activeCategory}
+            />
           ))}
         </div>
 
@@ -112,7 +181,7 @@ function HomeContent() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </div>
-            <p className="text-white/30 text-sm">没有找到匹配的工具</p>
+            <p className="text-white/30 text-sm">{getEmptyMessage()}</p>
           </div>
         )}
       </main>

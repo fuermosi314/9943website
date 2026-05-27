@@ -1,10 +1,12 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState } from 'react';
 import BackButton from '@/components/BackButton';
 import QRCode from 'qrcode';
 
 export default function QRCodeGenerator() {
+  useToolHistory('qrcode');
   const [text, setText] = useState('');
   const [size, setSize] = useState(200);
   const [color, setColor] = useState('#000000');

@@ -1,9 +1,11 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useRef, useCallback } from 'react';
 import BackButton from '@/components/BackButton';
 
 export default function ImageCompress() {
+  useToolHistory('image-compress');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string>('');
   const [quality, setQuality] = useState(80);

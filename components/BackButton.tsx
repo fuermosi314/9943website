@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { tools } from '@/lib/tools';
 
 interface BackButtonProps {
@@ -9,8 +10,15 @@ interface BackButtonProps {
 }
 
 export default function BackButton({ toolId, className }: BackButtonProps) {
+  const searchParams = useSearchParams();
+  const fromCategory = searchParams.get('from');
   const tool = tools.find((t) => t.id === toolId);
-  const backUrl = tool ? `/?category=${tool.category}` : '/';
+
+  const backUrl = fromCategory
+    ? `/?category=${fromCategory}`
+    : tool
+      ? `/?category=${tool.category}`
+      : '/';
 
   return (
     <Link

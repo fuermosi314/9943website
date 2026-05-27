@@ -1,4 +1,5 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useCallback } from 'react';
 import BackButton from '@/components/BackButton';
@@ -27,6 +28,7 @@ const PLATFORM_NAMES: Record<string, string> = {
 };
 
 export default function VideoUnwatermarkPage() {
+  useToolHistory('video-unwatermark');
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ParseResult | null>(null);

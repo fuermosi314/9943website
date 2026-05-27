@@ -1,9 +1,11 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import BackButton from '@/components/BackButton';
 
 export default function ImageRotate() {
+  useToolHistory('image-rotate');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string>('');
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });

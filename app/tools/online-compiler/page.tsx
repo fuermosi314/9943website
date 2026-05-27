@@ -1,4 +1,5 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import BackButton from '@/components/BackButton';
 
@@ -211,6 +212,7 @@ const compilers: LanguageGroup[] = [
 ];
 
 export default function OnlineCompilerPage() {
+  useToolHistory('online-compiler');
   return (
     <div className="min-h-screen relative z-10">
       <header className="fixed top-0 left-0 right-0 z-50 bg-black/40 backdrop-blur-xl border-b border-white/10">

@@ -1,4 +1,5 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useCallback } from 'react';
 import BackButton from '@/components/BackButton';
@@ -50,6 +51,7 @@ function generatePassword(length: number): string {
 }
 
 export default function RandomGenerator() {
+  useToolHistory('random-generator');
   const [mode, setMode] = useState<Mode>('number');
   const [minVal, setMinVal] = useState('1');
   const [maxVal, setMaxVal] = useState('100');

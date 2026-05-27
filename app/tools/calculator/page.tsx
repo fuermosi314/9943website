@@ -1,4 +1,5 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useCallback, useMemo } from 'react';
 import BackButton from '@/components/BackButton';
@@ -7,6 +8,7 @@ type CalcMode = 'standard' | 'scientific' | 'programmer' | 'date';
 type Base = 2 | 8 | 10 | 16;
 
 export default function CalculatorPage() {
+  useToolHistory('calculator');
   const [mode, setMode] = useState<CalcMode>('standard');
 
   // Standard / Scientific state

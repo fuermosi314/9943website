@@ -1,4 +1,5 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useRef, useCallback } from 'react';
 import BackButton from '@/components/BackButton';
@@ -16,6 +17,7 @@ interface PdfInfo {
 }
 
 export default function PdfToOffice() {
+  useToolHistory('pdf-to-office');
   const [file, setFile] = useState<File | null>(null);
   const [pdfInfo, setPdfInfo] = useState<PdfInfo | null>(null);
   const [outputFormat, setOutputFormat] = useState<OutputFormat>('docx');

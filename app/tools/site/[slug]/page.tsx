@@ -3,6 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import BackButton from '@/components/BackButton';
 import { tools } from '@/lib/tools';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 const siteFeatures: Record<string, string[]> = {
   excalidraw: [
@@ -95,6 +96,9 @@ export default function SiteDetailPage() {
   const params = useParams();
   const router = useRouter();
   const slug = params.slug as string;
+
+  // 记录历史
+  useToolHistory(slug);
 
   const tool = tools.find((t) => t.id === slug);
   const features = tool ? (siteFeatures[tool.id] || []) : [];

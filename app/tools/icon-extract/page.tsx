@@ -1,4 +1,5 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useRef, useCallback } from 'react';
 import BackButton from '@/components/BackButton';
@@ -472,6 +473,7 @@ function detectAndExtract(buffer: ArrayBuffer): ExtractedIcon[] {
 }
 
 export default function IconExtractPage() {
+  useToolHistory('icon-extract');
   const [file, setFile] = useState<File | null>(null);
   const [icons, setIcons] = useState<ExtractedIcon[]>([]);
   const [loading, setLoading] = useState(false);

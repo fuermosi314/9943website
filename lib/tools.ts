@@ -11,6 +11,8 @@ export interface Tool {
 }
 
 export const categories = [
+  { id: 'favorites', name: '收藏工具', icon: '⭐' },
+  { id: 'history', name: '历史工具', icon: '🕐' },
   { id: 'all', name: '全部', icon: '🔥' },
   { id: 'image', name: '图片工具', icon: '🖼️' },
   { id: 'document', name: '文档工具', icon: '📄' },

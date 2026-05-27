@@ -1,9 +1,11 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useMemo } from 'react';
 import BackButton from '@/components/BackButton';
 
 export default function WordCount() {
+  useToolHistory('word-count');
   const [text, setText] = useState('');
 
   const stats = useMemo(() => {

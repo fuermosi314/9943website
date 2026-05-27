@@ -12,6 +12,7 @@
 - **技术栈**: Next.js 14 + React 18 + Tailwind CSS 3 + TypeScript
 - **项目路径**: `/home/huang/claude/vs/work/9943小工具大全`
 - **部署计划**: 本地开发 → Git → Vercel 发布
+- **当前工具数量**: 38 个（自动统计自 `lib/tools.ts`）
 
 ---
 
@@ -128,6 +129,8 @@
 
 | ID | 名称 | 图标 | 说明 |
 |----|------|------|------|
+| `favorites` | 收藏工具 | ⭐ | 用户收藏的工具列表，从左往右第一个分类 |
+| `history` | 历史工具 | 🕐 | 用户使用过的工具，按最新使用时间排序，第二个分类 |
 | `all` | 全部 | 🔥 | 默认视图，显示所有工具 |
 | `image` | 图片工具 | 🖼️ | 图片压缩、格式转换、裁剪、缩放、旋转、图标提取 |
 | `document` | 文档工具 | 📄 | PDF 系列 + 字数统计（原"文本工具"已合并至此） |
@@ -135,6 +138,11 @@
 | `life` | 生活工具 | 🎯 | BMI 计算器、单位换算、专业计算器、视频去水印、简单记 |
 | `entertainment` | 娱乐工具 | 🎮 | 大转盘、二维码生成、随机数生成器、爆款开头生成器、毁灭地球的电磁炮 |
 | `website` | 网站工具 | 🌐 | Excalidraw, Carbon, JSON, CodeSandbox, Photopea, KMS, PDF24, S7资源库, FMHY, 便民查询网, 爱看机器人, Steam 下载, 图吧工具箱 |
+
+### 收藏和历史功能
+- **收藏工具**: 每个工具卡片右上角有心形收藏按钮，点击可收藏/取消收藏，收藏后在"收藏工具"分类页面显示
+- **历史工具**: 用户进入工具页面时自动记录到历史，按最新使用时间排序，最多保存100条记录
+- **数据存储**: 使用 localStorage 持久化，键名分别为 `9943-tool-favorites` 和 `9943-tool-history`
 
 ### 工具归属规则
 - "文本工具"分类已删除，所有文本工具归入"文档工具"
@@ -287,6 +295,8 @@ const backUrl = `/?category=${tool.category}`;
 ### localStorage 键名汇总
 | 键名 | 来源 | 用途 | 上限 |
 |------|------|------|------|
+| `9943-tool-favorites` | storage.ts | 工具收藏列表（工具ID数组） | 无 |
+| `9943-tool-history` | storage.ts | 工具使用历史（toolId + timestamp） | 100 条 |
 | `wheel-custom-presets` | wheel 页面 | 自定义转盘类别 | 无 |
 | `wheel-current-items` | wheel 页面 | 当前转盘选项 | 无 |
 | `wheel-active-preset` | wheel 页面 | 当前预设名 | 无 |
@@ -355,6 +365,7 @@ lang: 'zh-CN'
 4. 工具页面的顶部导航栏、背景效果要与网站整体风格一致
 5. 网站工具需同时添加到 `lib/tools.ts`（含 `externalUrl`）和 `app/tools/site/[slug]/page.tsx` 的 `siteFeatures`
 6. 所有工具卡片框的尺寸必须一致
+7. **每次增删工具后，必须更新本文档的工具数量**（第1节"当前工具数量"）
 
 ### 风格一致性：
 - 主色 `#fb6400` 不可更改
@@ -378,3 +389,8 @@ lang: 'zh-CN'
 - [ ] 开发工具分类的工具补充
 - [ ] 工具卡片封面图片（用户自备，后续缩小尺寸填入）
 - [ ] 项目体积优化（当前约 500MB，含 node_modules）
+- [ ] **高速下载 — 网盘链接解析**（夸克/阿里/百度/115/天翼/迅雷）
+  - 前端和 API 代码已写好（`/api/fast-download/parse`），但需要 alist 作为解析后端
+  - **阻塞问题**：alist 需要 Docker 部署，Vercel 不支持；用户无 VPS
+  - **待解决**：找一台免费 VPS（Oracle Cloud 永久免费 ARM）跑 alist，或改用 Cloudflare Worker 直接解析
+  - 环境变量：`ALIST_URL`、`ALIST_TOKEN`（已在 .env.local 预留）

@@ -1,4 +1,5 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState } from 'react';
 import BackButton from '@/components/BackButton';
@@ -12,6 +13,7 @@ import ErrorBanner from '@/components/ErrorBanner';
 import HistoryPanel from '@/components/HistoryPanel';
 
 export default function HookGenerator() {
+  useToolHistory('hook-generator');
   const [topic, setTopic] = useState('');
   const [platform, setPlatform] = useState<Platform>('xiaohongshu');
   const [contentType, setContentType] = useState<ContentType>('video');

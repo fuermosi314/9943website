@@ -1,9 +1,11 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useRef, useCallback } from 'react';
 import BackButton from '@/components/BackButton';
 
 export default function ImageResize() {
+  useToolHistory('image-resize');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string>('');
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });

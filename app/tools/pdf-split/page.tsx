@@ -1,4 +1,5 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useRef, useCallback } from 'react';
 import BackButton from '@/components/BackButton';
@@ -8,6 +9,7 @@ import JSZip from 'jszip';
 type SplitMode = 'each' | 'range' | 'count';
 
 export default function PdfSplit() {
+  useToolHistory('pdf-split');
   const [file, setFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState('');
   const [fileSize, setFileSize] = useState(0);

@@ -1,4 +1,5 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useMemo } from 'react';
 import BackButton from '@/components/BackButton';
@@ -156,6 +157,7 @@ function formatResult(value: number): string {
 
 // ============ 组件 ============
 export default function UnitConverter() {
+  useToolHistory('unit-converter');
   const [activeCategory, setActiveCategory] = useState<Category>('length');
   const [fromUnit, setFromUnit] = useState<string>('m');
   const [toUnit, setToUnit] = useState<string>('km');

@@ -1,4 +1,5 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useRef, useCallback } from 'react';
 import BackButton from '@/components/BackButton';
@@ -13,6 +14,7 @@ const FORMAT_OPTIONS: { label: string; value: Format; ext: string }[] = [
 ];
 
 export default function ImageConvert() {
+  useToolHistory('image-convert');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string>('');
   const [targetFormat, setTargetFormat] = useState<Format>('image/png');

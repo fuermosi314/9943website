@@ -1,4 +1,5 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useMemo } from 'react';
 import BackButton from '@/components/BackButton';
@@ -13,6 +14,7 @@ interface BMIResult {
 }
 
 export default function BMICalculator() {
+  useToolHistory('bmi');
   const [unit, setUnit] = useState<Unit>('metric');
   const [height, setHeight] = useState('');
   const [weight, setWeight] = useState('');

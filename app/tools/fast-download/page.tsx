@@ -1,4 +1,5 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useCallback, useRef } from 'react';
 import BackButton from '@/components/BackButton';
@@ -9,6 +10,7 @@ interface ProbeResult {
   supportsRange: boolean;
   contentType: string;
   error?: string;
+  cloudService?: string;
 }
 
 interface ChunkProgress {
@@ -20,6 +22,25 @@ interface ChunkProgress {
 
 const THREAD_OPTIONS = [1, 2, 4, 8, 16, 32];
 const DEFAULT_THREADS = 8;
+
+// 客户端网盘链接检测
+function detectCloudDrive(url: string): { service: string; serviceLabel: string; needsCode: boolean } | null {
+  const patterns: Array<{ pattern: RegExp; service: string; serviceLabel: string; needsCode: boolean }> = [
+    { pattern: /pan\.quark\.cn\/s\//, service: 'quark', serviceLabel: '夸克网盘', needsCode: false },
+    { pattern: /aliyundrive\.com\/s\//, service: 'aliyun', serviceLabel: '阿里云盘', needsCode: false },
+    { pattern: /www\.alipan\.com\/s\//, service: 'aliyun', serviceLabel: '阿里云盘', needsCode: false },
+    { pattern: /pan\.baidu\.com\/s\//, service: 'baidu', serviceLabel: '百度网盘', needsCode: true },
+    { pattern: /115\.com\/s\//, service: '115', serviceLabel: '115网盘', needsCode: true },
+    { pattern: /cloud\.189\.cn\/share/, service: 'tianyi', serviceLabel: '天翼云盘', needsCode: false },
+    { pattern: /xunlei\.com\/s\//, service: 'xunlei', serviceLabel: '迅雷云盘', needsCode: false },
+  ];
+  for (const p of patterns) {
+    if (p.pattern.test(url)) {
+      return { service: p.service, serviceLabel: p.serviceLabel, needsCode: p.needsCode };
+    }
+  }
+  return null;
+}
 
 function formatSize(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -34,7 +55,9 @@ function formatSpeed(bytesPerSec: number): string {
 }
 
 export default function FastDownloadPage() {
+  useToolHistory('fast-download');
   const [url, setUrl] = useState('');
+  const [extractionCode, setExtractionCode] = useState('');
   const [probing, setProbing] = useState(false);
   const [probeResult, setProbeResult] = useState<ProbeResult | null>(null);
   const [threadCount, setThreadCount] = useState(DEFAULT_THREADS);
@@ -44,8 +67,18 @@ export default function FastDownloadPage() {
   const [totalSize, setTotalSize] = useState(0);
   const [speed, setSpeed] = useState(0);
   const [error, setError] = useState('');
+  const [cloudInfo, setCloudInfo] = useState<{ serviceLabel: string; needsCode: boolean } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const speedRef = useRef({ lastTime: Date.now(), lastLoaded: 0 });
+
+  // 检测网盘链接
+  const handleUrlChange = (value: string) => {
+    setUrl(value);
+    setProbeResult(null);
+    setError('');
+    const detected = detectCloudDrive(value);
+    setCloudInfo(detected);
+  };
 
   const handleProbe = useCallback(async () => {
     if (!url.trim()) return;
@@ -54,28 +87,71 @@ export default function FastDownloadPage() {
     setProbing(true);
 
     try {
-      const res = await fetch('/api/fast-download/probe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url.trim() }),
-      });
-      const data = await res.json();
-      if (data.error) {
-        setError(data.error);
+      const detected = detectCloudDrive(url.trim());
+
+      if (detected) {
+        // 网盘链接：先解析再探测
+        const parseRes = await fetch('/api/fast-download/parse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: url.trim(), code: extractionCode.trim() || undefined }),
+        });
+        const parseData = await parseRes.json();
+
+        if (parseData.error) {
+          setError(parseData.error + (parseData.details ? `\n${parseData.details}` : ''));
+          setProbing(false);
+          return;
+        }
+
+        // 用解析出的直链进行探测
+        const probeRes = await fetch('/api/fast-download/probe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: parseData.downloadUrl }),
+        });
+        const probeData = await probeRes.json();
+
+        if (probeData.error) {
+          setError(`解析成功但探测失败: ${probeData.error}`);
+        } else {
+          // 保存直链用于后续下载
+          (window as Record<string, unknown>).__cloudDirectUrl = parseData.downloadUrl;
+          setProbeResult({
+            ...probeData,
+            cloudService: parseData.service,
+          });
+        }
       } else {
-        setProbeResult(data);
+        // 普通直链：直接探测
+        const res = await fetch('/api/fast-download/probe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: url.trim() }),
+        });
+        const data = await res.json();
+        if (data.error) {
+          setError(data.error);
+        } else {
+          setProbeResult(data);
+        }
       }
     } catch {
       setError('检测失败，请检查链接是否正确');
     } finally {
       setProbing(false);
     }
-  }, [url]);
+  }, [url, extractionCode]);
 
   const handleDownload = useCallback(async () => {
-    if (!probeResult || !probeResult.supportsRange) {
-      // 不支持分片，直接跳转下载
-      window.open(url.trim(), '_blank');
+    if (!probeResult) return;
+
+    // 获取实际下载地址（网盘直链或原始URL）
+    const directUrl = (window as Record<string, unknown>).__cloudDirectUrl as string | undefined;
+    const downloadUrl = directUrl || url.trim();
+
+    if (!probeResult.supportsRange) {
+      window.open(downloadUrl, '_blank');
       return;
     }
 
@@ -124,7 +200,7 @@ export default function FastDownloadPage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              url: url.trim(),
+              url: downloadUrl,
               start,
               end,
             }),
@@ -219,20 +295,20 @@ export default function FastDownloadPage() {
         {/* 输入区域 */}
         <div className="glass-card p-6 mb-6 animate-fade-in">
           <h3 className="text-base font-semibold text-white mb-1">粘贴下载链接</h3>
-          <p className="text-sm text-white/40 mb-4">支持 HTTP/HTTPS 直链，自动检测多线程支持</p>
+          <p className="text-sm text-white/40 mb-4">支持 HTTP/HTTPS 直链和网盘分享链接（夸克/阿里/百度/115/天翼/迅雷）</p>
 
           <div className="flex gap-2">
             <div className="flex-1 relative">
               <input
                 type="text"
                 value={url}
-                onChange={(e) => { setUrl(e.target.value); setProbeResult(null); setError(''); }}
+                onChange={(e) => handleUrlChange(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !probing && handleProbe()}
-                placeholder="粘贴下载链接..."
+                placeholder="粘贴下载链接或网盘分享链接..."
                 className="w-full px-4 py-3 pr-20 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-[#fb6400] transition-all"
               />
               <button
-                onClick={() => navigator.clipboard.readText().then(setUrl).catch(() => {})}
+                onClick={() => navigator.clipboard.readText().then(handleUrlChange).catch(() => {})}
                 className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 text-xs text-white/40 hover:text-[#fb6400] bg-white/5 rounded-lg transition-colors"
               >
                 粘贴
@@ -247,6 +323,24 @@ export default function FastDownloadPage() {
             </button>
           </div>
 
+          {/* 网盘链接提示 + 提取码输入 */}
+          {cloudInfo && (
+            <div className="mt-3 flex items-center gap-3">
+              <span className="px-2.5 py-1 text-xs font-medium bg-[#fb6400]/15 text-[#fb6400] rounded-lg border border-[#fb6400]/20">
+                {cloudInfo.serviceLabel}
+              </span>
+              {cloudInfo.needsCode && (
+                <input
+                  type="text"
+                  value={extractionCode}
+                  onChange={(e) => setExtractionCode(e.target.value)}
+                  placeholder="请输入提取码（如有）"
+                  className="flex-1 px-3 py-1.5 text-sm bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:border-[#fb6400] transition-all"
+                />
+              )}
+            </div>
+          )}
+
           {error && (
             <div className="mt-4 bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-sm text-red-400">
               {error}
@@ -259,10 +353,17 @@ export default function FastDownloadPage() {
           <div className="glass-card p-6 mb-6 animate-slide-up">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-[#fb6400]/20 flex items-center justify-center">
-                <span className="text-lg">📦</span>
+                <span className="text-lg">{probeResult.cloudService ? '☁️' : '📦'}</span>
               </div>
               <div>
-                <h3 className="text-white font-medium">{probeResult.fileName}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-white font-medium">{probeResult.fileName}</h3>
+                  {probeResult.cloudService && (
+                    <span className="px-2 py-0.5 text-[10px] font-medium bg-green-500/15 text-green-400 rounded-md border border-green-500/20">
+                      {probeResult.cloudService} 已解析
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm text-white/40">
                   {formatSize(probeResult.fileSize)} · {probeResult.contentType || '未知类型'}
                 </p>
@@ -391,11 +492,11 @@ export default function FastDownloadPage() {
         <div className="glass-card p-6 animate-slide-up" style={{ animationDelay: '100ms' }}>
           <h3 className="text-white font-semibold mb-3">💡 工作原理</h3>
           <ul className="space-y-2 text-white/50 text-sm">
-            <li>• 自动检测服务器是否支持分片下载（Range 请求）</li>
-            <li>• 支持分片时，将文件拆分为多个片段并行下载</li>
+            <li>• <strong className="text-white/70">直链下载</strong>：自动检测服务器是否支持分片下载（Range 请求），支持时多线程并行加速</li>
+            <li>• <strong className="text-white/70">网盘解析</strong>：自动识别夸克/阿里/百度/115/天翼/迅雷网盘链接，解析为直链后加速下载</li>
             <li>• 多线程同时下载，充分利用你的带宽</li>
             <li>• 不支持分片时，回退为普通单线程下载</li>
-            <li>• 注意：超大文件可能占用较多内存，建议 2GB 以内</li>
+            <li>• 注意：网盘解析需要配置 alist 服务，详见 .env.local 中的 ALIST_URL</li>
           </ul>
         </div>
       </main>

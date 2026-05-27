@@ -1,4 +1,5 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useRef, useEffect, useState, useCallback } from 'react';
 import BackButton from '@/components/BackButton';
@@ -1021,6 +1022,7 @@ function drawExplosion(ctx: CanvasRenderingContext2D, cx: number, cy: number, pr
 
 // ===== 主组件 =====
 export default function EarthCannonPage() {
+  useToolHistory('earth-cannon');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animRef = useRef<number>(0);
   const stateRef = useRef({

@@ -1,4 +1,5 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import BackButton from '@/components/BackButton';
@@ -8,7 +9,16 @@ import {
   getEntriesByDate, getAllDatesWithEntries,
   addPhoto, getPhoto, deletePhotosByEntryId,
   generateThumbnail,
+  exportAllData, importAllData,
 } from '@/lib/simple-note-db';
+
+function genId(): string {
+  try { return crypto.randomUUID(); } catch { /* fallback below */ }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
 
 function formatDate(date: string) {
   const d = new Date(date);
@@ -308,7 +318,7 @@ function EntryEditor({
     const newPhotos = await Promise.all(
       Array.from(files).map(async (file) => {
         const result = await generateThumbnail(file);
-        return { id: crypto.randomUUID(), thumbnail: result.thumbnail, blob: result.blob, width: result.width, height: result.height };
+        return { id: genId(), thumbnail: result.thumbnail, blob: result.blob, width: result.width, height: result.height };
       })
     );
     setPhotos(prev => [...prev, ...newPhotos]);
@@ -343,7 +353,7 @@ function EntryEditor({
     setSaving(true);
     const now = Date.now();
     const diaryEntry: DiaryEntry = {
-      id: entry?.id || crypto.randomUUID(),
+      id: entry?.id || genId(),
       date,
       content,
       mood,
@@ -491,6 +501,7 @@ function PhotoViewer({
 }
 
 export default function SimpleNotePage() {
+  useToolHistory('simple-note');
   const [selectedDate, setSelectedDate] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -505,6 +516,8 @@ export default function SimpleNotePage() {
   const [editingEntry, setEditingEntry] = useState<DiaryEntry | null>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   const loadDatesWithEntries = useCallback(async () => {
     const dates = await getAllDatesWithEntries();
@@ -563,6 +576,81 @@ export default function SimpleNotePage() {
     await loadDatesWithEntries();
   }, [loadEntries, loadDatesWithEntries]);
 
+  const handleExport = useCallback(async () => {
+    try {
+      const data = await exportAllData();
+      const blob = new Blob([data], { type: 'application/json' });
+      const fileName = `简单记备份-${new Date().toISOString().slice(0, 10)}.json`;
+
+      // 检测是否为移动设备
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+      // 移动端优先使用分享功能
+      if (isMobile && navigator.share) {
+        const file = new File([blob], fileName, { type: 'application/json' });
+        try {
+          await navigator.share({
+            title: '简单记数据备份',
+            text: '我的简单记数据备份文件',
+            files: [file],
+          });
+          return;
+        } catch {
+          // 用户取消分享，降级为下载
+        }
+      }
+
+      // 降级：直接下载
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      if (isMobile) {
+        alert('备份文件已保存到"下载"文件夹。\n\n建议：备份后将文件发送到微信或邮箱保存，避免丢失。');
+      }
+    } catch (err) {
+      alert('导出失败：' + (err as Error).message);
+    }
+  }, []);
+
+  const handleImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const result = await importAllData(text);
+
+      let message = '导入完成！\n';
+      if (result.addedEntries > 0) {
+        message += `✓ 新增 ${result.addedEntries} 条日记`;
+        if (result.addedPhotos > 0) {
+          message += `，${result.addedPhotos} 张照片`;
+        }
+        message += '\n';
+      }
+      if (result.skippedEntries > 0) {
+        message += `⊘ 跳过 ${result.skippedEntries} 条重复记录\n`;
+      }
+      if (result.addedEntries === 0 && result.skippedEntries > 0) {
+        message += '\n所有数据都已存在，无需导入。';
+      }
+
+      alert(message);
+      await loadEntries();
+      await loadDatesWithEntries();
+    } catch (err) {
+      alert('导入失败：' + (err as Error).message);
+    } finally {
+      setImporting(false);
+      e.target.value = '';
+    }
+  }, [loadEntries, loadDatesWithEntries]);
+
   return (
     <div className="min-h-screen relative z-10">
       <header className="fixed top-0 left-0 right-0 z-50 bg-black/40 backdrop-blur-xl border-b border-white/10">
@@ -594,6 +682,40 @@ export default function SimpleNotePage() {
               onChangeMonth={setCalendarMonth}
               datesWithEntries={datesWithEntries}
             />
+            {/* 备份/恢复按钮 */}
+            <div className="mt-4 space-y-2">
+              <button
+                onClick={handleExport}
+                className="w-full py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/70 text-sm hover:bg-white/10 hover:border-[#fb6400]/30 transition-all flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                备份数据
+              </button>
+              <label className={`w-full py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/70 text-sm hover:bg-white/10 hover:border-[#fb6400]/30 transition-all flex items-center justify-center gap-2 cursor-pointer ${importing ? 'opacity-50 pointer-events-none' : ''}`}>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                {importing ? '导入中...' : '恢复数据'}
+                <input
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={handleImport}
+                  disabled={importing}
+                />
+              </label>
+              <button
+                onClick={() => setShowHelp(true)}
+                className="w-full py-2 rounded-xl text-white/40 text-xs hover:text-white/60 transition-all flex items-center justify-center gap-1"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                使用帮助
+              </button>
+            </div>
           </div>
           {/* Entry list area */}
           <div className="flex-1 min-w-0">
@@ -619,6 +741,39 @@ export default function SimpleNotePage() {
                 onChangeMonth={setCalendarMonth}
                 datesWithEntries={datesWithEntries}
               />
+              {/* 移动端备份/恢复按钮 */}
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={() => { handleExport(); setShowMobileCalendar(false); }}
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/70 text-sm hover:bg-white/10 transition-all flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  备份
+                </button>
+                <label className={`flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/70 text-sm hover:bg-white/10 transition-all flex items-center justify-center gap-2 cursor-pointer ${importing ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                  {importing ? '导入中...' : '恢复'}
+                  <input
+                    type="file"
+                    accept=".json"
+                    className="hidden"
+                    onChange={(e) => { handleImport(e); setShowMobileCalendar(false); }}
+                    disabled={importing}
+                  />
+                </label>
+                <button
+                  onClick={() => { setShowMobileCalendar(false); setShowHelp(true); }}
+                  className="py-2.5 px-3 rounded-xl bg-white/5 border border-white/10 text-white/70 text-sm hover:bg-white/10 transition-all"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -641,6 +796,75 @@ export default function SimpleNotePage() {
       )}
       {viewingPhoto && (
         <PhotoViewer photoId={viewingPhoto} onClose={() => setViewingPhoto(null)} />
+      )}
+
+      {/* 帮助弹窗 */}
+      {showHelp && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4">
+          <div className="glass-card max-w-md w-full max-h-[80vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-white font-semibold text-lg">数据备份与恢复</h2>
+              <button onClick={() => setShowHelp(false)} className="text-white/40 hover:text-white">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4 text-sm">
+              <div>
+                <h3 className="text-[#fb6400] font-medium mb-2">为什么要备份？</h3>
+                <p className="text-white/60">数据保存在浏览器中，清除浏览器数据、换设备或换浏览器都会导致数据丢失。定期备份可以保护你的日记。</p>
+              </div>
+
+              <div>
+                <h3 className="text-[#fb6400] font-medium mb-2">如何备份？</h3>
+                <ol className="text-white/60 space-y-2 list-decimal pl-4">
+                  <li>点击「备份数据」按钮</li>
+                  <li>
+                    <strong className="text-white/80">手机端：</strong>会弹出分享选项，可以选择发送到「微信」「邮件」或「保存到文件」
+                  </li>
+                  <li>
+                    <strong className="text-white/80">电脑端：</strong>会自动下载一个 JSON 文件
+                  </li>
+                  <li>建议将备份文件保存到微信收藏、邮箱或云盘</li>
+                </ol>
+              </div>
+
+              <div>
+                <h3 className="text-[#fb6400] font-medium mb-2">如何恢复？</h3>
+                <ol className="text-white/60 space-y-2 list-decimal pl-4">
+                  <li>点击「恢复数据」按钮</li>
+                  <li>选择之前备份的 JSON 文件</li>
+                  <li>系统会自动合并数据：<br/>
+                    <span className="text-white/40">- 新记录会添加进来</span><br/>
+                    <span className="text-white/40">- 已存在的记录会跳过，不会重复</span>
+                  </li>
+                </ol>
+              </div>
+
+              <div>
+                <h3 className="text-[#fb6400] font-medium mb-2">手机端找不到备份文件？</h3>
+                <ul className="text-white/60 space-y-1 list-disc pl-4">
+                  <li>备份时优先使用「分享」功能，直接发送到微信或邮箱</li>
+                  <li>如果选择下载，文件保存在「文件管理 → 下载」文件夹</li>
+                  <li>文件名格式：<code className="bg-white/10 px-1 rounded text-xs">简单记备份-日期.json</code></li>
+                </ul>
+              </div>
+
+              <div className="pt-2 border-t border-white/10">
+                <p className="text-white/40 text-xs">建议每周备份一次，或在重要记录后立即备份。</p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowHelp(false)}
+              className="w-full mt-4 py-2.5 rounded-xl bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white text-sm font-medium hover:scale-105 transition-all"
+            >
+              我知道了
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

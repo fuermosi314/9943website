@@ -1,4 +1,5 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import BackButton from '@/components/BackButton';
 
@@ -27,6 +28,7 @@ const platforms = [
 ];
 
 export default function SteamPage() {
+  useToolHistory('steam');
   return (
     <div className="min-h-screen relative z-10">
       {/* Header */}

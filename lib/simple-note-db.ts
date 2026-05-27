@@ -127,6 +127,133 @@ export async function deletePhotosByEntryId(entryId: string): Promise<void> {
   });
 }
 
+// 导出所有数据（entries + photos）
+export async function exportAllData(): Promise<string> {
+  const db = await openDB();
+
+  // 读取所有 entries
+  const entries: DiaryEntry[] = await new Promise((resolve, reject) => {
+    const tx = db.transaction('entries', 'readonly');
+    const req = tx.objectStore('entries').getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+
+  // 读取所有 photos，将 Blob 转为 base64
+  const photos: { id: string; entryId: string; base64: string }[] = await new Promise((resolve, reject) => {
+    const tx = db.transaction('photos', 'readonly');
+    const req = tx.objectStore('photos').getAll();
+    req.onsuccess = async () => {
+      const results = req.result;
+      const converted = await Promise.all(
+        results.map(async (p: PhotoRecord) => {
+          const base64 = await blobToBase64(p.blob);
+          return { id: p.id, entryId: p.entryId, base64 };
+        })
+      );
+      resolve(converted);
+    };
+    req.onerror = () => reject(req.error);
+  });
+
+  db.close();
+
+  return JSON.stringify({
+    version: 1,
+    exportDate: new Date().toISOString(),
+    entries,
+    photos,
+  }, null, 2);
+}
+
+// 合并导入数据（不覆盖，只添加新条目）
+export async function importAllData(jsonStr: string): Promise<{
+  addedEntries: number;
+  addedPhotos: number;
+  skippedEntries: number;
+}> {
+  const data = JSON.parse(jsonStr);
+  if (!data.version || !data.entries) {
+    throw new Error('无效的备份文件');
+  }
+
+  const db = await openDB();
+
+  // 获取现有 entries 的 ID 集合
+  const existingEntryIds: Set<string> = await new Promise((resolve, reject) => {
+    const tx = db.transaction('entries', 'readonly');
+    const req = tx.objectStore('entries').getAllKeys();
+    req.onsuccess = () => resolve(new Set(req.result as string[]));
+    req.onerror = () => reject(req.error);
+  });
+
+  // 获取现有 photos 的 ID 集合
+  const existingPhotoIds: Set<string> = await new Promise((resolve, reject) => {
+    const tx = db.transaction('photos', 'readonly');
+    const req = tx.objectStore('photos').getAllKeys();
+    req.onsuccess = () => resolve(new Set(req.result as string[]));
+    req.onerror = () => reject(req.error);
+  });
+
+  // 筛选需要添加的 entries
+  const newEntries = data.entries.filter((e: DiaryEntry) => !existingEntryIds.has(e.id));
+  const skippedEntries = data.entries.length - newEntries.length;
+
+  // 添加新 entries
+  if (newEntries.length > 0) {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('entries', 'readwrite');
+      const store = tx.objectStore('entries');
+      for (const entry of newEntries) {
+        store.add(entry);
+      }
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  // 筛选并添加新 photos
+  let addedPhotos = 0;
+  const newPhotos = (data.photos || []).filter((p: { id: string }) => !existingPhotoIds.has(p.id));
+  if (newPhotos.length > 0) {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('photos', 'readwrite');
+      const store = tx.objectStore('photos');
+      for (const photo of newPhotos) {
+        const blob = base64ToBlob(photo.base64);
+        store.add({ id: photo.id, entryId: photo.entryId, blob });
+        addedPhotos++;
+      }
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  db.close();
+
+  return { addedEntries: newEntries.length, addedPhotos, skippedEntries };
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+function base64ToBlob(base64: string): Blob {
+  const [header, data] = base64.split(',');
+  const mime = header.match(/:(.*?);/)?.[1] || 'image/jpeg';
+  const binary = atob(data);
+  const array = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    array[i] = binary.charCodeAt(i);
+  }
+  return new Blob([array], { type: mime });
+}
+
 export async function generateThumbnail(
   file: File,
   maxWidth = 200

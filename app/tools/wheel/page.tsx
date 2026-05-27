@@ -1,4 +1,5 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import BackButton from '@/components/BackButton';
@@ -42,6 +43,7 @@ interface CustomPreset {
 }
 
 export default function WheelPage() {
+  useToolHistory('wheel');
   const [customPresets, setCustomPresets] = useState<CustomPreset[]>(() => {
     if (typeof window === 'undefined') return [];
     try {

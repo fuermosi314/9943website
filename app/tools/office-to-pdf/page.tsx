@@ -1,4 +1,5 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useRef, useCallback } from 'react';
 import BackButton from '@/components/BackButton';
@@ -64,6 +65,7 @@ function extractReadableText(buffer: ArrayBuffer): string {
 }
 
 export default function OfficeToPdf() {
+  useToolHistory('office-to-pdf');
   const [file, setFile] = useState<File | null>(null);
   const [fileInfo, setFileInfo] = useState<FileInfo | null>(null);
   const [isDragging, setIsDragging] = useState(false);

@@ -1,4 +1,5 @@
 'use client';
+import { useToolHistory } from '@/lib/useToolHistory';
 
 import dynamic from 'next/dynamic';
 import BackButton from '@/components/BackButton';
@@ -13,6 +14,7 @@ const Scene3D = dynamic(() => import('@/components/tianjige/Scene3D'), {
 });
 
 export default function TianjigePage() {
+  useToolHistory('tianjige');
   return (
     <div className="min-h-screen relative z-10">
       {/* Top bar */}
