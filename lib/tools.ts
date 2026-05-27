@@ -256,7 +256,7 @@ export const tools: Tool[] = [
   {
     id: 'tianjige',
     name: '天机阁',
-    description: '3D场景式物品收纳管理，再也不找不到东西',
+    description: '天机阁，一览所有',
     icon: '🏠',
     category: 'life',
     path: '/tools/tianjige',
