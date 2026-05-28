@@ -61,6 +61,7 @@ export default function FastDownloadPage() {
     win64: { url: string; name: string; size: number } | null;
     win32: { url: string; name: string; size: number } | null;
   } | null>(null);
+  const [aria2DlStatus, setAria2DlStatus] = useState<'idle' | 'downloading' | 'done'>('idle');
   const [method, setMethod] = useState<DownloadMethod>('browser');
   const [aria2Host, setAria2Host] = useState('localhost');
   const [aria2Port, setAria2Port] = useState('6800');
@@ -167,6 +168,59 @@ export default function FastDownloadPage() {
   useEffect(() => {
     if (method === 'aria2' && aria2Status === 'error') fetchAria2Release();
   }, [method, aria2Status, fetchAria2Release]);
+
+  // 多线程下载 aria2 安装包
+  const downloadAria2Pkg = useCallback(async (asset: { url: string; name: string; size: number }) => {
+    setAria2DlStatus('downloading');
+    const fileSize = asset.size;
+    const threads = 8;
+    const chunkSize = Math.ceil(fileSize / threads);
+
+    try {
+      const buffers: (ArrayBuffer | null)[] = new Array(threads).fill(null);
+
+      await Promise.all(
+        Array.from({ length: threads }, async (_, i) => {
+          const start = i * chunkSize;
+          const end = Math.min(start + chunkSize - 1, fileSize - 1);
+          if (start >= fileSize) return;
+
+          const res = await fetch('/api/fast-download/download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: asset.url, start, end }),
+          });
+
+          if (!res.ok) throw new Error(`分片 ${i + 1} 失败`);
+          const data = await res.arrayBuffer();
+          buffers[i] = data;
+        })
+      );
+
+      const validBuffers = buffers.filter((b): b is ArrayBuffer => b !== null);
+      const totalLen = validBuffers.reduce((s, b) => s + b.byteLength, 0);
+      const merged = new Uint8Array(totalLen);
+      let offset = 0;
+      for (const buf of validBuffers) {
+        merged.set(new Uint8Array(buf), offset);
+        offset += buf.byteLength;
+      }
+
+      const blob = new Blob([merged]);
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = asset.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      setAria2DlStatus('done');
+    } catch {
+      setAria2DlStatus('idle');
+      setError('aria2 下载失败，请重试');
+    }
+  }, []);
 
   const handleDownload = useCallback(async () => {
     if (!probeResult) return;
@@ -531,25 +585,25 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
                         <p className="text-xs text-white/40">最新版本：{aria2Release.version}</p>
                         <div className="flex flex-wrap gap-2">
                           {aria2Release.win64 && (
-                            <a
-                              href={aria2Release.win64.url}
-                              download={aria2Release.win64.name}
-                              className="px-3 py-1.5 text-xs bg-[#fb6400]/20 border border-[#fb6400]/30 rounded-lg text-[#fb6400] hover:bg-[#fb6400]/30 transition-colors inline-block"
+                            <button
+                              onClick={() => downloadAria2Pkg(aria2Release.win64!)}
+                              disabled={aria2DlStatus === 'downloading'}
+                              className="px-3 py-1.5 text-xs bg-[#fb6400]/20 border border-[#fb6400]/30 rounded-lg text-[#fb6400] hover:bg-[#fb6400]/30 transition-colors disabled:opacity-50"
                             >
-                              Win 64位 ({formatSize(aria2Release.win64.size)})
-                            </a>
+                              {aria2DlStatus === 'downloading' ? '下载中...' : `Win 64位 (${formatSize(aria2Release.win64.size)})`}
+                            </button>
                           )}
                           {aria2Release.win32 && (
-                            <a
-                              href={aria2Release.win32.url}
-                              download={aria2Release.win32.name}
-                              className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-lg text-white/60 hover:text-[#fb6400] transition-colors inline-block"
+                            <button
+                              onClick={() => downloadAria2Pkg(aria2Release.win32!)}
+                              disabled={aria2DlStatus === 'downloading'}
+                              className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-lg text-white/60 hover:text-[#fb6400] transition-colors disabled:opacity-50"
                             >
                               Win 32位
-                            </a>
+                            </button>
                           )}
                         </div>
-                        <p className="text-[10px] text-white/30">直接从 GitHub CDN 下载，无需代理加速</p>
+                        <p className="text-[10px] text-white/30">8 线程下载，通过服务器中转加速</p>
                       </div>
                     ) : (
                       <p className="text-xs text-white/30">正在获取版本信息...</p>
