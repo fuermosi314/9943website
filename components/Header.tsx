@@ -24,19 +24,12 @@ export default function Header({ onSearch }: HeaderProps) {
 
   const toggleSearch = () => {
     if (searchOpen) {
-      // 收起：清空搜索
       setQuery('');
       onSearch('');
       setSearchOpen(false);
     } else {
       setSearchOpen(true);
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  };
-
-  const handleBlur = () => {
-    if (!query) {
-      setSearchOpen(false);
+      requestAnimationFrame(() => inputRef.current?.focus());
     }
   };
 
@@ -114,14 +107,14 @@ export default function Header({ onSearch }: HeaderProps) {
                     setQuery(e.target.value);
                     onSearch(e.target.value);
                   }}
-                  onBlur={handleBlur}
                   placeholder="搜索工具..."
                   className="w-full px-4 py-2 pr-10 bg-white/10 border border-white/20 rounded-full text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-[#fb6400] transition-all duration-300"
                 />
                 <button
                   type="button"
-                  onClick={toggleSearch}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 bg-[#fb6400] rounded-full flex items-center justify-center"
+                  onMouseDown={(e) => { e.preventDefault(); toggleSearch(); }}
+                  onClick={(e) => { e.preventDefault(); toggleSearch(); }}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 w-10 h-10 bg-[#fb6400] rounded-full flex items-center justify-center"
                 >
                   <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

@@ -103,6 +103,7 @@ function HomeContent() {
   // 自动滚动（拖拽到边缘时）
   const autoScrollRef = useRef<number | null>(null);
   const lastPointerY = useRef<number>(0);
+  const lastPointerX = useRef<number>(0);
 
   const startAutoScroll = useCallback((y: number) => {
     lastPointerY.current = y;
@@ -148,8 +149,6 @@ function HomeContent() {
       autoScrollRef.current = null;
     }
   }, []);
-
-  const lastPointerX = useRef<number>(0);
 
   // 触摸事件处理
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
