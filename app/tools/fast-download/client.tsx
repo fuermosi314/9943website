@@ -114,7 +114,7 @@ export default function FastDownloadPage() {
   }, [url]);
 
   // aria2 RPC 调用
-  const aria2Rpc = useCallback(async (method: string, params: string[]) => {
+  const aria2Rpc = useCallback(async (method: string, params: unknown[]) => {
     const rpcUrl = `http://${aria2Host}:${aria2Port}/jsonrpc`;
     const id = Date.now().toString();
     const body: Record<string, unknown> = { jsonrpc: '2.0', id, method, params };
