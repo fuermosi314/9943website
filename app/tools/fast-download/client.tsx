@@ -54,6 +54,20 @@ export default function FastDownloadPage() {
   const speedRef = useRef({ lastTime: Date.now(), lastLoaded: 0 });
 
   // 下载方式
+  const [showDetails, setShowDetails] = useState(false);
+  const [showIdmTutorial, setShowIdmTutorial] = useState(false);
+  const [aria2Release, setAria2Release] = useState<{
+    version: string;
+    win64: { url: string; name: string; size: number } | null;
+    win32: { url: string; name: string; size: number } | null;
+  } | null>(null);
+  const [aria2Downloading, setAria2Downloading] = useState(false);
+  const [aria2DlProgress, setAria2DlProgress] = useState(0);
+  const [aria2DlSpeed, setAria2DlSpeed] = useState(0);
+  const [aria2DlLoaded, setAria2DlLoaded] = useState(0);
+  const [aria2DlTotal, setAria2DlTotal] = useState(0);
+  const aria2DlAbortRef = useRef<AbortController | null>(null);
+  const aria2DlSpeedRef = useRef({ lastTime: Date.now(), lastLoaded: 0 });
   const [method, setMethod] = useState<DownloadMethod>(() => {
     if (typeof window === 'undefined') return 'browser';
     return (localStorage.getItem('fast-dl-method') as DownloadMethod) || 'browser';
@@ -147,6 +161,116 @@ export default function FastDownloadPage() {
   useEffect(() => {
     if (method === 'aria2') checkAria2();
   }, [method, checkAria2]);
+
+  // 获取 aria2 最新版本信息
+  const fetchAria2Release = useCallback(async () => {
+    if (aria2Release) return;
+    try {
+      const res = await fetch('/api/fast-download/aria2-release');
+      const data = await res.json();
+      if (!data.error) setAria2Release(data);
+    } catch { /* ignore */ }
+  }, [aria2Release]);
+
+  // aria2 选中时自动获取版本信息
+  useEffect(() => {
+    if (method === 'aria2' && aria2Status === 'error') fetchAria2Release();
+  }, [method, aria2Status, fetchAria2Release]);
+
+  // 下载 aria2 安装包（多线程）
+  const downloadAria2 = useCallback(async (asset: { url: string; name: string; size: number }) => {
+    setAria2Downloading(true);
+    setAria2DlProgress(0);
+    setAria2DlLoaded(0);
+    setAria2DlTotal(asset.size);
+    setAria2DlSpeed(0);
+
+    const fileSize = asset.size;
+    const threads = 8;
+    const chunkSize = Math.ceil(fileSize / threads);
+
+    const abortController = new AbortController();
+    aria2DlAbortRef.current = abortController;
+    aria2DlSpeedRef.current = { lastTime: Date.now(), lastLoaded: 0 };
+
+    const speedInterval = setInterval(() => {
+      const now = Date.now();
+      const elapsed = (now - aria2DlSpeedRef.current.lastTime) / 1000;
+      if (elapsed > 0) {
+        const bytesDiff = aria2DlLoaded - aria2DlSpeedRef.current.lastLoaded;
+        setAria2DlSpeed(bytesDiff / elapsed);
+        aria2DlSpeedRef.current = { lastTime: now, lastLoaded: aria2DlLoaded };
+      }
+    }, 500);
+
+    try {
+      const buffers: (ArrayBuffer | null)[] = new Array(threads).fill(null);
+
+      await Promise.all(
+        Array.from({ length: threads }, async (_, i) => {
+          const start = i * chunkSize;
+          const end = Math.min(start + chunkSize - 1, fileSize - 1);
+          if (start >= fileSize) return;
+
+          const res = await fetch('/api/fast-download/download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: asset.url, start, end }),
+            signal: abortController.signal,
+          });
+
+          if (!res.ok) throw new Error(`分片 ${i + 1} 下载失败`);
+
+          const reader = res.body?.getReader();
+          if (!reader) throw new Error('无法读取响应流');
+
+          const parts: Uint8Array[] = [];
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            parts.push(value);
+            setAria2DlLoaded((prev) => prev + value.byteLength);
+          }
+
+          const totalLen = parts.reduce((s, p) => s + p.byteLength, 0);
+          const merged = new Uint8Array(totalLen);
+          let offset = 0;
+          for (const part of parts) {
+            merged.set(part, offset);
+            offset += part.byteLength;
+          }
+          buffers[i] = merged.buffer;
+        })
+      );
+
+      const validBuffers = buffers.filter((b): b is ArrayBuffer => b !== null);
+      const totalLen = validBuffers.reduce((s, b) => s + b.byteLength, 0);
+      const merged = new Uint8Array(totalLen);
+      let offset = 0;
+      for (const buf of validBuffers) {
+        merged.set(new Uint8Array(buf), offset);
+        offset += buf.byteLength;
+      }
+
+      const blob = new Blob([merged]);
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = asset.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        setError(`下载失败: ${(err as Error).message}`);
+      }
+    } finally {
+      clearInterval(speedInterval);
+      setAria2Downloading(false);
+      aria2DlAbortRef.current = null;
+    }
+  }, [aria2DlLoaded]);
 
   const handleDownload = useCallback(async () => {
     if (!probeResult) return;
@@ -504,25 +628,56 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
               <div className="space-y-3">
                 <div className="flex items-start gap-3">
                   <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#fb6400]/20 text-[#fb6400] text-xs font-bold">1</span>
-                  <div>
-                    <p className="text-sm text-white/70 mb-1">下载 aria2（已安装请跳过）</p>
-                    <a
-                      href="https://github.com/aria2/aria2/releases/latest"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs text-[#fb6400] hover:underline"
-                    >
-                      下载 aria2 最新版
-                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </a>
+                  <div className="flex-1">
+                    <p className="text-sm text-white/70 mb-2">下载 aria2（已安装请跳过）</p>
+                    {aria2Release ? (
+                      <div className="space-y-2">
+                        <p className="text-xs text-white/40">最新版本：{aria2Release.version}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {aria2Release.win64 && (
+                            <button
+                              onClick={() => downloadAria2(aria2Release.win64!)}
+                              disabled={aria2Downloading}
+                              className="px-3 py-1.5 text-xs bg-[#fb6400]/20 border border-[#fb6400]/30 rounded-lg text-[#fb6400] hover:bg-[#fb6400]/30 transition-colors disabled:opacity-50"
+                            >
+                              {aria2Downloading ? '下载中...' : `Win 64位 (${formatSize(aria2Release.win64.size)})`}
+                            </button>
+                          )}
+                          {aria2Release.win32 && (
+                            <button
+                              onClick={() => downloadAria2(aria2Release.win32!)}
+                              disabled={aria2Downloading}
+                              className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-lg text-white/60 hover:text-[#fb6400] transition-colors disabled:opacity-50"
+                            >
+                              Win 32位
+                            </button>
+                          )}
+                        </div>
+                        {aria2Downloading && (
+                          <div className="mt-2">
+                            <div className="flex justify-between text-xs mb-1">
+                              <span className="text-white/40">{formatSize(aria2DlLoaded)} / {formatSize(aria2DlTotal)}</span>
+                              <span className="text-[#fb6400]">{aria2DlTotal > 0 ? ((aria2DlLoaded / aria2DlTotal) * 100).toFixed(1) : 0}%</span>
+                            </div>
+                            <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-[#fb6400] to-[#ff8c00] rounded-full transition-all duration-300"
+                                style={{ width: `${aria2DlTotal > 0 ? (aria2DlLoaded / aria2DlTotal) * 100 : 0}%` }}
+                              />
+                            </div>
+                            <p className="text-[10px] text-white/30 mt-1">速度：{formatSpeed(aria2DlSpeed)}</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-white/30">正在获取版本信息...</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#fb6400]/20 text-[#fb6400] text-xs font-bold">2</span>
                   <div>
-                    <p className="text-sm text-white/70 mb-2">运行启动脚本</p>
+                    <p className="text-sm text-white/70 mb-2">解压后运行启动脚本</p>
                     <div className="flex gap-2">
                       <button
                         onClick={() => downloadStartScript('bat')}
@@ -542,6 +697,81 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
                 <div className="flex items-start gap-3">
                   <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#fb6400]/20 text-[#fb6400] text-xs font-bold">3</span>
                   <p className="text-sm text-white/70">运行脚本后，本页会自动检测连接</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* IDM 未安装时的教程 */}
+          {method === 'idm' && (
+            <div className="mt-4 bg-[#fb6400]/10 border border-[#fb6400]/20 rounded-xl p-4 animate-slide-up">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[#fb6400] text-sm font-medium">IDM 使用教程</span>
+                <button
+                  onClick={() => setShowIdmTutorial(!showIdmTutorial)}
+                  className="ml-auto px-3 py-1 text-xs bg-white/5 border border-white/10 rounded-lg text-white/60 hover:text-[#fb6400] transition-colors"
+                >
+                  {showIdmTutorial ? '收起' : '展开教程'}
+                </button>
+              </div>
+
+              <div
+                className="transition-all duration-500 ease-in-out"
+                style={{
+                  maxHeight: showIdmTutorial ? '800px' : '0px',
+                  opacity: showIdmTutorial ? 1 : 0,
+                  overflow: 'hidden',
+                }}
+              >
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#fb6400]/20 text-[#fb6400] text-xs font-bold">1</span>
+                    <div>
+                      <p className="text-sm text-white/70 mb-1">下载安装 IDM</p>
+                      <a
+                        href="https://www.internetdownloadmanager.com/download.html"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-[#fb6400] hover:underline"
+                      >
+                        IDM 官网下载
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                      <p className="text-[10px] text-white/30 mt-1">安装后需要激活，可自行搜索激活教程</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#fb6400]/20 text-[#fb6400] text-xs font-bold">2</span>
+                    <div>
+                      <p className="text-sm text-white/70 mb-1">安装浏览器扩展</p>
+                      <p className="text-xs text-white/50">IDM 安装后会自动提示安装浏览器扩展。如果没有提示：</p>
+                      <ul className="text-xs text-white/40 mt-1 ml-3 space-y-0.5">
+                        <li>• Chrome：在 IDM 安装目录找到 <code className="text-[#fb6400]">IDMGCExt.crx</code>，拖入扩展页面</li>
+                        <li>• Firefox：在附加组件中搜索 "IDM Integration Module"</li>
+                        <li>• Edge：在扩展商店搜索 "IDM Integration Module"</li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#fb6400]/20 text-[#fb6400] text-xs font-bold">3</span>
+                    <div>
+                      <p className="text-sm text-white/70 mb-1">配置 IDM</p>
+                      <ul className="text-xs text-white/40 ml-3 space-y-0.5">
+                        <li>• 打开 IDM → 选项 → 连接</li>
+                        <li>• 最大连接数改为 <strong className="text-white/60">16</strong>（或更高）</li>
+                        <li>• 勾选 "使用多段下载"</li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#fb6400]/20 text-[#fb6400] text-xs font-bold">4</span>
+                    <div>
+                      <p className="text-sm text-white/70 mb-1">开始下载</p>
+                      <p className="text-xs text-white/50">安装完成后，回到本页粘贴下载链接，点击"调用 IDM 下载"即可。IDM 会自动接管下载，多线程跑满带宽。</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -719,101 +949,129 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
           </div>
         )}
 
-        {/* 说明 */}
-        <div className="glass-card p-6 animate-slide-up" style={{ animationDelay: '100ms' }}>
-          <h3 className="text-white font-semibold mb-4">三种下载方式对比</h3>
+        {/* 详情介绍 */}
+        <div className="glass-card animate-slide-up overflow-hidden" style={{ animationDelay: '100ms' }}>
+          <button
+            onClick={() => setShowDetails(!showDetails)}
+            className="w-full px-6 py-4 flex items-center justify-between group transition-colors hover:bg-white/5"
+          >
+            <span className="text-white/60 text-sm group-hover:text-[#fb6400] transition-colors">详情介绍</span>
+            <svg
+              className={`w-4 h-4 text-white/30 transition-transform duration-300 ${showDetails ? 'rotate-180' : ''}`}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
 
-          {/* 对比表格 */}
-          <div className="overflow-x-auto mb-4">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/10">
-                  <th className="text-left text-white/40 py-2 pr-3 font-normal">对比项</th>
-                  <th className="text-center text-white/40 py-2 px-2 font-normal">浏览器</th>
-                  <th className="text-center text-[#fb6400] py-2 px-2 font-normal">aria2</th>
-                  <th className="text-center text-white/40 py-2 px-2 font-normal">IDM</th>
-                </tr>
-              </thead>
-              <tbody className="text-white/60">
-                <tr className="border-b border-white/5">
-                  <td className="py-2 pr-3 text-white/40">需要安装</td>
-                  <td className="text-center py-2 px-2 text-green-400">不需要</td>
-                  <td className="text-center py-2 px-2 text-yellow-400">需要</td>
-                  <td className="text-center py-2 px-2 text-yellow-400">需要</td>
-                </tr>
-                <tr className="border-b border-white/5">
-                  <td className="py-2 pr-3 text-white/40">占用资源</td>
-                  <td className="text-center py-2 px-2 text-green-400">无</td>
-                  <td className="text-center py-2 px-2 text-yellow-400">~50MB 内存</td>
-                  <td className="text-center py-2 px-2 text-yellow-400">~30MB 内存</td>
-                </tr>
-                <tr className="border-b border-white/5">
-                  <td className="py-2 pr-3 text-white/40">下载速度</td>
-                  <td className="text-center py-2 px-2">受服务器限制</td>
-                  <td className="text-center py-2 px-2 text-green-400">跑满带宽</td>
-                  <td className="text-center py-2 px-2 text-green-400">跑满带宽</td>
-                </tr>
-                <tr className="border-b border-white/5">
-                  <td className="py-2 pr-3 text-white/40">多线程</td>
-                  <td className="text-center py-2 px-2">服务器中转</td>
-                  <td className="text-center py-2 px-2 text-green-400">本地直连</td>
-                  <td className="text-center py-2 px-2 text-green-400">本地直连</td>
-                </tr>
-                <tr className="border-b border-white/5">
-                  <td className="py-2 pr-3 text-white/40">BT/磁力</td>
-                  <td className="text-center py-2 px-2 text-red-400">不支持</td>
-                  <td className="text-center py-2 px-2 text-green-400">支持</td>
-                  <td className="text-center py-2 px-2 text-red-400">不支持</td>
-                </tr>
-                <tr className="border-b border-white/5">
-                  <td className="py-2 pr-3 text-white/40">大文件</td>
-                  <td className="text-center py-2 px-2 text-yellow-400">可能内存溢出</td>
-                  <td className="text-center py-2 px-2 text-green-400">磁盘直写</td>
-                  <td className="text-center py-2 px-2 text-green-400">磁盘直写</td>
-                </tr>
-                <tr>
-                  <td className="py-2 pr-3 text-white/40">支持平台</td>
-                  <td className="text-center py-2 px-2">全平台</td>
-                  <td className="text-center py-2 px-2">全平台</td>
-                  <td className="text-center py-2 px-2">仅 Windows</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <div
+            className="transition-all duration-500 ease-in-out"
+            style={{
+              maxHeight: showDetails ? '1200px' : '0px',
+              opacity: showDetails ? 1 : 0,
+              overflow: 'hidden',
+            }}
+          >
+            <div className="px-6 pb-6 space-y-6">
+              {/* 对比表格 */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10">
+                      <th className="text-left text-white/40 py-2 pr-3 font-normal">对比项</th>
+                      <th className="text-center text-white/40 py-2 px-2 font-normal">浏览器</th>
+                      <th className="text-center text-[#fb6400] py-2 px-2 font-normal">aria2</th>
+                      <th className="text-center text-white/40 py-2 px-2 font-normal">IDM</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-white/60">
+                    <tr className="border-b border-white/5">
+                      <td className="py-2 pr-3 text-white/40">需要安装</td>
+                      <td className="text-center py-2 px-2 text-green-400">不需要</td>
+                      <td className="text-center py-2 px-2 text-yellow-400">需要</td>
+                      <td className="text-center py-2 px-2 text-yellow-400">需要</td>
+                    </tr>
+                    <tr className="border-b border-white/5">
+                      <td className="py-2 pr-3 text-white/40">占用资源</td>
+                      <td className="text-center py-2 px-2 text-green-400">无</td>
+                      <td className="text-center py-2 px-2 text-yellow-400">~50MB 内存</td>
+                      <td className="text-center py-2 px-2 text-yellow-400">~30MB 内存</td>
+                    </tr>
+                    <tr className="border-b border-white/5">
+                      <td className="py-2 pr-3 text-white/40">下载速度</td>
+                      <td className="text-center py-2 px-2">受服务器限制</td>
+                      <td className="text-center py-2 px-2 text-green-400">跑满带宽</td>
+                      <td className="text-center py-2 px-2 text-green-400">跑满带宽</td>
+                    </tr>
+                    <tr className="border-b border-white/5">
+                      <td className="py-2 pr-3 text-white/40">多线程</td>
+                      <td className="text-center py-2 px-2">服务器中转</td>
+                      <td className="text-center py-2 px-2 text-green-400">本地直连</td>
+                      <td className="text-center py-2 px-2 text-green-400">本地直连</td>
+                    </tr>
+                    <tr className="border-b border-white/5">
+                      <td className="py-2 pr-3 text-white/40">BT/磁力</td>
+                      <td className="text-center py-2 px-2 text-red-400">不支持</td>
+                      <td className="text-center py-2 px-2 text-green-400">支持</td>
+                      <td className="text-center py-2 px-2 text-red-400">不支持</td>
+                    </tr>
+                    <tr className="border-b border-white/5">
+                      <td className="py-2 pr-3 text-white/40">大文件</td>
+                      <td className="text-center py-2 px-2 text-yellow-400">可能内存溢出</td>
+                      <td className="text-center py-2 px-2 text-green-400">磁盘直写</td>
+                      <td className="text-center py-2 px-2 text-green-400">磁盘直写</td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 pr-3 text-white/40">支持平台</td>
+                      <td className="text-center py-2 px-2">全平台</td>
+                      <td className="text-center py-2 px-2">全平台</td>
+                      <td className="text-center py-2 px-2">仅 Windows</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
-          <div className="space-y-4 text-white/50 text-xs">
-            <div>
-              <p className="text-white/70 font-medium mb-1">aria2 的优势</p>
-              <ul className="space-y-1 ml-3">
-                <li>• 开源免费，无广告无捆绑，社区活跃持续更新</li>
-                <li>• 支持 HTTP/HTTPS/FTP/SFTP/BT/磁力链等多种协议</li>
-                <li>• 本地多线程直连源服务器，不受中转服务器带宽限制，跑满你的带宽</li>
-                <li>• 支持断点续传，下载中断后从上次位置继续</li>
-                <li>• 跨平台：Windows/macOS/Linux/Android 均可使用</li>
-                <li>• 资源占用低，后台静默运行，不影响其他工作</li>
-              </ul>
-            </div>
-            <div>
-              <p className="text-white/70 font-medium mb-1">IDM 的优势</p>
-              <ul className="space-y-1 ml-3">
-                <li>• 自动嗅探浏览器中的下载链接，点击即捕获，无需手动复制</li>
-                <li>• 内置站点抓取功能，可批量下载网页中的所有文件</li>
-                <li>• 自动多线程分割，无需手动配置线程数</li>
-                <li>• 下载完成后自动调用杀毒软件扫描，安全省心</li>
-                <li>• 图形界面操作简单，适合不熟悉命令行的用户</li>
-              </ul>
-            </div>
-            <div>
-              <p className="text-white/70 font-medium mb-1">什么是 BT/磁力？</p>
-              <p className="ml-3">BT（BitTorrent）是一种点对点文件分享技术。与传统下载不同，BT 不是从一台服务器下载整个文件，而是从多个用户那里同时下载文件的不同片段。下载的人越多，速度越快。</p>
-              <p className="ml-3 mt-1">磁力链接（magnet:）是 BT 的一种链接形式，通过文件的唯一哈希值来定位资源，不需要依赖种子文件服务器。即使原始发布者下架了文件，只要网络中还有人持有该文件的片段，就可以继续下载。</p>
-              <p className="ml-3 mt-1">简单说：普通下载是从一个地方拿文件，BT/磁力是从很多人那里拼文件，人越多越快。aria2 是少数同时支持普通下载和 BT/磁力的工具。</p>
-            </div>
-          </div>
+              {/* aria2 优势 */}
+              <div>
+                <p className="text-white/70 font-medium mb-2 text-sm">aria2 的优势</p>
+                <ul className="space-y-1.5 text-white/50 text-xs ml-3">
+                  <li>• 开源免费，无广告无捆绑，社区活跃持续更新</li>
+                  <li>• 支持 HTTP/HTTPS/FTP/SFTP/BT/磁力链等多种协议</li>
+                  <li>• 本地多线程直连源服务器，跑满你的带宽</li>
+                  <li>• 支持断点续传，下载中断后从上次位置继续</li>
+                  <li>• 跨平台：Windows/macOS/Linux/Android 均可使用</li>
+                  <li>• 资源占用低，后台静默运行，不影响其他工作</li>
+                </ul>
+              </div>
 
-          <div className="mt-4 p-3 bg-white/5 rounded-lg">
-            <p className="text-xs text-white/40 mb-1">aria2 快速启动命令：</p>
-            <code className="text-xs text-[#fb6400] break-all">aria2c --enable-rpc --rpc-listen-port=6800 --rpc-allow-origin-all</code>
+              {/* IDM 优势 */}
+              <div>
+                <p className="text-white/70 font-medium mb-2 text-sm">IDM 的优势</p>
+                <ul className="space-y-1.5 text-white/50 text-xs ml-3">
+                  <li>• 自动嗅探浏览器中的下载链接，点击即捕获</li>
+                  <li>• 内置站点抓取功能，可批量下载网页中的所有文件</li>
+                  <li>• 自动多线程分割，无需手动配置线程数</li>
+                  <li>• 下载完成后自动调用杀毒软件扫描</li>
+                  <li>• 图形界面操作简单，适合不熟悉命令行的用户</li>
+                </ul>
+              </div>
+
+              {/* BT/磁力解释 */}
+              <div>
+                <p className="text-white/70 font-medium mb-2 text-sm">什么是 BT/磁力？</p>
+                <div className="text-white/50 text-xs ml-3 space-y-2">
+                  <p>BT（BitTorrent）是一种点对点文件分享技术。与传统下载不同，BT 不是从一台服务器下载整个文件，而是从多个用户那里同时下载文件的不同片段。下载的人越多，速度越快。</p>
+                  <p>磁力链接（magnet:）是 BT 的一种链接形式，通过文件的唯一哈希值来定位资源，不需要依赖种子文件服务器。即使原始发布者下架了文件，只要网络中还有人持有该文件，就可以继续下载。</p>
+                  <p>简单说：普通下载是从一个地方拿文件，BT/磁力是从很多人那里拼文件，人越多越快。</p>
+                </div>
+              </div>
+
+              {/* aria2 启动命令 */}
+              <div className="p-3 bg-white/5 rounded-lg">
+                <p className="text-xs text-white/40 mb-1">aria2 快速启动命令：</p>
+                <code className="text-xs text-[#fb6400] break-all">aria2c --enable-rpc --rpc-listen-port=6800 --rpc-allow-origin-all</code>
+              </div>
+            </div>
           </div>
         </div>
       </main>
