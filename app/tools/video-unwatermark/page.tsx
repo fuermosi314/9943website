@@ -1,7 +1,6 @@
-import { Metadata } from 'next';
 import ClientPage from './client';
 
-export async function generateMetadata(): Promise<Metadata> {
+export function generateMetadata() {
   return {
     title: '视频去水印 - 9943小工具大全',
     description: '抖音/B站/西瓜视频无水印下载，支持多平台',

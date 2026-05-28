@@ -1,7 +1,6 @@
-import { Metadata } from 'next';
 import ClientPage from './client';
 
-export async function generateMetadata(): Promise<Metadata> {
+export function generateMetadata() {
   return {
     title: '随机数生成器 - 9943小工具大全',
     description: '生成随机数、字符串、UUID、密码',

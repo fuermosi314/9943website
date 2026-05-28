@@ -132,6 +132,13 @@ const siteFeatures: Record<string, string[]> = {
     '支持中文界面，降低学习门槛',
     '开源免费，浏览器直接运行',
   ],
+  steampp: [
+    'Steam 商店/社区加速，解决国内访问慢的问题',
+    '本地令牌管理，多账号切换一键完成',
+    '游戏库存管理，本地存档自动备份',
+    '支持 Windows/macOS/Linux 多平台',
+    '开源免费，无广告无捆绑，持续更新',
+  ],
 };
 
 export default function SiteDetailClient() {

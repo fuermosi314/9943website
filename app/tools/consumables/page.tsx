@@ -1,7 +1,6 @@
-import { Metadata } from 'next';
 import ClientPage from './client';
 
-export async function generateMetadata(): Promise<Metadata> {
+export function generateMetadata() {
   return {
     title: '耗知通 - 9943小工具大全',
     description: '记录你的消耗品，清楚库存',

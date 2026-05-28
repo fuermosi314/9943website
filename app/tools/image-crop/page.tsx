@@ -1,7 +1,6 @@
-import { Metadata } from 'next';
 import ClientPage from './client';
 
-export async function generateMetadata(): Promise<Metadata> {
+export function generateMetadata() {
   return {
     title: '图片裁剪 - 9943小工具大全',
     description: '自定义区域裁剪图片',

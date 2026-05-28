@@ -1,7 +1,6 @@
-import { Metadata } from 'next';
 import ClientPage from './client';
 
-export async function generateMetadata(): Promise<Metadata> {
+export function generateMetadata() {
   return {
     title: '单位换算 - 9943小工具大全',
     description: '长度、重量、温度、面积、体积、时间单位互转',

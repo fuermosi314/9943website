@@ -1,7 +1,6 @@
-import { Metadata } from 'next';
 import ClientPage from './client';
 
-export async function generateMetadata(): Promise<Metadata> {
+export function generateMetadata() {
   return {
     title: '毁灭地球的电磁炮 - 9943小工具大全',
     description: '太空汪星人的电磁炮小游戏',

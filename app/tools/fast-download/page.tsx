@@ -1,7 +1,6 @@
-import { Metadata } from 'next';
 import ClientPage from './client';
 
-export async function generateMetadata(): Promise<Metadata> {
+export function generateMetadata() {
   return {
     title: '高速下载 - 9943小工具大全',
     description: '多线程并行下载，充分利用你的带宽',

@@ -1,7 +1,6 @@
-import { Metadata } from 'next';
 import ClientPage from './client';
 
-export async function generateMetadata(): Promise<Metadata> {
+export function generateMetadata() {
   return {
     title: '图片旋转/翻转 - 9943小工具大全',
     description: '旋转角度、水平/垂直翻转',

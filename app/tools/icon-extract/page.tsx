@@ -1,7 +1,6 @@
-import { Metadata } from 'next';
 import ClientPage from './client';
 
-export async function generateMetadata(): Promise<Metadata> {
+export function generateMetadata() {
   return {
     title: '图标提取 - 9943小工具大全',
     description: '从 EXE/DLL/ICO 文件中提取图标',

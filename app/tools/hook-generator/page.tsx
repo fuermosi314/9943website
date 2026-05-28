@@ -1,7 +1,6 @@
-import { Metadata } from 'next';
 import ClientPage from './client';
 
-export async function generateMetadata(): Promise<Metadata> {
+export function generateMetadata() {
   return {
     title: '爆款开头生成器 - 9943小工具大全',
     description: 'AI 生成10个不同风格的爆款开头，支持多平台',

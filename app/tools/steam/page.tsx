@@ -1,7 +1,6 @@
-import { Metadata } from 'next';
 import ClientPage from './client';
 
-export async function generateMetadata(): Promise<Metadata> {
+export function generateMetadata() {
   return {
     title: 'Steam 下载 - 9943小工具大全',
     description: 'Steam 客户端官方下载地址，支持 Windows/Mac/Linux',

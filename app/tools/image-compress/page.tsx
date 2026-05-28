@@ -1,7 +1,6 @@
-import { Metadata } from 'next';
 import ClientPage from './client';
 
-export async function generateMetadata(): Promise<Metadata> {
+export function generateMetadata() {
   return {
     title: '图片压缩 - 9943小工具大全',
     description: '压缩图片大小，支持 JPG、PNG、WebP',
