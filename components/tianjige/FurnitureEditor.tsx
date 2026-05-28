@@ -29,7 +29,7 @@ export default function FurnitureEditor({
   if (!show || !editingFurniture) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="bg-[#1a1a2e] rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md mx-0 sm:mx-4 border border-white/10 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="p-5 border-b border-white/10 flex items-center justify-between">
           <h3 className="text-white text-lg font-bold">编辑家具</h3>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTianjigeState } from './useTianjigeState';
 import SearchBar from './SearchBar';
 import SceneManager from './SceneManager';
@@ -17,6 +17,24 @@ import FirstGuide from './FirstGuide';
 export default function Scene3D() {
   const state = useTianjigeState();
   const isTouchDevice = useMemo(() => typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0), []);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // 监听全屏状态变化
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      document.documentElement.requestFullscreen();
+    }
+  };
 
   // ── 键盘快捷键 ─────────────────────────────────────────────
   useEffect(() => {
@@ -101,10 +119,10 @@ export default function Scene3D() {
         </div>
       )}
 
-      {/* Top bar: search + camera toggle + scene switcher */}
-      <div className="absolute top-2 left-2 right-2 z-10 flex items-center gap-2">
-        {/* Search bar */}
-        <div className="flex-1 min-w-0">
+      {/* Top bar: search + camera toggle + fullscreen + scene switcher */}
+      <div className="absolute top-2 left-2 right-2 z-10 flex items-center gap-1.5">
+        {/* Search bar - 限制宽度 */}
+        <div className="flex-1 min-w-0 max-w-[60%]">
           <SearchBar
             searchQuery={state.searchQuery}
             searchResults={state.searchResults}
@@ -114,27 +132,21 @@ export default function Scene3D() {
         </div>
         {/* Camera toggle */}
         <button onClick={state.toggleCameraMode}
-          className="p-2 bg-[#1a1a2e]/90 rounded-lg border border-white/20 text-white/70 hover:text-white hover:border-[#fb6400]/30 transition-colors shrink-0"
+          className="w-9 h-9 flex items-center justify-center bg-[#1a1a2e]/90 rounded-lg border border-white/20 text-white/70 hover:text-white hover:border-[#fb6400]/30 transition-colors shrink-0 text-sm"
           title={state.cameraMode === 'orbit' ? '切换到上帝视角' : '切换到自由视角'}>
           {state.cameraMode === 'orbit' ? '🔭' : '⬇️'}
         </button>
         {/* Fullscreen toggle */}
-        <button onClick={() => {
-          if (document.fullscreenElement) {
-            document.exitFullscreen();
-          } else {
-            document.documentElement.requestFullscreen();
-          }
-        }}
-          className="p-2 bg-[#1a1a2e]/90 rounded-lg border border-white/20 text-white/70 hover:text-white hover:border-[#fb6400]/30 transition-colors shrink-0"
-          title="全屏">
-          {document.fullscreenElement ? '🔲' : '⛶'}
+        <button onClick={toggleFullscreen}
+          className="w-9 h-9 flex items-center justify-center bg-[#1a1a2e]/90 rounded-lg border border-white/20 text-white/70 hover:text-white hover:border-[#fb6400]/30 transition-colors shrink-0 text-sm"
+          title={isFullscreen ? '退出全屏' : '全屏'}>
+          {isFullscreen ? '🔲' : '⛶'}
         </button>
         {/* Scene switcher */}
         <select
           value={state.activeSceneId}
           onChange={state.handleSceneChange}
-          className="bg-[#1a1a2e]/90 border border-white/20 rounded-lg px-2 py-2 text-xs shadow-md text-white focus:outline-none focus:ring-2 focus:ring-[#fb6400] shrink-0 max-w-[100px]"
+          className="bg-[#1a1a2e]/90 border border-white/20 rounded-lg px-2 py-2 text-xs shadow-md text-white focus:outline-none focus:ring-2 focus:ring-[#fb6400] shrink-0 max-w-[80px]"
         >
           {state.scenes.map((s) => (
             <option key={s.id} value={s.id} className="bg-[#1a1a2e] text-white">
@@ -170,6 +182,13 @@ export default function Scene3D() {
         </div>
       )}
 
+      {/* Mobile hint - above bottom toolbar */}
+      {isTouchDevice && !state.isMovingFurniture && (
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10 text-white/30 text-xs text-center pointer-events-none bg-black/30 px-3 py-1 rounded-full">
+          {state.cameraMode === 'topdown' ? '拖动屏幕平移视角 · 双指缩放' : '点击家具查看物品和编辑'}
+        </div>
+      )}
+
       {/* Bottom toolbar */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex flex-wrap gap-2 justify-center max-w-[90vw]" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         <button onClick={() => state.setShowFurniturePicker(true)}
@@ -188,13 +207,6 @@ export default function Scene3D() {
           <span className="hidden sm:inline">📊</span>
         </button>
       </div>
-
-      {/* Mobile hint - above bottom toolbar */}
-      {isTouchDevice && !state.isMovingFurniture && (
-        <div className="absolute bottom-14 left-1/2 -translate-x-1/2 z-10 text-white/30 text-xs text-center pointer-events-none">
-          {state.cameraMode === 'topdown' ? '拖动屏幕平移视角 · 双指缩放' : '点击家具查看物品和编辑'}
-        </div>
-      )}
 
       {/* Furniture Picker Modal */}
       <FurniturePicker

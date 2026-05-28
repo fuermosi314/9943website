@@ -111,6 +111,7 @@ function HomeContent() {
     touchedId.current = toolId;
 
     longPressTimerRef.current = setTimeout(() => {
+      e.preventDefault();
       handleDragStart(toolId);
       // 触发振动反馈
       if (navigator.vibrate) navigator.vibrate(50);
@@ -131,8 +132,9 @@ function HomeContent() {
       }
     }
 
-    // 如果正在拖拽，找到当前触摸位置下的元素
+    // 如果正在拖拽，阻止默认行为（防止页面滚动）
     if (isDraggingRef.current) {
+      e.preventDefault();
       const element = document.elementFromPoint(touch.clientX, touch.clientY);
       const card = element?.closest('[data-tool-id]');
       if (card) {
@@ -155,6 +157,7 @@ function HomeContent() {
   // 鼠标事件处理（桌面端）
   const handleMouseDown = useCallback((e: React.MouseEvent, toolId: string) => {
     if (activeCategory !== 'favorites' || e.button !== 0) return;
+    e.preventDefault();
     longPressTimerRef.current = setTimeout(() => {
       handleDragStart(toolId);
     }, 500);
@@ -295,7 +298,10 @@ function HomeContent() {
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
               onMouseDown={(e) => handleMouseDown(e, tool.id)}
-              className={`transition-transform duration-200 ${
+              onContextMenu={(e) => {
+                if (activeCategory === 'favorites') e.preventDefault();
+              }}
+              className={`transition-transform duration-200 select-none ${
                 draggingId === tool.id ? 'opacity-50 scale-95' : ''
               } ${dragOverId === tool.id ? 'scale-105' : ''}`}
             >
