@@ -21,11 +21,25 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const resp = await fetch(parsedUrl.href, {
+    // 先用 HEAD 探测是否支持 Range，同时解析可能的重定向
+    let targetUrl = parsedUrl.href;
+    try {
+      const headResp = await fetch(targetUrl, {
+        method: 'HEAD',
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        redirect: 'follow',
+        signal: AbortSignal.timeout(15000),
+      });
+      // 如果有最终 URL（经过重定向），使用它
+      if (headResp.url) targetUrl = headResp.url;
+    } catch { /* HEAD 失败不影响主请求 */ }
+
+    const resp = await fetch(targetUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         Range: `bytes=${start}-${end}`,
       },
+      redirect: 'follow',
       signal: AbortSignal.timeout(300_000), // 5 分钟超时
     });
 

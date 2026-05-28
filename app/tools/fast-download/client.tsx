@@ -728,6 +728,7 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
                     <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#fb6400]/20 text-[#fb6400] text-xs font-bold">1</span>
                     <div>
                       <p className="text-sm text-white/70 mb-1">下载安装 IDM</p>
+                      <p className="text-xs text-white/40 mb-2">IDM 是付费软件，$24.95 终身授权，有 30 天免费试用</p>
                       <a
                         href="https://www.internetdownloadmanager.com/download.html"
                         target="_blank"
@@ -739,7 +740,7 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                         </svg>
                       </a>
-                      <p className="text-[10px] text-white/30 mt-1">安装后需要激活，可自行搜索激活教程</p>
+                      <p className="text-[10px] text-white/30 mt-1">安装后需要购买授权或使用试用版</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3">
