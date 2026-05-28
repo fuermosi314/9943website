@@ -484,7 +484,7 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
 
           <div className="grid grid-cols-3 gap-2 mb-4">
             {[
-              { key: 'browser' as const, label: '浏览器', desc: '无需安装，直接使用' },
+              { key: 'browser' as const, label: '浏览器', desc: '无需安装，加速有限' },
               { key: 'aria2' as const, label: 'aria2', desc: '需安装，速度更快' },
               { key: 'idm' as const, label: 'IDM', desc: '需安装，Windows' },
             ].map((opt) => (
@@ -936,13 +936,13 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
                     </tr>
                     <tr className="border-b border-white/5">
                       <td className="py-2 pr-3 text-white/40">下载速度</td>
-                      <td className="text-center py-2 px-2">受服务器限制</td>
+                      <td className="text-center py-2 px-2 text-yellow-400">加速有限</td>
                       <td className="text-center py-2 px-2 text-green-400">跑满带宽</td>
                       <td className="text-center py-2 px-2 text-green-400">跑满带宽</td>
                     </tr>
                     <tr className="border-b border-white/5">
                       <td className="py-2 pr-3 text-white/40">多线程</td>
-                      <td className="text-center py-2 px-2">服务器中转</td>
+                      <td className="text-center py-2 px-2 text-yellow-400">服务器中转，作用有限</td>
                       <td className="text-center py-2 px-2 text-green-400">本地直连</td>
                       <td className="text-center py-2 px-2 text-green-400">本地直连</td>
                     </tr>
