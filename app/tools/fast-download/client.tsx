@@ -67,26 +67,24 @@ export default function FastDownloadPage() {
   const [aria2DlLoaded, setAria2DlLoaded] = useState(0);
   const [aria2DlTotal, setAria2DlTotal] = useState(0);
   const aria2DlAbortRef = useRef<AbortController | null>(null);
-  const aria2DlSpeedRef = useRef({ lastTime: Date.now(), lastLoaded: 0 });
-  const [method, setMethod] = useState<DownloadMethod>(() => {
-    if (typeof window === 'undefined') return 'browser';
-    return (localStorage.getItem('fast-dl-method') as DownloadMethod) || 'browser';
-  });
-
-  // aria2 配置
-  const [aria2Host, setAria2Host] = useState(() => {
-    if (typeof window === 'undefined') return 'localhost';
-    return localStorage.getItem('fast-dl-aria2-host') || 'localhost';
-  });
-  const [aria2Port, setAria2Port] = useState(() => {
-    if (typeof window === 'undefined') return '6800';
-    return localStorage.getItem('fast-dl-aria2-port') || '6800';
-  });
-  const [aria2Secret, setAria2Secret] = useState(() => {
-    if (typeof window === 'undefined') return '';
-    return localStorage.getItem('fast-dl-aria2-secret') || '';
-  });
+  const aria2DlSpeedRef = useRef({ lastTime: 0, lastLoaded: 0 });
+  const [method, setMethod] = useState<DownloadMethod>('browser');
+  const [aria2Host, setAria2Host] = useState('localhost');
+  const [aria2Port, setAria2Port] = useState('6800');
+  const [aria2Secret, setAria2Secret] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+
+  // 从 localStorage 恢复配置（客户端挂载后）
+  useEffect(() => {
+    const saved = localStorage.getItem('fast-dl-method') as DownloadMethod;
+    if (saved) setMethod(saved);
+    const host = localStorage.getItem('fast-dl-aria2-host');
+    if (host) setAria2Host(host);
+    const port = localStorage.getItem('fast-dl-aria2-port');
+    if (port) setAria2Port(port);
+    const secret = localStorage.getItem('fast-dl-aria2-secret');
+    if (secret) setAria2Secret(secret);
+  }, []);
 
   // 持久化配置
   useEffect(() => { localStorage.setItem('fast-dl-method', method); }, [method]);
