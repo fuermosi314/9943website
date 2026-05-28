@@ -284,6 +284,17 @@ export const tools: Tool[] = [
     keywords: ['游戏平台', 'steam安装', '游戏下载', 'epic'],
   },
   {
+    id: 'steampp',
+    name: 'Watt Toolkit',
+    description: 'Steam 多功能工具箱，加速/修复/管理一体',
+    icon: '🔧',
+    category: 'website',
+    path: '/tools/site/steampp',
+    externalUrl: 'https://steampp.net',
+    tags: ['steam', '加速', '工具箱', '网络', '修复'],
+    keywords: ['steam加速', 'steam工具', 'steam社区修复', 'steam商店加速', 'watt toolkit', 'steam++'],
+  },
+  {
     id: 'tbtool',
     name: '图吧工具箱',
     description: 'DIY 爱好者硬件检测工具合集，开源免费无捆绑',
@@ -492,17 +503,6 @@ export const tools: Tool[] = [
     externalUrl: 'https://learngitbranching.js.org',
     tags: ['git', '学习', '分支', '教程', '交互'],
     keywords: ['学git', 'git教程', 'git分支', '版本控制', 'git可视化', 'git入门'],
-  },
-  {
-    id: 'steampp',
-    name: 'Watt Toolkit',
-    description: 'Steam 多功能工具箱，加速/修复/管理一体',
-    icon: '🔧',
-    category: 'website',
-    path: '/tools/site/steampp',
-    externalUrl: 'https://steampp.net',
-    tags: ['steam', '加速', '工具箱', '网络', '修复'],
-    keywords: ['steam加速', 'steam工具', 'steam社区修复', 'steam商店加速', 'watt toolkit', 'steam++'],
   },
 ];
 
