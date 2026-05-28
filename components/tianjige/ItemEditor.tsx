@@ -2,6 +2,7 @@
 
 import { Item, PhotoRef } from '@/lib/tianjige-db';
 import CategorySelector from '@/components/CategorySelector';
+import DatePicker from '@/components/DatePicker';
 
 interface ItemForm {
   name: string;
@@ -74,14 +75,12 @@ export default function ItemEditor({
           {/* Storage Date */}
           <div>
             <label className="text-white/70 text-sm mb-1 block">存放日期</label>
-            <input type="datetime-local" value={itemForm.storageDate} onChange={e => setItemForm(f => ({ ...f, storageDate: e.target.value }))}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#fb6400]" />
+            <DatePicker value={itemForm.storageDate} onChange={v => setItemForm(f => ({ ...f, storageDate: v }))} showTime />
           </div>
           {/* Purchase Date (optional) */}
           <div>
             <label className="text-white/70 text-sm mb-1 block">购买日期 <span className="text-white/30">(可选)</span></label>
-            <input type="datetime-local" value={itemForm.purchaseDate} onChange={e => setItemForm(f => ({ ...f, purchaseDate: e.target.value }))}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#fb6400]" />
+            <DatePicker value={itemForm.purchaseDate} onChange={v => setItemForm(f => ({ ...f, purchaseDate: v }))} showTime placeholder="选择购买日期" />
           </div>
           {/* Note */}
           <div>

@@ -33,7 +33,7 @@ function BackButtonContent({ toolId, className }: BackButtonProps) {
         </svg>
         返回
       </Link>
-      <FullscreenButton showHint />
+      <FullscreenButton />
     </div>
   );
 }

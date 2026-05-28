@@ -100,25 +100,6 @@ export default function Scene3D() {
         onPointerLeave={state.handlePointerLeave}
       />
 
-      {/* Move mode indicator */}
-      {state.isMovingFurniture && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 bg-[#fb6400] text-white px-3 py-1.5 rounded-lg text-xs font-medium shadow-lg flex items-center gap-2 whitespace-nowrap">
-          <span>拖拽移动家具中</span>
-          <RotationButtons onRotate={state.rotateMovingFurniture} size="sm" />
-          <button onClick={state.stopMoveMode}
-            className="px-2 py-0.5 bg-white/20 hover:bg-white/30 rounded-md text-xs transition-colors">
-            完成
-          </button>
-        </div>
-      )}
-
-      {/* Top-down rotation buttons */}
-      {state.cameraMode === 'topdown' && !state.isMovingFurniture && (
-        <div className="absolute bottom-20 right-4 z-10">
-          <RotationButtons onRotate={state.rotateCamera} />
-        </div>
-      )}
-
       {/* Top bar: search + camera toggle + fullscreen + scene switcher */}
       <div className="absolute top-2 left-2 right-2 z-10 flex items-center gap-1.5">
         {/* Search bar - 限制宽度 */}
@@ -168,6 +149,11 @@ export default function Scene3D() {
         <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 bg-[#fb6400] text-white px-3 py-1.5 rounded-lg text-xs font-medium shadow-lg flex items-center gap-2 whitespace-nowrap">
           <span>拖拽移动家具中</span>
           <RotationButtons onRotate={state.rotateMovingFurniture} size="sm" />
+          <button onClick={state.resetMovingFurnitureRotation}
+            className="px-2 py-0.5 bg-white/20 hover:bg-white/30 rounded-md text-xs transition-colors"
+            title="重置角度">
+            ↩
+          </button>
           <button onClick={state.stopMoveMode}
             className="px-2 py-0.5 bg-white/20 hover:bg-white/30 rounded-md text-xs transition-colors">
             完成

@@ -185,3 +185,25 @@ select {
   background: linear-gradient(to right, transparent, #1a1a2e);
   pointer-events: none;
 }
+
+/* Fullscreen layout: expand content to fill screen */
+html\:fullscreen .max-w-6xl,
+:fullscreen .max-w-6xl {
+  max-width: 100% !important;
+  padding-left: 2rem !important;
+  padding-right: 2rem !important;
+}
+html\:fullscreen .max-w-4xl,
+:fullscreen .max-w-4xl {
+  max-width: 100% !important;
+  padding-left: 2rem !important;
+  padding-right: 2rem !important;
+}
+html\:fullscreen .max-w-lg,
+:fullscreen .max-w-lg {
+  max-width: 48rem !important;
+}
+html\:fullscreen .max-w-sm,
+:fullscreen .max-w-sm {
+  max-width: 24rem !important;
+}

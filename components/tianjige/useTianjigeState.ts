@@ -1384,6 +1384,36 @@ export function useTianjigeState() {
     });
   }, [activeSceneId]);
 
+  // ── Reset moving furniture rotation ─────────────────────────────
+  const resetMovingFurnitureRotation = useCallback(() => {
+    const furniture = movingFurnitureRef.current;
+    if (!furniture) return;
+    furniture.rotation = 0;
+    const mesh = furnitureMeshesRef.current.find(
+      obj => obj.userData?.furnitureId === furniture.id,
+    );
+    if (mesh) {
+      mesh.rotation.y = 0;
+    }
+    setScenes(prev => {
+      const updated = prev.map(s => {
+        if (s.id !== activeSceneId) return s;
+        return {
+          ...s,
+          furniture: s.furniture.map(f =>
+            f.id === furniture.id ? { ...f, rotation: 0 } : f,
+          ),
+        };
+      });
+      const active = updated.find(s => s.id === activeSceneId);
+      if (active) {
+        setSaveStatus('saving');
+        saveScene(active).then(() => setSaveStatus('saved'));
+      }
+      return updated;
+    });
+  }, [activeSceneId]);
+
   return {
     // Refs
     containerRef,
@@ -1490,5 +1520,6 @@ export function useTianjigeState() {
     // Rotation
     rotateCamera,
     rotateMovingFurniture,
+    resetMovingFurnitureRotation,
   };
 }

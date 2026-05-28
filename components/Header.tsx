@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import FullscreenButton from './FullscreenButton';
 
 interface HeaderProps {
   onSearch: (query: string) => void;
@@ -78,7 +79,8 @@ export default function Header({ onSearch }: HeaderProps) {
         </form>
 
         {/* 右侧装饰 */}
-        <div className="hidden md:flex items-center space-x-2">
+        <div className="hidden md:flex items-center space-x-3">
+          <FullscreenButton showHint />
           <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
           <span className="text-xs text-white/40">在线</span>
         </div>

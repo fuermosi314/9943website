@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { CategoryItem, PRESET_ICONS, getCategories, addCategory, updateCategory, deleteCategory } from '@/lib/category-manager';
 
 interface CategorySelectorProps {
@@ -93,8 +94,8 @@ export default function CategorySelector({ toolId, value, onChange, showManage =
       </div>
 
       {/* 分类管理弹窗 */}
-      {showManager && (
-        <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+      {showManager && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-[#1a1a2e] rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[80vh] overflow-y-auto">
             <div className="p-4 border-b border-white/10 flex items-center justify-between">
               <h3 className="text-white font-bold">管理分类</h3>
@@ -190,7 +191,8 @@ export default function CategorySelector({ toolId, value, onChange, showManage =
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

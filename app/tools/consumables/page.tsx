@@ -3,6 +3,7 @@ import { useToolHistory } from '@/lib/useToolHistory';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import BackButton from '@/components/BackButton';
 import CategorySelector from '@/components/CategorySelector';
+import DatePicker from '@/components/DatePicker';
 import {
   Consumable, Category, CATEGORIES, CATEGORY_ICONS,
   genId, getAllItems, addItem, updateItem, deleteItem,
@@ -497,21 +498,11 @@ function ItemEditor({ item, onSave, onClose }: {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm text-white/60 mb-1">存入日期</label>
-              <input
-                type="datetime-local"
-                value={storageDate}
-                onChange={e => setStorageDate(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-[#fb6400] [color-scheme:dark]"
-              />
+              <DatePicker value={storageDate} onChange={setStorageDate} showTime />
             </div>
             <div>
               <label className="block text-sm text-white/60 mb-1">过期日期（可选）</label>
-              <input
-                type="date"
-                value={expiryDate}
-                onChange={e => setExpiryDate(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-[#fb6400] [color-scheme:dark]"
-              />
+              <DatePicker value={expiryDate} onChange={setExpiryDate} placeholder="选择过期日期" />
             </div>
           </div>
 

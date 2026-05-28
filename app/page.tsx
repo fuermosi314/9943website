@@ -100,6 +100,57 @@ function HomeContent() {
     isDraggingRef.current = false;
   }, [draggingId, dragOverId]);
 
+  // 自动滚动（拖拽到边缘时）
+  const autoScrollRef = useRef<number | null>(null);
+  const lastPointerY = useRef<number>(0);
+
+  const startAutoScroll = useCallback((y: number) => {
+    lastPointerY.current = y;
+    if (autoScrollRef.current) return;
+
+    const EDGE = 80;
+    const MAX_SPEED = 12;
+
+    const tick = () => {
+      if (!isDraggingRef.current) {
+        autoScrollRef.current = null;
+        return;
+      }
+      const y = lastPointerY.current;
+      const vh = window.innerHeight;
+      let speed = 0;
+      if (y < EDGE) {
+        speed = -MAX_SPEED * (1 - y / EDGE);
+      } else if (y > vh - EDGE) {
+        speed = MAX_SPEED * (1 - (vh - y) / EDGE);
+      }
+      if (speed !== 0) {
+        window.scrollBy(0, speed);
+        // 滚动后重新检测拖拽目标
+        const el = document.elementFromPoint(
+          lastPointerX.current,
+          lastPointerY.current
+        );
+        const card = el?.closest('[data-tool-id]');
+        if (card) {
+          const id = card.getAttribute('data-tool-id');
+          if (id) handleDragOver(id);
+        }
+      }
+      autoScrollRef.current = requestAnimationFrame(tick);
+    };
+    autoScrollRef.current = requestAnimationFrame(tick);
+  }, [handleDragOver]);
+
+  const stopAutoScroll = useCallback(() => {
+    if (autoScrollRef.current) {
+      cancelAnimationFrame(autoScrollRef.current);
+      autoScrollRef.current = null;
+    }
+  }, []);
+
+  const lastPointerX = useRef<number>(0);
+
   // 触摸事件处理
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
   const touchedId = useRef<string | null>(null);
@@ -111,9 +162,7 @@ function HomeContent() {
     touchedId.current = toolId;
 
     longPressTimerRef.current = setTimeout(() => {
-      e.preventDefault();
       handleDragStart(toolId);
-      // 触发振动反馈
       if (navigator.vibrate) navigator.vibrate(50);
     }, 500);
   }, [activeCategory, handleDragStart]);
@@ -131,18 +180,7 @@ function HomeContent() {
         longPressTimerRef.current = null;
       }
     }
-
-    // 如果正在拖拽，阻止默认行为（防止页面滚动）
-    if (isDraggingRef.current) {
-      e.preventDefault();
-      const element = document.elementFromPoint(touch.clientX, touch.clientY);
-      const card = element?.closest('[data-tool-id]');
-      if (card) {
-        const targetId = card.getAttribute('data-tool-id');
-        if (targetId) handleDragOver(targetId);
-      }
-    }
-  }, [handleDragOver]);
+  }, []);
 
   const handleTouchEnd = useCallback(() => {
     if (longPressTimerRef.current) {
@@ -151,8 +189,9 @@ function HomeContent() {
     }
     touchStartPos.current = null;
     touchedId.current = null;
+    stopAutoScroll();
     handleDragEnd();
-  }, [handleDragEnd]);
+  }, [handleDragEnd, stopAutoScroll]);
 
   // 鼠标事件处理（桌面端）
   const handleMouseDown = useCallback((e: React.MouseEvent, toolId: string) => {
@@ -165,21 +204,51 @@ function HomeContent() {
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isDraggingRef.current) return;
+    e.preventDefault();
+    lastPointerX.current = e.clientX;
+    lastPointerY.current = e.clientY;
+    startAutoScroll(e.clientY);
     const element = document.elementFromPoint(e.clientX, e.clientY);
     const card = element?.closest('[data-tool-id]');
     if (card) {
       const targetId = card.getAttribute('data-tool-id');
       if (targetId) handleDragOver(targetId);
     }
-  }, [handleDragOver]);
+  }, [handleDragOver, startAutoScroll]);
 
   const handleMouseUp = useCallback(() => {
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
+    stopAutoScroll();
     handleDragEnd();
-  }, [handleDragEnd]);
+  }, [handleDragEnd, stopAutoScroll]);
+
+  // 触摸事件需要用原生监听器（React 的 passive 事件无法 preventDefault）
+  const gridRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+
+    const nativeTouchMove = (e: TouchEvent) => {
+      if (!isDraggingRef.current) return;
+      e.preventDefault();
+      const touch = e.touches[0];
+      lastPointerX.current = touch.clientX;
+      lastPointerY.current = touch.clientY;
+      startAutoScroll(touch.clientY);
+      const element = document.elementFromPoint(touch.clientX, touch.clientY);
+      const card = element?.closest('[data-tool-id]');
+      if (card) {
+        const targetId = card.getAttribute('data-tool-id');
+        if (targetId) handleDragOver(targetId);
+      }
+    };
+
+    el.addEventListener('touchmove', nativeTouchMove, { passive: false });
+    return () => el.removeEventListener('touchmove', nativeTouchMove);
+  }, [handleDragOver, startAutoScroll]);
 
   const animatedCatsRef = useRef<Set<string> | null>(null);
   if (!animatedCatsRef.current) {
@@ -285,6 +354,7 @@ function HomeContent() {
 
         {/* Tools Grid */}
         <div
+          ref={gridRef}
           className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
