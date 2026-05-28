@@ -62,6 +62,14 @@ export default function FastDownloadPage() {
     win32: { url: string; name: string; size: number } | null;
   } | null>(null);
   const [aria2DlStatus, setAria2DlStatus] = useState<'idle' | 'downloading' | 'done'>('idle');
+  const [aria2DlProgress, setAria2DlProgress] = useState({ loaded: 0, total: 0 });
+  const [aria2DirectStatus, setAria2DirectStatus] = useState<'idle' | 'downloading' | 'done'>('idle');
+  const [aria2DirectProgress, setAria2DirectProgress] = useState({ loaded: 0, total: 0 });
+  const [idmRelease, setIdmRelease] = useState<{ url: string; version: string } | null>(null);
+  const [idmDlStatus, setIdmDlStatus] = useState<'idle' | 'downloading' | 'done'>('idle');
+  const [idmDlProgress, setIdmDlProgress] = useState({ loaded: 0, total: 0 });
+  const [idmDirectStatus, setIdmDirectStatus] = useState<'idle' | 'downloading' | 'done'>('idle');
+  const [idmDirectProgress, setIdmDirectProgress] = useState({ loaded: 0, total: 0 });
   const [method, setMethod] = useState<DownloadMethod>('browser');
   const [aria2Host, setAria2Host] = useState('localhost');
   const [aria2Port, setAria2Port] = useState('6800');
@@ -172,9 +180,11 @@ export default function FastDownloadPage() {
   // 多线程下载 aria2 安装包
   const downloadAria2Pkg = useCallback(async (asset: { url: string; name: string; size: number }) => {
     setAria2DlStatus('downloading');
+    setAria2DlProgress({ loaded: 0, total: asset.size });
     const fileSize = asset.size;
     const threads = 8;
     const chunkSize = Math.ceil(fileSize / threads);
+    const chunkLoaded = new Array(threads).fill(0);
 
     try {
       const buffers: (ArrayBuffer | null)[] = new Array(threads).fill(null);
@@ -192,8 +202,27 @@ export default function FastDownloadPage() {
           });
 
           if (!res.ok) throw new Error(`分片 ${i + 1} 失败`);
-          const data = await res.arrayBuffer();
-          buffers[i] = data;
+          const reader = res.body?.getReader();
+          if (!reader) throw new Error('无法读取响应流');
+
+          const parts: Uint8Array[] = [];
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            parts.push(value);
+            chunkLoaded[i] += value.byteLength;
+            const total = chunkLoaded.reduce((s, c) => s + c, 0);
+            setAria2DlProgress({ loaded: total, total: fileSize });
+          }
+
+          const totalLen = parts.reduce((s, p) => s + p.byteLength, 0);
+          const merged = new Uint8Array(totalLen);
+          let offset = 0;
+          for (const part of parts) {
+            merged.set(part, offset);
+            offset += part.byteLength;
+          }
+          buffers[i] = merged.buffer;
         })
       );
 
@@ -218,9 +247,213 @@ export default function FastDownloadPage() {
       setAria2DlStatus('done');
     } catch {
       setAria2DlStatus('idle');
+      setAria2DlProgress({ loaded: 0, total: 0 });
       setError('aria2 下载失败，请重试');
     }
   }, []);
+
+  // 获取 IDM 最新下载链接
+  const fetchIdmRelease = useCallback(async () => {
+    if (idmRelease) return;
+    try {
+      const res = await fetch('/api/fast-download/idm-release');
+      const data = await res.json();
+      if (!data.error) setIdmRelease(data);
+    } catch { /* ignore */ }
+  }, [idmRelease]);
+
+  // IDM 选中时自动获取下载链接
+  useEffect(() => {
+    if (method === 'idm') fetchIdmRelease();
+  }, [method, fetchIdmRelease]);
+
+  // 多线程下载 IDM 安装包
+  const downloadIdmPkg = useCallback(async () => {
+    if (!idmRelease) return;
+    setIdmDlStatus('downloading');
+    setIdmDlProgress({ loaded: 0, total: 0 });
+
+    try {
+      // 先探测文件大小
+      const probeRes = await fetch('/api/fast-download/probe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: idmRelease.url }),
+      });
+      const probeData = await probeRes.json();
+      if (probeData.error) throw new Error(probeData.error);
+
+      const fileSize = probeData.fileSize;
+      setIdmDlProgress({ loaded: 0, total: fileSize });
+      const threads = 8;
+      const chunkSize = Math.ceil(fileSize / threads);
+      const chunkLoaded = new Array(threads).fill(0);
+
+      const buffers: (ArrayBuffer | null)[] = new Array(threads).fill(null);
+
+      await Promise.all(
+        Array.from({ length: threads }, async (_, i) => {
+          const start = i * chunkSize;
+          const end = Math.min(start + chunkSize - 1, fileSize - 1);
+          if (start >= fileSize) return;
+
+          const res = await fetch('/api/fast-download/download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: idmRelease.url, start, end }),
+          });
+
+          if (!res.ok) throw new Error(`分片 ${i + 1} 失败`);
+          const reader = res.body?.getReader();
+          if (!reader) throw new Error('无法读取响应流');
+
+          const parts: Uint8Array[] = [];
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            parts.push(value);
+            chunkLoaded[i] += value.byteLength;
+            const total = chunkLoaded.reduce((s, c) => s + c, 0);
+            setIdmDlProgress({ loaded: total, total: fileSize });
+          }
+
+          const totalLen = parts.reduce((s, p) => s + p.byteLength, 0);
+          const merged = new Uint8Array(totalLen);
+          let offset = 0;
+          for (const part of parts) {
+            merged.set(part, offset);
+            offset += part.byteLength;
+          }
+          buffers[i] = merged.buffer;
+        })
+      );
+
+      const validBuffers = buffers.filter((b): b is ArrayBuffer => b !== null);
+      const totalLen = validBuffers.reduce((s, b) => s + b.byteLength, 0);
+      const merged = new Uint8Array(totalLen);
+      let offset = 0;
+      for (const buf of validBuffers) {
+        merged.set(new Uint8Array(buf), offset);
+        offset += buf.byteLength;
+      }
+
+      const blob = new Blob([merged]);
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `idm${idmRelease.version.replace('.', '')}.exe`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      setIdmDlStatus('done');
+    } catch {
+      setIdmDlStatus('idle');
+      setIdmDlProgress({ loaded: 0, total: 0 });
+      setError('IDM 下载失败，请重试');
+    }
+  }, [idmRelease]);
+
+  // 原链接直连下载 aria2（不经服务器中转）
+  const downloadAria2Direct = useCallback(async (asset: { url: string; name: string; size: number }) => {
+    setAria2DirectStatus('downloading');
+    setAria2DirectProgress({ loaded: 0, total: asset.size });
+
+    try {
+      const res = await fetch(asset.url);
+      if (!res.ok) throw new Error(`请求失败: ${res.status}`);
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('无法读取响应流');
+
+      const totalSize = Number(res.headers.get('content-length')) || asset.size;
+      setAria2DirectProgress({ loaded: 0, total: totalSize });
+
+      const parts: Uint8Array[] = [];
+      let loaded = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parts.push(value);
+        loaded += value.byteLength;
+        setAria2DirectProgress({ loaded, total: totalSize });
+      }
+
+      const totalLen = parts.reduce((s, p) => s + p.byteLength, 0);
+      const merged = new Uint8Array(totalLen);
+      let offset = 0;
+      for (const part of parts) {
+        merged.set(part, offset);
+        offset += part.byteLength;
+      }
+
+      const blob = new Blob([merged]);
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = asset.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      setAria2DirectStatus('done');
+    } catch {
+      setAria2DirectStatus('idle');
+      setAria2DirectProgress({ loaded: 0, total: 0 });
+      setError('原链接下载失败，请重试');
+    }
+  }, []);
+
+  // 原链接直连下载 IDM（不经服务器中转）
+  const downloadIdmDirect = useCallback(async () => {
+    if (!idmRelease) return;
+    setIdmDirectStatus('downloading');
+    setIdmDirectProgress({ loaded: 0, total: 0 });
+
+    try {
+      const res = await fetch(idmRelease.url);
+      if (!res.ok) throw new Error(`请求失败: ${res.status}`);
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('无法读取响应流');
+
+      const totalSize = Number(res.headers.get('content-length')) || 0;
+      setIdmDirectProgress({ loaded: 0, total: totalSize });
+
+      const parts: Uint8Array[] = [];
+      let loaded = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parts.push(value);
+        loaded += value.byteLength;
+        setIdmDirectProgress({ loaded, total: totalSize });
+      }
+
+      const totalLen = parts.reduce((s, p) => s + p.byteLength, 0);
+      const merged = new Uint8Array(totalLen);
+      let offset = 0;
+      for (const part of parts) {
+        merged.set(part, offset);
+        offset += part.byteLength;
+      }
+
+      const blob = new Blob([merged]);
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `idm${idmRelease.version.replace('.', '')}.exe`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+      setIdmDirectStatus('done');
+    } catch {
+      setIdmDirectStatus('idle');
+      setIdmDirectProgress({ loaded: 0, total: 0 });
+      setError('原链接下载失败，请重试');
+    }
+  }, [idmRelease]);
 
   const handleDownload = useCallback(async () => {
     if (!probeResult) return;
@@ -581,29 +814,86 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
                   <div className="flex-1">
                     <p className="text-sm text-white/70 mb-2">下载 aria2（已安装请跳过）</p>
                     {aria2Release ? (
-                      <div className="space-y-2">
+                      <div className="space-y-3">
                         <p className="text-xs text-white/40">最新版本：{aria2Release.version}</p>
-                        <div className="flex flex-wrap gap-2">
-                          {aria2Release.win64 && (
-                            <button
-                              onClick={() => downloadAria2Pkg(aria2Release.win64!)}
-                              disabled={aria2DlStatus === 'downloading'}
-                              className="px-3 py-1.5 text-xs bg-[#fb6400]/20 border border-[#fb6400]/30 rounded-lg text-[#fb6400] hover:bg-[#fb6400]/30 transition-colors disabled:opacity-50"
-                            >
-                              {aria2DlStatus === 'downloading' ? '下载中...' : `Win 64位 (${formatSize(aria2Release.win64.size)})`}
-                            </button>
-                          )}
-                          {aria2Release.win32 && (
-                            <button
-                              onClick={() => downloadAria2Pkg(aria2Release.win32!)}
-                              disabled={aria2DlStatus === 'downloading'}
-                              className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-lg text-white/60 hover:text-[#fb6400] transition-colors disabled:opacity-50"
-                            >
-                              Win 32位
-                            </button>
+
+                        {/* 加速下载 */}
+                        <div>
+                          <p className="text-[10px] text-white/30 mb-1.5">加速下载（8线程，通过服务器中转）</p>
+                          <div className="flex flex-wrap gap-2">
+                            {aria2Release.win64 && (
+                              <button
+                                onClick={() => downloadAria2Pkg(aria2Release.win64!)}
+                                disabled={aria2DlStatus === 'downloading' || aria2DirectStatus === 'downloading'}
+                                className="px-3 py-1.5 text-xs bg-[#fb6400]/20 border border-[#fb6400]/30 rounded-lg text-[#fb6400] hover:bg-[#fb6400]/30 transition-colors disabled:opacity-50"
+                              >
+                                {aria2DlStatus === 'downloading' ? '下载中...' : `Win 64位 (${formatSize(aria2Release.win64.size)})`}
+                              </button>
+                            )}
+                            {aria2Release.win32 && (
+                              <button
+                                onClick={() => downloadAria2Pkg(aria2Release.win32!)}
+                                disabled={aria2DlStatus === 'downloading' || aria2DirectStatus === 'downloading'}
+                                className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-lg text-white/60 hover:text-[#fb6400] transition-colors disabled:opacity-50"
+                              >
+                                Win 32位
+                              </button>
+                            )}
+                          </div>
+                          {aria2DlStatus === 'downloading' && aria2DlProgress.total > 0 && (
+                            <div className="mt-2 space-y-1">
+                              <div className="flex justify-between text-[10px] text-white/40">
+                                <span>{formatSize(aria2DlProgress.loaded)} / {formatSize(aria2DlProgress.total)}</span>
+                                <span>{((aria2DlProgress.loaded / aria2DlProgress.total) * 100).toFixed(1)}%</span>
+                              </div>
+                              <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-gradient-to-r from-[#fb6400] to-[#ff8c00] rounded-full transition-all duration-300"
+                                  style={{ width: `${(aria2DlProgress.loaded / aria2DlProgress.total) * 100}%` }}
+                                />
+                              </div>
+                            </div>
                           )}
                         </div>
-                        <p className="text-[10px] text-white/30">8 线程下载，通过服务器中转加速</p>
+
+                        {/* 原链接下载 */}
+                        <div>
+                          <p className="text-[10px] text-white/30 mb-1.5">原链接直连（不经服务器中转，更稳定）</p>
+                          <div className="flex flex-wrap gap-2">
+                            {aria2Release.win64 && (
+                              <button
+                                onClick={() => downloadAria2Direct(aria2Release.win64!)}
+                                disabled={aria2DlStatus === 'downloading' || aria2DirectStatus === 'downloading'}
+                                className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-lg text-white/60 hover:text-[#fb6400] transition-colors disabled:opacity-50"
+                              >
+                                {aria2DirectStatus === 'downloading' ? '下载中...' : aria2DirectStatus === 'done' ? '下载完成 ✓' : `Win 64位 (${formatSize(aria2Release.win64.size)})`}
+                              </button>
+                            )}
+                            {aria2Release.win32 && (
+                              <button
+                                onClick={() => downloadAria2Direct(aria2Release.win32!)}
+                                disabled={aria2DlStatus === 'downloading' || aria2DirectStatus === 'downloading'}
+                                className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-lg text-white/60 hover:text-[#fb6400] transition-colors disabled:opacity-50"
+                              >
+                                Win 32位
+                              </button>
+                            )}
+                          </div>
+                          {aria2DirectStatus === 'downloading' && aria2DirectProgress.total > 0 && (
+                            <div className="mt-2 space-y-1">
+                              <div className="flex justify-between text-[10px] text-white/40">
+                                <span>{formatSize(aria2DirectProgress.loaded)} / {formatSize(aria2DirectProgress.total)}</span>
+                                <span>{((aria2DirectProgress.loaded / aria2DirectProgress.total) * 100).toFixed(1)}%</span>
+                              </div>
+                              <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-white/20 rounded-full transition-all duration-300"
+                                  style={{ width: `${(aria2DirectProgress.loaded / aria2DirectProgress.total) * 100}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ) : (
                       <p className="text-xs text-white/30">正在获取版本信息...</p>
@@ -665,17 +955,63 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
                     <div>
                       <p className="text-sm text-white/70 mb-1">下载安装 IDM</p>
                       <p className="text-xs text-white/40 mb-2">IDM 是付费软件，$24.95 终身授权，有 30 天免费试用</p>
-                      <a
-                        href="https://www.internetdownloadmanager.com/download.html"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-[#fb6400] hover:underline"
-                      >
-                        IDM 官网下载
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                      </a>
+                      {idmRelease ? (
+                        <div className="space-y-3">
+                          {/* 加速下载 */}
+                          <div>
+                            <p className="text-[10px] text-white/30 mb-1.5">加速下载（8线程，通过服务器中转）</p>
+                            <button
+                              onClick={downloadIdmPkg}
+                              disabled={idmDlStatus === 'downloading' || idmDirectStatus === 'downloading'}
+                              className="px-3 py-1.5 text-xs bg-[#fb6400]/20 border border-[#fb6400]/30 rounded-lg text-[#fb6400] hover:bg-[#fb6400]/30 transition-colors disabled:opacity-50"
+                            >
+                              {idmDlStatus === 'downloading' ? '下载中...' : idmDlStatus === 'done' ? '下载完成 ✓' : `下载 IDM ${idmRelease.version}`}
+                            </button>
+                            {idmDlStatus === 'downloading' && idmDlProgress.total > 0 && (
+                              <div className="mt-2 space-y-1">
+                                <div className="flex justify-between text-[10px] text-white/40">
+                                  <span>{formatSize(idmDlProgress.loaded)} / {formatSize(idmDlProgress.total)}</span>
+                                  <span>{((idmDlProgress.loaded / idmDlProgress.total) * 100).toFixed(1)}%</span>
+                                </div>
+                                <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-gradient-to-r from-[#fb6400] to-[#ff8c00] rounded-full transition-all duration-300"
+                                    style={{ width: `${(idmDlProgress.loaded / idmDlProgress.total) * 100}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* 原链接下载 */}
+                          <div>
+                            <p className="text-[10px] text-white/30 mb-1.5">原链接直连（不经服务器中转，更稳定）</p>
+                            <button
+                              onClick={downloadIdmDirect}
+                              disabled={idmDlStatus === 'downloading' || idmDirectStatus === 'downloading'}
+                              className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-lg text-white/60 hover:text-[#fb6400] transition-colors disabled:opacity-50"
+                            >
+                              {idmDirectStatus === 'downloading' ? '下载中...' : idmDirectStatus === 'done' ? '下载完成 ✓' : `下载 IDM ${idmRelease.version}`}
+                            </button>
+                            {idmDirectStatus === 'downloading' && idmDirectProgress.total > 0 && (
+                              <div className="mt-2 space-y-1">
+                                <div className="flex justify-between text-[10px] text-white/40">
+                                  <span>{formatSize(idmDirectProgress.loaded)} / {formatSize(idmDirectProgress.total)}</span>
+                                  <span>{((idmDirectProgress.loaded / idmDirectProgress.total) * 100).toFixed(1)}%</span>
+                                </div>
+                                <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-white/20 rounded-full transition-all duration-300"
+                                    style={{ width: `${(idmDirectProgress.loaded / idmDirectProgress.total) * 100}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-white/30">正在获取版本信息...</p>
+                      )}
                       <p className="text-[10px] text-white/30 mt-1">安装后需要购买授权或使用试用版</p>
                     </div>
                   </div>
