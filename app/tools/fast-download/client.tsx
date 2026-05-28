@@ -721,12 +721,72 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
 
         {/* 说明 */}
         <div className="glass-card p-6 animate-slide-up" style={{ animationDelay: '100ms' }}>
-          <h3 className="text-white font-semibold mb-3">下载方式说明</h3>
-          <ul className="space-y-2 text-white/50 text-sm">
-            <li>• <strong className="text-white/70">aria2</strong>：开源下载工具，支持多线程/BT/磁力，功能最强。需本地安装并启动 RPC 服务</li>
-            <li>• <strong className="text-white/70">IDM</strong>：Windows 下载管理器，自动多线程。需已安装 IDM 并注册浏览器扩展</li>
-            <li>• <strong className="text-white/70">浏览器</strong>：通过服务器中转分片下载，无需安装软件，但受服务器带宽限制</li>
-          </ul>
+          <h3 className="text-white font-semibold mb-4">三种下载方式对比</h3>
+
+          {/* 对比表格 */}
+          <div className="overflow-x-auto mb-4">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/10">
+                  <th className="text-left text-white/40 py-2 pr-3 font-normal">对比项</th>
+                  <th className="text-center text-white/40 py-2 px-2 font-normal">浏览器</th>
+                  <th className="text-center text-[#fb6400] py-2 px-2 font-normal">aria2</th>
+                  <th className="text-center text-white/40 py-2 px-2 font-normal">IDM</th>
+                </tr>
+              </thead>
+              <tbody className="text-white/60">
+                <tr className="border-b border-white/5">
+                  <td className="py-2 pr-3 text-white/40">需要安装</td>
+                  <td className="text-center py-2 px-2 text-green-400">不需要</td>
+                  <td className="text-center py-2 px-2 text-yellow-400">需要</td>
+                  <td className="text-center py-2 px-2 text-yellow-400">需要</td>
+                </tr>
+                <tr className="border-b border-white/5">
+                  <td className="py-2 pr-3 text-white/40">占用资源</td>
+                  <td className="text-center py-2 px-2 text-green-400">无</td>
+                  <td className="text-center py-2 px-2 text-yellow-400">~50MB 内存</td>
+                  <td className="text-center py-2 px-2 text-yellow-400">~30MB 内存</td>
+                </tr>
+                <tr className="border-b border-white/5">
+                  <td className="py-2 pr-3 text-white/40">下载速度</td>
+                  <td className="text-center py-2 px-2">受服务器限制</td>
+                  <td className="text-center py-2 px-2 text-green-400">跑满带宽</td>
+                  <td className="text-center py-2 px-2 text-green-400">跑满带宽</td>
+                </tr>
+                <tr className="border-b border-white/5">
+                  <td className="py-2 pr-3 text-white/40">多线程</td>
+                  <td className="text-center py-2 px-2">服务器中转</td>
+                  <td className="text-center py-2 px-2 text-green-400">本地直连</td>
+                  <td className="text-center py-2 px-2 text-green-400">本地直连</td>
+                </tr>
+                <tr className="border-b border-white/5">
+                  <td className="py-2 pr-3 text-white/40">BT/磁力</td>
+                  <td className="text-center py-2 px-2 text-red-400">不支持</td>
+                  <td className="text-center py-2 px-2 text-green-400">支持</td>
+                  <td className="text-center py-2 px-2 text-red-400">不支持</td>
+                </tr>
+                <tr className="border-b border-white/5">
+                  <td className="py-2 pr-3 text-white/40">大文件</td>
+                  <td className="text-center py-2 px-2 text-yellow-400">可能内存溢出</td>
+                  <td className="text-center py-2 px-2 text-green-400">磁盘直写</td>
+                  <td className="text-center py-2 px-2 text-green-400">磁盘直写</td>
+                </tr>
+                <tr>
+                  <td className="py-2 pr-3 text-white/40">支持平台</td>
+                  <td className="text-center py-2 px-2">全平台</td>
+                  <td className="text-center py-2 px-2">全平台</td>
+                  <td className="text-center py-2 px-2">仅 Windows</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="space-y-2 text-white/50 text-xs">
+            <p><strong className="text-white/70">浏览器</strong>：零安装直接用，通过服务器中转分片。适合临时下载小文件，受服务器带宽限制，大文件可能卡死浏览器。</p>
+            <p><strong className="text-white/70">aria2</strong>：开源命令行下载器，功能最强。支持 HTTP/FTP/BT/磁力链，本地多线程直连源服务器，速度最快。适合经常下载大文件的用户。</p>
+            <p><strong className="text-white/70">IDM</strong>：Windows 专用下载管理器，自动嗅探网页资源。操作最简单，但仅限 Windows 平台。</p>
+          </div>
+
           <div className="mt-4 p-3 bg-white/5 rounded-lg">
             <p className="text-xs text-white/40 mb-1">aria2 快速启动命令：</p>
             <code className="text-xs text-[#fb6400] break-all">aria2c --enable-rpc --rpc-listen-port=6800 --rpc-allow-origin-all</code>
