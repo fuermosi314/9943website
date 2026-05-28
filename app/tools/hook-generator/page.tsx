@@ -3,6 +3,7 @@ import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState } from 'react';
 import BackButton from '@/components/BackButton';
+import FullscreenButton from '@/components/FullscreenButton';
 import { Platform, ContentType, Hook, GenerateResponse, HistoryRecord } from '@/lib/types';
 import { saveHistory } from '@/lib/storage';
 import TopicInput from '@/components/TopicInput';
@@ -111,6 +112,7 @@ export default function HookGenerator() {
             <h1 className="text-lg font-semibold text-white">爆款开头生成器</h1>
           </div>
         </div>
+        <FullscreenButton />
       </header>
 
       <div className="relative z-10 max-w-4xl mx-auto px-4 pt-20 pb-16">

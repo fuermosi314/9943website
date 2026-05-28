@@ -3,6 +3,7 @@ import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useRef, useEffect, useState, useCallback } from 'react';
 import BackButton from '@/components/BackButton';
+import FullscreenButton from '@/components/FullscreenButton';
 
 // ===== 轻量级 Simplex Noise =====
 class SimplexNoise {
@@ -1637,6 +1638,7 @@ export default function EarthCannonPage() {
             <h1 className="text-lg font-semibold text-white">毁灭地球的电磁炮</h1>
           </div>
         </div>
+        <FullscreenButton />
       </header>
 
       <main className="relative w-full h-screen overflow-hidden">

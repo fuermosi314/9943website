@@ -3,6 +3,7 @@ import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useRef, useCallback } from 'react';
 import BackButton from '@/components/BackButton';
+import FullscreenButton from '@/components/FullscreenButton';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 type OfficeType = 'docx' | 'xlsx' | 'pptx';
@@ -257,6 +258,7 @@ export default function OfficeToPdf() {
             <h1 className="text-lg font-semibold text-white">Office 转 PDF</h1>
           </div>
         </div>
+        <FullscreenButton />
       </header>
 
       <main className="max-w-4xl mx-auto px-6 pt-24 pb-16">

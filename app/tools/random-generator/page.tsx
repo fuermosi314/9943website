@@ -3,6 +3,7 @@ import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useCallback } from 'react';
 import BackButton from '@/components/BackButton';
+import FullscreenButton from '@/components/FullscreenButton';
 
 type Mode = 'number' | 'string' | 'uuid' | 'password';
 
@@ -118,6 +119,7 @@ export default function RandomGenerator() {
             <h1 className="text-lg font-semibold text-white">随机数生成器</h1>
           </div>
         </div>
+        <FullscreenButton />
       </header>
 
       <main className="max-w-4xl mx-auto px-6 pt-24 pb-16">

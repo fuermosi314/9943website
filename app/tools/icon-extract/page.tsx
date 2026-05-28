@@ -3,6 +3,7 @@ import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useRef, useCallback } from 'react';
 import BackButton from '@/components/BackButton';
+import FullscreenButton from '@/components/FullscreenButton';
 
 interface ExtractedIcon {
   width: number;
@@ -547,6 +548,7 @@ export default function IconExtractPage() {
             <h1 className="text-lg font-semibold text-white">图标提取</h1>
           </div>
         </div>
+        <FullscreenButton />
       </header>
 
       <main className="max-w-2xl mx-auto px-6 pt-24 pb-16">

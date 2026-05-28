@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { categories } from '@/lib/tools';
 
 interface CategoryNavProps {
@@ -8,6 +9,12 @@ interface CategoryNavProps {
 }
 
 export default function CategoryNav({ activeCategory, onCategoryChange }: CategoryNavProps) {
+  const activeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }, [activeCategory]);
+
   return (
     <nav className="sticky top-14 z-40 bg-black/30 backdrop-blur-xl border-b border-white/10">
       <div className="max-w-6xl mx-auto px-6">
@@ -15,6 +22,7 @@ export default function CategoryNav({ activeCategory, onCategoryChange }: Catego
           {categories.map((category, index) => (
             <button
               key={category.id}
+              ref={activeCategory === category.id ? activeRef : undefined}
               onClick={() => onCategoryChange(category.id)}
               className={`flex items-center px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-200 ${
                 activeCategory === category.id

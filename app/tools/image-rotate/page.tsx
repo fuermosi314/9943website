@@ -3,6 +3,7 @@ import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import BackButton from '@/components/BackButton';
+import FullscreenButton from '@/components/FullscreenButton';
 
 export default function ImageRotate() {
   useToolHistory('image-rotate');
@@ -133,6 +134,7 @@ export default function ImageRotate() {
             <h1 className="text-lg font-semibold text-white">图片旋转/翻转</h1>
           </div>
         </div>
+        <FullscreenButton />
       </header>
 
       <main className="max-w-4xl mx-auto px-6 pt-24 pb-16">

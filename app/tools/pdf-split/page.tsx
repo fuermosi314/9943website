@@ -3,6 +3,7 @@ import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useRef, useCallback } from 'react';
 import BackButton from '@/components/BackButton';
+import FullscreenButton from '@/components/FullscreenButton';
 import { PDFDocument } from 'pdf-lib';
 import JSZip from 'jszip';
 
@@ -194,6 +195,7 @@ export default function PdfSplit() {
             <h1 className="text-lg font-semibold text-white">PDF 拆分</h1>
           </div>
         </div>
+        <FullscreenButton />
       </header>
 
       <main className="max-w-4xl mx-auto px-6 pt-24 pb-16">

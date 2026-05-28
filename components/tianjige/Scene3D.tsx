@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTianjigeState } from './useTianjigeState';
 import SearchBar from './SearchBar';
 import SceneManager from './SceneManager';
@@ -17,24 +17,6 @@ import FirstGuide from './FirstGuide';
 export default function Scene3D() {
   const state = useTianjigeState();
   const isTouchDevice = useMemo(() => typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0), []);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  // 监听全屏状态变化
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, []);
-
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
-    } else {
-      document.documentElement.requestFullscreen();
-    }
-  };
 
   // ── 键盘快捷键 ─────────────────────────────────────────────
   useEffect(() => {
@@ -116,12 +98,6 @@ export default function Scene3D() {
           className="w-9 h-9 flex items-center justify-center bg-[#1a1a2e]/90 rounded-lg border border-white/20 text-white/70 hover:text-white hover:border-[#fb6400]/30 transition-colors shrink-0 text-sm"
           title={state.cameraMode === 'orbit' ? '切换到上帝视角' : '切换到自由视角'}>
           {state.cameraMode === 'orbit' ? '🔭' : '⬇️'}
-        </button>
-        {/* Fullscreen toggle */}
-        <button onClick={toggleFullscreen}
-          className="w-9 h-9 flex items-center justify-center bg-[#1a1a2e]/90 rounded-lg border border-white/20 text-white/70 hover:text-white hover:border-[#fb6400]/30 transition-colors shrink-0 text-sm"
-          title={isFullscreen ? '退出全屏' : '全屏'}>
-          {isFullscreen ? '🔲' : '⛶'}
         </button>
         {/* Scene switcher */}
         <select

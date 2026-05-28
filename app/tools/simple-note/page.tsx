@@ -3,6 +3,7 @@ import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import BackButton from '@/components/BackButton';
+import FullscreenButton from '@/components/FullscreenButton';
 import {
   type DiaryEntry, type Mood, type PhotoRef,
   addEntry, updateEntry, deleteEntry,
@@ -708,6 +709,7 @@ export default function SimpleNotePage() {
             </svg>
           </button>
         </div>
+        <FullscreenButton />
       </header>
       <main className="max-w-7xl mx-auto px-6 pt-24 pb-16">
         <div className="flex gap-6">

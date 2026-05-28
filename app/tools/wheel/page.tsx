@@ -3,6 +3,7 @@ import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import BackButton from '@/components/BackButton';
+import FullscreenButton from '@/components/FullscreenButton';
 
 // 预设模板
 const presets: Record<string, string[]> = {
@@ -352,6 +353,7 @@ export default function WheelPage() {
             <h1 className="text-lg font-semibold text-white">大转盘</h1>
           </div>
         </div>
+        <FullscreenButton />
       </header>
 
       {/* 主内容区 */}

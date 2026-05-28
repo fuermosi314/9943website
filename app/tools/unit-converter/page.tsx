@@ -3,6 +3,7 @@ import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useMemo } from 'react';
 import BackButton from '@/components/BackButton';
+import FullscreenButton from '@/components/FullscreenButton';
 
 // ============ 类型定义 ============
 type Category = 'length' | 'weight' | 'temperature' | 'area' | 'volume' | 'time';
@@ -209,6 +210,7 @@ export default function UnitConverter() {
             <h1 className="text-lg font-semibold text-white">单位换算</h1>
           </div>
         </div>
+        <FullscreenButton />
       </header>
 
       <main className="max-w-4xl mx-auto px-6 pt-24 pb-16">

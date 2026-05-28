@@ -3,6 +3,7 @@ import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useRef, useCallback } from 'react';
 import BackButton from '@/components/BackButton';
+import FullscreenButton from '@/components/FullscreenButton';
 
 type Format = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/bmp';
 
@@ -122,6 +123,7 @@ export default function ImageConvert() {
             <h1 className="text-lg font-semibold text-white">图片格式转换</h1>
           </div>
         </div>
+        <FullscreenButton />
       </header>
 
       <main className="max-w-4xl mx-auto px-6 pt-24 pb-16">

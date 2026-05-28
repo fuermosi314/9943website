@@ -3,6 +3,7 @@ import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useCallback } from 'react';
 import BackButton from '@/components/BackButton';
+import FullscreenButton from '@/components/FullscreenButton';
 
 interface ParseResult {
   success: boolean;
@@ -135,6 +136,7 @@ export default function VideoUnwatermarkPage() {
             <h1 className="text-lg font-semibold text-white">视频去水印</h1>
           </div>
         </div>
+        <FullscreenButton />
       </header>
 
       <main className="max-w-2xl mx-auto px-6 pt-24 pb-16">

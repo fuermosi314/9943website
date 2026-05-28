@@ -3,6 +3,7 @@ import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useCallback, useRef } from 'react';
 import BackButton from '@/components/BackButton';
+import FullscreenButton from '@/components/FullscreenButton';
 
 interface ProbeResult {
   fileName: string;
@@ -283,6 +284,7 @@ export default function FastDownloadPage() {
             <h1 className="text-lg font-semibold text-white">高速下载</h1>
           </div>
         </div>
+        <FullscreenButton />
       </header>
 
       <main className="max-w-2xl mx-auto px-6 pt-24 pb-16">

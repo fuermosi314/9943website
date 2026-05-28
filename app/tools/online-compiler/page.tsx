@@ -2,6 +2,7 @@
 import { useToolHistory } from '@/lib/useToolHistory';
 
 import BackButton from '@/components/BackButton';
+import FullscreenButton from '@/components/FullscreenButton';
 
 interface CompilerSite {
   name: string;
@@ -223,6 +224,7 @@ export default function OnlineCompilerPage() {
             <h1 className="text-lg font-semibold text-white">在线编译器</h1>
           </div>
         </div>
+        <FullscreenButton />
       </header>
 
       <main className="max-w-2xl mx-auto px-6 pt-24 pb-16">

@@ -2,6 +2,7 @@
 import { useToolHistory } from '@/lib/useToolHistory';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import BackButton from '@/components/BackButton';
+import FullscreenButton from '@/components/FullscreenButton';
 import CategorySelector from '@/components/CategorySelector';
 import DatePicker from '@/components/DatePicker';
 import {
@@ -190,6 +191,7 @@ export default function ConsumablesPage() {
             <span className="text-lg font-bold" style={{ color: '#fb6400' }}>耗知通</span>
           </div>
           <div className="flex-1" />
+          <FullscreenButton />
           <button onClick={() => setShowHelp(true)} className="text-white/50 hover:text-white text-sm">使用说明</button>
         </div>
       </div>

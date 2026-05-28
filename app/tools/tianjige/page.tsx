@@ -3,6 +3,7 @@ import { useToolHistory } from '@/lib/useToolHistory';
 
 import dynamic from 'next/dynamic';
 import BackButton from '@/components/BackButton';
+import FullscreenButton from '@/components/FullscreenButton';
 
 const Scene3D = dynamic(() => import('@/components/tianjige/Scene3D'), {
   ssr: false,
@@ -22,6 +23,8 @@ export default function TianjigePage() {
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center">
           <BackButton toolId="tianjige" />
           <h1 className="text-lg font-bold text-[#fb6400]">天机阁</h1>
+          <div className="flex-1" />
+          <FullscreenButton />
         </div>
       </div>
 

@@ -3,6 +3,7 @@ import { useToolHistory } from '@/lib/useToolHistory';
 
 import { useState, useMemo } from 'react';
 import BackButton from '@/components/BackButton';
+import FullscreenButton from '@/components/FullscreenButton';
 
 type Unit = 'metric' | 'imperial';
 
@@ -65,6 +66,7 @@ export default function BMICalculator() {
             <h1 className="text-lg font-semibold text-white">BMI 计算器</h1>
           </div>
         </div>
+        <FullscreenButton />
       </header>
 
       <main className="max-w-4xl mx-auto px-6 pt-24 pb-16">

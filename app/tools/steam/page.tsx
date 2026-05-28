@@ -2,6 +2,7 @@
 import { useToolHistory } from '@/lib/useToolHistory';
 
 import BackButton from '@/components/BackButton';
+import FullscreenButton from '@/components/FullscreenButton';
 
 const platforms = [
   {
@@ -42,6 +43,7 @@ export default function SteamPage() {
             <h1 className="text-lg font-semibold text-white">Steam 下载</h1>
           </div>
         </div>
+        <FullscreenButton />
       </header>
 
       <main className="max-w-lg mx-auto px-6 pt-24 pb-16">
