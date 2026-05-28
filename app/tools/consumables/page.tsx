@@ -238,7 +238,7 @@ export default function ConsumablesPage() {
           />
 
           {/* 分类筛选 */}
-          <div className="flex flex-wrap gap-2 mt-3">
+          <div className="flex flex-wrap items-center gap-2 mt-3">
             <button
               onClick={() => setFilterCat('all')}
               className={`px-3 py-1 rounded-full text-xs transition-colors ${filterCat === 'all' ? 'bg-[#fb6400] text-white' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
@@ -254,6 +254,13 @@ export default function ConsumablesPage() {
                 {cat.icon} {cat.name}
               </button>
             ))}
+            <CategorySelector
+              toolId="consumables"
+              value=""
+              onChange={() => {}}
+              manageOnly
+              onCategoriesChange={loadCategories}
+            />
           </div>
 
           {/* 排序 */}

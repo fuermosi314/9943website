@@ -8,9 +8,11 @@ interface CategorySelectorProps {
   value: string;
   onChange: (value: string) => void;
   showManage?: boolean;
+  manageOnly?: boolean;
+  onCategoriesChange?: () => void;
 }
 
-export default function CategorySelector({ toolId, value, onChange, showManage = true }: CategorySelectorProps) {
+export default function CategorySelector({ toolId, value, onChange, showManage = true, manageOnly = false, onCategoriesChange }: CategorySelectorProps) {
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [showManager, setShowManager] = useState(false);
   const [editingCat, setEditingCat] = useState<CategoryItem | null>(null);
@@ -34,6 +36,7 @@ export default function CategorySelector({ toolId, value, onChange, showManage =
     setNewName('');
     setNewIcon('📦');
     await loadCategories();
+    onCategoriesChange?.();
   }
 
   async function handleUpdate() {
@@ -43,12 +46,14 @@ export default function CategorySelector({ toolId, value, onChange, showManage =
     setNewName('');
     setNewIcon('📦');
     await loadCategories();
+    onCategoriesChange?.();
   }
 
   async function handleDelete(catId: string) {
     if (confirm('确定删除此分类？')) {
       await deleteCategory(toolId, catId);
       await loadCategories();
+      onCategoriesChange?.();
     }
   }
 
@@ -62,7 +67,7 @@ export default function CategorySelector({ toolId, value, onChange, showManage =
     <div>
       {/* 分类选择按钮 */}
       <div className="flex flex-wrap gap-2">
-        {categories.map(cat => (
+        {!manageOnly && categories.map(cat => (
           <button
             key={cat.id}
             type="button"
@@ -76,13 +81,13 @@ export default function CategorySelector({ toolId, value, onChange, showManage =
             {cat.icon} {cat.name}
           </button>
         ))}
-        {showManage && (
+        {(showManage || manageOnly) && (
           <button
             type="button"
             onClick={() => setShowManager(true)}
             className="px-3 py-1.5 rounded-lg text-sm bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/60 border border-dashed border-white/20"
           >
-            + 管理
+            管理分类
           </button>
         )}
       </div>
