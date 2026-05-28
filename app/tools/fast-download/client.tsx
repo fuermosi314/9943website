@@ -781,10 +781,34 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
             </table>
           </div>
 
-          <div className="space-y-2 text-white/50 text-xs">
-            <p><strong className="text-white/70">浏览器</strong>：零安装直接用，通过服务器中转分片。适合临时下载小文件，受服务器带宽限制，大文件可能卡死浏览器。</p>
-            <p><strong className="text-white/70">aria2</strong>：开源命令行下载器，功能最强。支持 HTTP/FTP/BT/磁力链，本地多线程直连源服务器，速度最快。适合经常下载大文件的用户。</p>
-            <p><strong className="text-white/70">IDM</strong>：Windows 专用下载管理器，自动嗅探网页资源。操作最简单，但仅限 Windows 平台。</p>
+          <div className="space-y-4 text-white/50 text-xs">
+            <div>
+              <p className="text-white/70 font-medium mb-1">aria2 的优势</p>
+              <ul className="space-y-1 ml-3">
+                <li>• 开源免费，无广告无捆绑，社区活跃持续更新</li>
+                <li>• 支持 HTTP/HTTPS/FTP/SFTP/BT/磁力链等多种协议</li>
+                <li>• 本地多线程直连源服务器，不受中转服务器带宽限制，跑满你的带宽</li>
+                <li>• 支持断点续传，下载中断后从上次位置继续</li>
+                <li>• 跨平台：Windows/macOS/Linux/Android 均可使用</li>
+                <li>• 资源占用低，后台静默运行，不影响其他工作</li>
+              </ul>
+            </div>
+            <div>
+              <p className="text-white/70 font-medium mb-1">IDM 的优势</p>
+              <ul className="space-y-1 ml-3">
+                <li>• 自动嗅探浏览器中的下载链接，点击即捕获，无需手动复制</li>
+                <li>• 内置站点抓取功能，可批量下载网页中的所有文件</li>
+                <li>• 自动多线程分割，无需手动配置线程数</li>
+                <li>• 下载完成后自动调用杀毒软件扫描，安全省心</li>
+                <li>• 图形界面操作简单，适合不熟悉命令行的用户</li>
+              </ul>
+            </div>
+            <div>
+              <p className="text-white/70 font-medium mb-1">什么是 BT/磁力？</p>
+              <p className="ml-3">BT（BitTorrent）是一种点对点文件分享技术。与传统下载不同，BT 不是从一台服务器下载整个文件，而是从多个用户那里同时下载文件的不同片段。下载的人越多，速度越快。</p>
+              <p className="ml-3 mt-1">磁力链接（magnet:）是 BT 的一种链接形式，通过文件的唯一哈希值来定位资源，不需要依赖种子文件服务器。即使原始发布者下架了文件，只要网络中还有人持有该文件的片段，就可以继续下载。</p>
+              <p className="ml-3 mt-1">简单说：普通下载是从一个地方拿文件，BT/磁力是从很多人那里拼文件，人越多越快。aria2 是少数同时支持普通下载和 BT/磁力的工具。</p>
+            </div>
           </div>
 
           <div className="mt-4 p-3 bg-white/5 rounded-lg">
