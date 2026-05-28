@@ -39,7 +39,7 @@ export default function FeedbackPage() {
   return (
     <div className="min-h-screen relative z-10">
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-black/40 backdrop-blur-xl border-b border-white/10">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-black/40 backdrop-blur-xl safe-area-top border-b border-white/10">
         <div className="max-w-2xl mx-auto px-6 py-3 flex items-center">
           <Link
             href="/"

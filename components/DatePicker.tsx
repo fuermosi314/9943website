@@ -56,13 +56,17 @@ export default function DatePicker({ value, onChange, showTime = false, placehol
 
   useEffect(() => {
     if (!open) return;
-    const handler = (e: MouseEvent) => {
+    const handler = (e: Event) => {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
   }, [open]);
 
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
@@ -113,7 +117,7 @@ export default function DatePicker({ value, onChange, showTime = false, placehol
       </button>
 
       {open && (
-        <div ref={panelRef} className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div ref={panelRef} className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm" onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
           <div className="bg-[#1a1a2e] rounded-t-2xl sm:rounded-2xl w-full sm:max-w-xs mx-0 sm:mx-4 border border-white/10 shadow-2xl">
             {/* Header */}
             <div className="p-4 border-b border-white/10 flex items-center justify-between">
@@ -145,7 +149,7 @@ export default function DatePicker({ value, onChange, showTime = false, placehol
                     key={day}
                     type="button"
                     onClick={() => selectDay(day)}
-                    className={`h-9 rounded-lg text-sm transition-colors ${
+                    className={`h-10 rounded-lg text-sm transition-colors ${
                       isSelected
                         ? 'bg-[#fb6400] text-white font-medium'
                         : isToday

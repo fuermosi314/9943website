@@ -73,7 +73,7 @@ export default function CategorySelector({ toolId, value, onChange, showManage =
             key={cat.id}
             type="button"
             onClick={() => onChange(cat.name)}
-            className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+            className={`px-3 py-2.5 rounded-lg text-sm transition-colors ${
               value === cat.name
                 ? 'bg-[#fb6400] text-white'
                 : 'bg-white/10 text-white/60 hover:bg-white/20'
@@ -86,7 +86,7 @@ export default function CategorySelector({ toolId, value, onChange, showManage =
           <button
             type="button"
             onClick={() => setShowManager(true)}
-            className="px-3 py-1.5 rounded-lg text-sm bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/60 border border-dashed border-white/20"
+            className="px-3 py-2.5 rounded-lg text-sm bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/60 border border-dashed border-white/20"
           >
             管理分类
           </button>
@@ -99,7 +99,7 @@ export default function CategorySelector({ toolId, value, onChange, showManage =
           <div className="bg-[#1a1a2e] rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[80vh] overflow-y-auto">
             <div className="p-4 border-b border-white/10 flex items-center justify-between">
               <h3 className="text-white font-bold">管理分类</h3>
-              <button onClick={() => { setShowManager(false); setEditingCat(null); setNewName(''); }} className="text-white/50 hover:text-white text-xl">×</button>
+              <button onClick={() => { setShowManager(false); setEditingCat(null); setNewName(''); }} className="w-10 h-10 flex items-center justify-center text-white/50 hover:text-white text-xl">×</button>
             </div>
 
             {/* 分类列表 */}

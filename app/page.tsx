@@ -327,7 +327,7 @@ function HomeContent() {
         onCategoryChange={handleCategoryChange}
       />
 
-      <main className="max-w-6xl mx-auto px-6 pt-28 pb-16">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-28 pb-16">
         {/* Hero Section - 模仿 4399 风格 */}
         <div className="text-center mb-12 animate-fade-in">
           <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight">

@@ -230,3 +230,10 @@ html\:fullscreen .max-w-sm,
 .safe-area-right {
   padding-right: env(safe-area-inset-right);
 }
+
+/* Prevent iOS Safari auto-zoom on input focus */
+@media (max-width: 768px) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}

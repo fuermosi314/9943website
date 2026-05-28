@@ -79,7 +79,7 @@ export default function ToolCard({
           {tool.name}
         </h3>
 
-        <p className="text-[10px] sm:text-xs text-white/50 text-center leading-relaxed line-clamp-2 mt-auto">
+        <p className="text-xs text-white/50 text-center leading-relaxed line-clamp-2 mt-auto">
           {tool.description}
         </p>
       </div>

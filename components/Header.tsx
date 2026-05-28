@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import FullscreenButton from './FullscreenButton';
 
@@ -13,6 +13,12 @@ export default function Header({ onSearch }: HeaderProps) {
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const debouncedSearch = useCallback((value: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => onSearch(value), 150);
+  }, [onSearch]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -40,7 +46,7 @@ export default function Header({ onSearch }: HeaderProps) {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+      className={`fixed top-0 left-0 right-0 z-50 safe-area-top transition-all duration-300 ${
         scrolled
           ? 'bg-[#1a0a00]/90 backdrop-blur-md shadow-lg shadow-orange-500/10'
           : 'bg-transparent'
@@ -78,7 +84,7 @@ export default function Header({ onSearch }: HeaderProps) {
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
-                onSearch(e.target.value);
+                debouncedSearch(e.target.value);
               }}
               placeholder="搜索工具..."
               className="w-full px-4 py-2.5 bg-white/10 border border-white/20 rounded-full text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-[#fb6400] focus:bg-white/15 transition-all duration-300"
@@ -105,7 +111,7 @@ export default function Header({ onSearch }: HeaderProps) {
                   value={query}
                   onChange={(e) => {
                     setQuery(e.target.value);
-                    onSearch(e.target.value);
+                    debouncedSearch(e.target.value);
                   }}
                   placeholder="搜索工具..."
                   className="w-full px-4 py-2 pr-10 bg-white/10 border border-white/20 rounded-full text-sm text-white placeholder:text-white/40 focus:outline-none focus:border-[#fb6400] transition-all duration-300"
