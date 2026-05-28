@@ -74,7 +74,7 @@ export default function Scene3D() {
       )}
 
       {/* Three.js canvas container */}
-      <div ref={state.containerRef} className="w-full h-full"
+      <div ref={state.containerRef} className="w-full h-full" style={{ touchAction: 'none' }}
         onPointerDown={state.handlePointerDown}
         onPointerMove={state.handlePointerMove}
         onContextMenu={(e) => e.preventDefault()}

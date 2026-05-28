@@ -248,14 +248,14 @@ export default function FastDownloadPage() {
 
       // 触发浏览器下载
       const blob = new Blob([merged]);
-      const downloadUrl = URL.createObjectURL(blob);
+      const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = downloadUrl;
+      a.href = blobUrl;
       a.download = probeResult.fileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(downloadUrl);
+      URL.revokeObjectURL(blobUrl);
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         setError(`下载失败: ${(err as Error).message}`);

@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -6,6 +6,13 @@ export const metadata: Metadata = {
   description: '为你精心准备的效率工具集，包含图片压缩、二维码生成、字数统计等实用工具，让工作更轻松。',
   keywords: '在线工具, 效率工具, 图片压缩, 二维码生成, 字数统计',
   icons: { icon: '/favicon.png' },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#0a0a1a',
 };
 
 export default function RootLayout({

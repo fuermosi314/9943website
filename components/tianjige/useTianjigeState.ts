@@ -71,6 +71,7 @@ export function useTianjigeState() {
   // Pinch-to-zoom refs (topdown mode)
   const pinchStartDist = useRef<number>(0);
   const pinchStartHeight = useRef<number>(0);
+  const isPinching = useRef(false);
 
   // ── Undo / Redo refs ──────────────────────────────────────────────
   const historyRef = useRef<Scene[][]>([]);
@@ -1134,6 +1135,7 @@ export function useTianjigeState() {
 
   // ── Pointer event handlers for canvas ───────────────────────────
   const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (isPinching.current) return;
     if (showFurniturePicker || showFurnitureEditor || showItemEditor || showSceneManager || showStats) return;
 
     pointerDownPos.current = { x: e.clientX, y: e.clientY };
@@ -1182,11 +1184,12 @@ export function useTianjigeState() {
   }, [isMovingFurniture, showFurniturePicker, showFurnitureEditor, showItemEditor, showSceneManager, showStats]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (isPinching.current) return;
     // Movement threshold detection
     if (pointerDownPos.current && !pointerMoved.current) {
       const dx = e.clientX - pointerDownPos.current.x;
       const dy = e.clientY - pointerDownPos.current.y;
-      if (Math.sqrt(dx * dx + dy * dy) > 8) {
+      if (Math.sqrt(dx * dx + dy * dy) > 12) {
         pointerMoved.current = true;
       }
     }
@@ -1275,8 +1278,8 @@ export function useTianjigeState() {
 
     if (draggingFurniture.current) {
       commitDragPosition();
-      // Re-enable controls after furniture drag
-      if (controlsRef.current && isMovingFurniture) controlsRef.current.enabled = true;
+      // Re-enable controls after furniture drag (only in orbit mode — topdown keeps controls disabled)
+      if (controlsRef.current && isMovingFurniture && cameraModeRef.current !== 'topdown') controlsRef.current.enabled = true;
     } else if (!pointerMoved.current && !isMovingFurniture) {
       handleClick(e);
     }
@@ -1325,12 +1328,17 @@ export function useTianjigeState() {
       return Math.sqrt(dx * dx + dy * dy);
     };
     const onTouchStart = (e: TouchEvent) => {
-      if (cameraModeRef.current !== 'topdown' || e.touches.length < 2) return;
-      pinchStartDist.current = getTouchDist(e.touches);
-      pinchStartHeight.current = cameraRef.current?.position.y ?? 10;
+      if (e.touches.length >= 2) {
+        isPinching.current = true;
+        if (cameraModeRef.current === 'topdown') {
+          pinchStartDist.current = getTouchDist(e.touches);
+          pinchStartHeight.current = cameraRef.current?.position.y ?? 10;
+        }
+      }
     };
     const onTouchMove = (e: TouchEvent) => {
-      if (cameraModeRef.current !== 'topdown' || e.touches.length < 2) return;
+      if (!isPinching.current || e.touches.length < 2) return;
+      if (cameraModeRef.current !== 'topdown') return;
       e.preventDefault();
       const camera = cameraRef.current;
       if (!camera) return;
@@ -1341,11 +1349,18 @@ export function useTianjigeState() {
       const newY = Math.max(minH, Math.min(maxH, pinchStartHeight.current * ratio));
       setTopdownPosition(camera, camera.position.x, newY, camera.position.z);
     };
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        isPinching.current = false;
+      }
+    };
     container.addEventListener('touchstart', onTouchStart, { passive: true });
     container.addEventListener('touchmove', onTouchMove, { passive: false });
+    container.addEventListener('touchend', onTouchEnd, { passive: true });
     return () => {
       container.removeEventListener('touchstart', onTouchStart);
       container.removeEventListener('touchmove', onTouchMove);
+      container.removeEventListener('touchend', onTouchEnd);
     };
   }, []);
 

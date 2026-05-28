@@ -36,7 +36,7 @@ export default function FullscreenButton({ className = '', showHint = false }: F
     <div className={`relative inline-flex items-center ${className}`}>
       <button
         onClick={toggle}
-        className="flex items-center text-white/60 hover:text-[#fb6400] transition-colors"
+        className="flex items-center justify-center w-10 h-10 text-white/60 hover:text-[#fb6400] transition-colors"
         title={isFullscreen ? '退出全屏' : '全屏'}
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

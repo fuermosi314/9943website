@@ -52,7 +52,7 @@ export default function ToolCard({
       {/* 收藏按钮 */}
       <button
         onClick={handleFavoriteClick}
-        className="absolute top-2 right-2 z-10 p-1.5 rounded-full transition-all duration-200 hover:scale-110"
+        className="absolute top-1 right-1 z-10 w-10 h-10 flex items-center justify-center rounded-full transition-all duration-200 hover:scale-110"
         title={isFavorite ? '取消收藏' : '收藏'}
       >
         <svg

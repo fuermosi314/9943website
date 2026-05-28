@@ -125,7 +125,7 @@ export default function Header({ onSearch }: HeaderProps) {
           ) : (
             <button
               onClick={toggleSearch}
-              className="w-9 h-9 bg-[#fb6400] rounded-full flex items-center justify-center hover:bg-[#ff8c00] transition-colors"
+              className="w-10 h-10 bg-[#fb6400] rounded-full flex items-center justify-center hover:bg-[#ff8c00] transition-colors"
             >
               <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -135,9 +135,9 @@ export default function Header({ onSearch }: HeaderProps) {
         </div>
 
         {/* 右侧 */}
-        <div className={`flex items-center space-x-3 ${searchOpen ? 'hidden sm:flex' : ''}`}>
+        <div className={`flex items-center space-x-3`}>
           <FullscreenButton showHint />
-          <div className="hidden md:flex items-center space-x-2">
+          <div className={`hidden md:flex items-center space-x-2 ${searchOpen ? 'hidden' : ''}`}>
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
             <span className="text-xs text-white/40">在线</span>
           </div>

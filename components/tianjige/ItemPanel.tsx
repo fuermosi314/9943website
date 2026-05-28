@@ -130,16 +130,16 @@ export default function ItemPanel({ show, selectedFurniture, onClose, onOpenItem
         <h2 className="text-white font-bold">{FURNITURE_DEFAULTS[selectedFurniture.type].emoji} {selectedFurniture.name}</h2>
         <div className="flex items-center gap-1">
           <button onClick={() => onEditFurniture(selectedFurniture)}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-[#fb6400]/30 text-white/70 hover:text-white text-sm transition-colors"
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-[#fb6400]/30 text-white/70 hover:text-white text-sm transition-colors"
             title="编辑家具">✏️</button>
           <button onClick={() => { onMoveFurniture(selectedFurniture); onClose(); }}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-[#fb6400]/30 text-white/70 hover:text-white text-sm transition-colors"
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-[#fb6400]/30 text-white/70 hover:text-white text-sm transition-colors"
             title="移动家具">↕️</button>
           <button onClick={() => onDeleteFurniture(selectedFurniture)}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-red-500/50 text-white/70 hover:text-red-400 text-sm transition-colors"
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-red-500/50 text-white/70 hover:text-red-400 text-sm transition-colors"
             title="删除家具">🗑️</button>
           <button onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 hover:bg-red-500/50 text-white/70 hover:text-white text-lg transition-colors">&times;</button>
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-red-500/50 text-white/70 hover:text-white text-lg transition-colors">&times;</button>
         </div>
       </div>
 
@@ -148,7 +148,7 @@ export default function ItemPanel({ show, selectedFurniture, onClose, onOpenItem
         <div className="flex gap-1">
           {SORT_OPTIONS.map(opt => (
             <button key={opt.key} onClick={() => setSortBy(opt.key)}
-              className={`px-2 py-1 text-xs rounded-lg transition-colors ${
+              className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
                 sortBy === opt.key
                   ? 'bg-[#fb6400] text-white'
                   : 'text-white/40 hover:text-white hover:bg-white/10'
