@@ -4,11 +4,13 @@ import { useToolHistory } from '@/lib/useToolHistory';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
+import { saveDownloadState, getDownloadState, deleteDownloadState } from '@/lib/download-db';
 
 interface ProbeResult {
   fileName: string;
   fileSize: number;
   supportsRange: boolean;
+  supportsCors: boolean;
   contentType: string;
   error?: string;
 }
@@ -22,6 +24,40 @@ interface ChunkProgress {
 
 const THREAD_OPTIONS = [1, 2, 4, 8, 16, 32];
 const DEFAULT_THREADS = 8;
+
+// GitHub 镜像代理列表
+const GITHUB_MIRRORS = [
+  { name: 'ghproxy', prefix: 'https://mirror.ghproxy.com/' },
+  { name: 'gh-proxy', prefix: 'https://gh-proxy.com/' },
+];
+
+function isGitHubReleasesUrl(u: string): boolean {
+  return /^https?:\/\/github\.com\/[^/]+\/[^/]+\/releases\/download\//.test(u);
+}
+
+function getMirrorUrls(u: string): { name: string; url: string }[] {
+  return GITHUB_MIRRORS.map(m => ({ name: m.name, url: m.prefix + u }));
+}
+
+// 测试镜像，返回最快 URL（失败返回原始 URL）
+async function resolveBestMirror(u: string): Promise<string> {
+  if (!isGitHubReleasesUrl(u)) return u;
+  const mirrors = getMirrorUrls(u);
+  const candidates = [{ name: '原始', url: u }, ...mirrors];
+  const results: { url: string; time: number }[] = [];
+  await Promise.all(candidates.map(async (c) => {
+    try {
+      const t = Date.now();
+      const r = await fetch(c.url, { method: 'HEAD', redirect: 'follow', signal: AbortSignal.timeout(5000) });
+      if (r.ok || r.status === 302 || r.status === 301) {
+        results.push({ url: c.url, time: Date.now() - t });
+      }
+    } catch {}
+  }));
+  if (results.length === 0) return u;
+  results.sort((a, b) => a.time - b.time);
+  return results[0].url;
+}
 
 type DownloadMethod = 'aria2' | 'idm' | 'browser';
 
@@ -53,9 +89,25 @@ export default function FastDownloadPage() {
   const abortRef = useRef<AbortController | null>(null);
   const speedRef = useRef({ lastTime: Date.now(), lastLoaded: 0 });
 
+  // 自动测速 & 断点续传
+  const [autoThreadCount, setAutoThreadCount] = useState<number | null>(null);
+  const [speedTesting, setSpeedTesting] = useState(false);
+  const [speedTestResult, setSpeedTestResult] = useState<{ best: number; speeds: Record<number, number> } | null>(null);
+  // 自动选择的下载通道: aria2 | cors | proxy
+  const [autoChannel, setAutoChannel] = useState<'aria2' | 'cors' | 'proxy'>('proxy');
+  // 最终使用的下载 URL（可能是镜像）
+  const [bestUrl, setBestUrl] = useState('');
+  const [mirrorTesting, setMirrorTesting] = useState(false);
+  const [resumeState, setResumeState] = useState<{
+    url: string;
+    fileName: string;
+    fileSize: number;
+    threadCount: number;
+    completedChunks: boolean[];
+    chunkBuffers: ArrayBuffer[];
+  } | null>(null);
+
   // 下载方式
-  const [showDetails, setShowDetails] = useState(false);
-  const [showIdmTutorial, setShowIdmTutorial] = useState(false);
   const [aria2Release, setAria2Release] = useState<{
     version: string;
     win64: { url: string; name: string; size: number } | null;
@@ -75,6 +127,7 @@ export default function FastDownloadPage() {
   const [aria2Port, setAria2Port] = useState('6800');
   const [aria2Secret, setAria2Secret] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const [showAria2Intro, setShowAria2Intro] = useState(false);
 
   // 从 localStorage 恢复配置（客户端挂载后）
   useEffect(() => {
@@ -101,31 +154,139 @@ export default function FastDownloadPage() {
     setSuccess('');
   };
 
-  const handleProbe = useCallback(async () => {
-    if (!url.trim()) return;
-    setError('');
-    setSuccess('');
-    setProbeResult(null);
-    setProbing(true);
+  // 自动测速：测试不同线程数的下载速度，选最快的
+  // direct=true 时浏览器直连（CORS），false 时走服务器代理
+  const runSpeedTest = useCallback(async (downloadUrl: string, fileSize: number, direct: boolean) => {
+    if (fileSize < 1024 * 1024) {
+      setAutoThreadCount(4);
+      return;
+    }
+
+    setSpeedTesting(true);
+    setSpeedTestResult(null);
+
+    const TEST_CHUNK_SIZE = 512 * 1024;
+    const threadOptions = [1, 2, 4, 8, 16, 32];
+    const speeds: Record<number, number> = {};
 
     try {
-      const res = await fetch('/api/fast-download/probe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url.trim() }),
-      });
-      const data = await res.json();
-      if (data.error) {
-        setError(data.error);
+      for (const threads of threadOptions) {
+        if (threads * TEST_CHUNK_SIZE > fileSize) break;
+
+        const chunkPerThread = Math.ceil(TEST_CHUNK_SIZE / threads);
+        const start = Date.now();
+
+        await Promise.all(
+          Array.from({ length: threads }, (_, i) => {
+            const chunkStart = i * chunkPerThread;
+            const chunkEnd = Math.min(chunkStart + chunkPerThread - 1, TEST_CHUNK_SIZE - 1);
+            if (chunkStart >= TEST_CHUNK_SIZE) return Promise.resolve();
+
+            const fetchPromise = direct
+              ? fetch(downloadUrl, { headers: { Range: `bytes=${chunkStart}-${chunkEnd}` } })
+              : fetch('/api/fast-download/download', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ url: downloadUrl, start: chunkStart, end: chunkEnd }),
+                });
+
+            return fetchPromise.then(async (res) => {
+              const reader = res.body?.getReader();
+              if (!reader) return;
+              while (true) {
+                const { done } = await reader.read();
+                if (done) break;
+              }
+            });
+          })
+        );
+
+        const elapsed = (Date.now() - start) / 1000;
+        speeds[threads] = TEST_CHUNK_SIZE / elapsed;
+      }
+
+      let bestThreads = 1;
+      let bestSpeed = 0;
+      for (const [t, s] of Object.entries(speeds)) {
+        if (s > bestSpeed) {
+          bestSpeed = s;
+          bestThreads = Number(t);
+        }
+      }
+
+      if (speeds[16] && speeds[8] && speeds[16] < speeds[8] * 1.2) {
+        bestThreads = Math.min(bestThreads, 8);
+      }
+
+      setSpeedTestResult({ best: bestThreads, speeds });
+      setAutoThreadCount(bestThreads);
+      setThreadCount(bestThreads);
+    } catch {
+      setAutoThreadCount(DEFAULT_THREADS);
+    } finally {
+      setSpeedTesting(false);
+    }
+  }, []);
+
+  // 检查是否有未完成的下载（断点续传）
+  const checkResume = useCallback(async (downloadUrl: string) => {
+    try {
+      const state = await getDownloadState(downloadUrl);
+      if (state && state.completedChunks.some(c => c) && !state.completedChunks.every(c => c)) {
+        setResumeState({
+          url: state.url,
+          fileName: state.fileName,
+          fileSize: state.fileSize,
+          threadCount: state.threadCount,
+          completedChunks: state.completedChunks,
+          chunkBuffers: state.chunkBuffers,
+        });
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  // GitHub 镜像测速：测试原链接和镜像，选最快的
+  const testGitHubMirrors = useCallback(async (originalUrl: string) => {
+    setMirrorTesting(true);
+    const mirrors = getMirrorUrls(originalUrl);
+    const candidates = [{ name: '原始链接', url: originalUrl }, ...mirrors];
+    const speeds: { name: string; url: string; speed: number }[] = [];
+
+    try {
+      // 并行测试所有候选源
+      await Promise.all(candidates.map(async (candidate) => {
+        try {
+          const start = Date.now();
+          const res = await fetch(candidate.url, {
+            method: 'HEAD',
+            redirect: 'follow',
+            signal: AbortSignal.timeout(8000),
+          });
+          const elapsed = (Date.now() - start) / 1000;
+          // HEAD 请求成功就算可用，用响应时间作为速度指标（越小越好）
+          if (res.ok || res.status === 302 || res.status === 301) {
+            speeds.push({ name: candidate.name, url: candidate.url, speed: 1 / elapsed });
+          }
+        } catch { /* 该源不可用 */ }
+      }));
+
+      if (speeds.length > 0) {
+        // 按速度排序，选最快的
+        speeds.sort((a, b) => b.speed - a.speed);
+        const fastest = speeds[0];
+        setBestUrl(fastest.url);
+        if (fastest.name !== '原始链接') {
+          setSuccess(`已自动切换到 ${fastest.name} 镜像（更快）`);
+        }
       } else {
-        setProbeResult(data);
+        setBestUrl(originalUrl);
       }
     } catch {
-      setError('检测失败，请检查链接是否正确');
+      setBestUrl(originalUrl);
     } finally {
-      setProbing(false);
+      setMirrorTesting(false);
     }
-  }, [url]);
+  }, []);
 
   // aria2 RPC 调用
   const aria2Rpc = useCallback(async (method: string, params: unknown[]) => {
@@ -157,10 +318,67 @@ export default function FastDownloadPage() {
     }
   }, [aria2Rpc]);
 
-  // 方法切换时检测 aria2
+  // 探测链接（在 checkResume、runSpeedTest、aria2Status 之后定义，因为依赖它们）
+  const handleProbe = useCallback(async () => {
+    if (!url.trim()) return;
+    setError('');
+    setSuccess('');
+    setProbeResult(null);
+    setProbing(true);
+
+    try {
+      const res = await fetch('/api/fast-download/probe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: url.trim() }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setError(data.error);
+      } else {
+        setProbeResult(data);
+        setResumeState(null);
+        setSpeedTestResult(null);
+        setAutoThreadCount(null);
+        setBestUrl('');
+        checkResume(url.trim());
+
+        // GitHub releases 链接：自动测速镜像
+        const trimmedUrl = url.trim();
+        if (isGitHubReleasesUrl(trimmedUrl)) {
+          testGitHubMirrors(trimmedUrl);
+        } else {
+          setBestUrl(trimmedUrl);
+        }
+
+        // 自动选择最优通道
+        if (aria2Status === 'ok') {
+          setAutoChannel('aria2');
+          setMethod('aria2');
+        } else if (data.supportsCors && data.supportsRange) {
+          setAutoChannel('cors');
+          setMethod('browser');
+          runSpeedTest(url.trim(), data.fileSize, true); // true = CORS 直连测速
+        } else if (data.supportsRange) {
+          setAutoChannel('proxy');
+          setMethod('browser');
+          runSpeedTest(url.trim(), data.fileSize, false); // false = 代理测速
+        } else {
+          setAutoChannel('proxy');
+          setMethod('browser');
+        }
+      }
+    } catch {
+      setError('检测失败，请检查链接是否正确');
+    } finally {
+      setProbing(false);
+    }
+  }, [url, method, checkResume, runSpeedTest, aria2Status, testGitHubMirrors]);
+
+  // 页面加载时自动检测 aria2
   useEffect(() => {
-    if (method === 'aria2') checkAria2();
-  }, [method, checkAria2]);
+    checkAria2();
+  }, [checkAria2]);
 
   // 获取 aria2 最新版本信息
   const fetchAria2Release = useCallback(async () => {
@@ -172,19 +390,21 @@ export default function FastDownloadPage() {
     } catch { /* ignore */ }
   }, [aria2Release]);
 
-  // aria2 选中时自动获取版本信息
+  // aria2 未连接时自动获取版本信息（用于安装引导）
   useEffect(() => {
-    if (method === 'aria2' && aria2Status === 'error') fetchAria2Release();
-  }, [method, aria2Status, fetchAria2Release]);
+    if (aria2Status === 'error') fetchAria2Release();
+  }, [aria2Status, fetchAria2Release]);
 
-  // 多线程下载 aria2 安装包
+  // 多线程下载 aria2 安装包（自动选择最快镜像）
   const downloadAria2Pkg = useCallback(async (asset: { url: string; name: string; size: number }) => {
     setAria2DlStatus('downloading');
     setAria2DlProgress({ loaded: 0, total: asset.size });
+    const downloadUrl = await resolveBestMirror(asset.url);
     const fileSize = asset.size;
     const threads = 8;
     const chunkSize = Math.ceil(fileSize / threads);
     const chunkLoaded = new Array(threads).fill(0);
+    const maxRetry = 3;
 
     try {
       const buffers: (ArrayBuffer | null)[] = new Array(threads).fill(null);
@@ -195,34 +415,43 @@ export default function FastDownloadPage() {
           const end = Math.min(start + chunkSize - 1, fileSize - 1);
           if (start >= fileSize) return;
 
-          const res = await fetch('/api/fast-download/download', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: asset.url, start, end }),
-          });
+          for (let attempt = 0; attempt < maxRetry; attempt++) {
+            try {
+              const res = await fetch('/api/fast-download/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: downloadUrl, start, end }),
+                signal: AbortSignal.timeout(60000),
+              });
 
-          if (!res.ok) throw new Error(`分片 ${i + 1} 失败`);
-          const reader = res.body?.getReader();
-          if (!reader) throw new Error('无法读取响应流');
+              if (!res.ok) throw new Error(`分片 ${i + 1} HTTP ${res.status}`);
+              const reader = res.body?.getReader();
+              if (!reader) throw new Error('无法读取响应流');
 
-          const parts: Uint8Array[] = [];
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            parts.push(value);
-            chunkLoaded[i] += value.byteLength;
-            const total = chunkLoaded.reduce((s, c) => s + c, 0);
-            setAria2DlProgress({ loaded: total, total: fileSize });
+              const parts: Uint8Array[] = [];
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                parts.push(value);
+                chunkLoaded[i] += value.byteLength;
+                const total = chunkLoaded.reduce((s, c) => s + c, 0);
+                setAria2DlProgress({ loaded: total, total: fileSize });
+              }
+
+              const totalLen = parts.reduce((s, p) => s + p.byteLength, 0);
+              const merged = new Uint8Array(totalLen);
+              let offset = 0;
+              for (const part of parts) {
+                merged.set(part, offset);
+                offset += part.byteLength;
+              }
+              buffers[i] = merged.buffer;
+              break; // success
+            } catch {
+              if (attempt === maxRetry - 1) throw new Error(`分片 ${i + 1} 重试 ${maxRetry} 次后失败`);
+              await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+            }
           }
-
-          const totalLen = parts.reduce((s, p) => s + p.byteLength, 0);
-          const merged = new Uint8Array(totalLen);
-          let offset = 0;
-          for (const part of parts) {
-            merged.set(part, offset);
-            offset += part.byteLength;
-          }
-          buffers[i] = merged.buffer;
         })
       );
 
@@ -245,10 +474,9 @@ export default function FastDownloadPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
       setAria2DlStatus('done');
-    } catch {
+    } catch (err) {
       setAria2DlStatus('idle');
-      setAria2DlProgress({ loaded: 0, total: 0 });
-      setError('aria2 下载失败，请重试');
+      setError(`aria2 下载失败: ${(err as Error).message}，请点击重试`);
     }
   }, []);
 
@@ -262,10 +490,10 @@ export default function FastDownloadPage() {
     } catch { /* ignore */ }
   }, [idmRelease]);
 
-  // IDM 选中时自动获取下载链接
+  // 页面加载时获取 IDM 下载链接（用于设置中的安装引导）
   useEffect(() => {
-    if (method === 'idm') fetchIdmRelease();
-  }, [method, fetchIdmRelease]);
+    fetchIdmRelease();
+  }, [fetchIdmRelease]);
 
   // 多线程下载 IDM 安装包
   const downloadIdmPkg = useCallback(async () => {
@@ -354,53 +582,62 @@ export default function FastDownloadPage() {
     }
   }, [idmRelease]);
 
-  // 原链接直连下载 aria2（不经服务器中转）
+  // 原链接直连下载 aria2（不经服务器中转，自动镜像加速 + 重试）
   const downloadAria2Direct = useCallback(async (asset: { url: string; name: string; size: number }) => {
     setAria2DirectStatus('downloading');
     setAria2DirectProgress({ loaded: 0, total: asset.size });
+    const downloadUrl = await resolveBestMirror(asset.url);
+    const maxRetry = 3;
 
-    try {
-      const res = await fetch(asset.url);
-      if (!res.ok) throw new Error(`请求失败: ${res.status}`);
+    for (let attempt = 0; attempt < maxRetry; attempt++) {
+      try {
+        const res = await fetch(downloadUrl, { signal: AbortSignal.timeout(60000) });
+        if (!res.ok) throw new Error(`请求失败: ${res.status}`);
 
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error('无法读取响应流');
+        const reader = res.body?.getReader();
+        if (!reader) throw new Error('无法读取响应流');
 
-      const totalSize = Number(res.headers.get('content-length')) || asset.size;
-      setAria2DirectProgress({ loaded: 0, total: totalSize });
+        const totalSize = Number(res.headers.get('content-length')) || asset.size;
+        setAria2DirectProgress({ loaded: 0, total: totalSize });
 
-      const parts: Uint8Array[] = [];
-      let loaded = 0;
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        parts.push(value);
-        loaded += value.byteLength;
-        setAria2DirectProgress({ loaded, total: totalSize });
+        const parts: Uint8Array[] = [];
+        let loaded = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          parts.push(value);
+          loaded += value.byteLength;
+          setAria2DirectProgress({ loaded, total: totalSize });
+        }
+
+        const totalLen = parts.reduce((s, p) => s + p.byteLength, 0);
+        const merged = new Uint8Array(totalLen);
+        let offset = 0;
+        for (const part of parts) {
+          merged.set(part, offset);
+          offset += part.byteLength;
+        }
+
+        const blob = new Blob([merged]);
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = asset.name;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+        setAria2DirectStatus('done');
+        return; // success
+      } catch {
+        if (attempt === maxRetry - 1) {
+          setAria2DirectStatus('idle');
+          setAria2DirectProgress({ loaded: 0, total: 0 });
+          setError(`原链接下载失败（重试 ${maxRetry} 次），请用加速下载或手动下载`);
+          return;
+        }
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
       }
-
-      const totalLen = parts.reduce((s, p) => s + p.byteLength, 0);
-      const merged = new Uint8Array(totalLen);
-      let offset = 0;
-      for (const part of parts) {
-        merged.set(part, offset);
-        offset += part.byteLength;
-      }
-
-      const blob = new Blob([merged]);
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = asset.name;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-      setAria2DirectStatus('done');
-    } catch {
-      setAria2DirectStatus('idle');
-      setAria2DirectProgress({ loaded: 0, total: 0 });
-      setError('原链接下载失败，请重试');
     }
   }, []);
 
@@ -457,7 +694,7 @@ export default function FastDownloadPage() {
 
   const handleDownload = useCallback(async () => {
     if (!probeResult) return;
-    const downloadUrl = url.trim();
+    const downloadUrl = bestUrl || url.trim();
     setError('');
     setSuccess('');
 
@@ -483,7 +720,7 @@ export default function FastDownloadPage() {
       return;
     }
 
-    // 浏览器多线程下载
+    // 浏览器多线程下载（支持断点续传）
     if (!probeResult.supportsRange) {
       window.open(downloadUrl, '_blank');
       return;
@@ -497,18 +734,55 @@ export default function FastDownloadPage() {
 
     const fileSize = probeResult.fileSize;
     const chunkSize = Math.ceil(fileSize / threads);
+
+    // 初始化分片状态（支持续传：从 resumeState 恢复已完成的分片）
     const initChunks: ChunkProgress[] = [];
+    const buffers: (ArrayBuffer | null)[] = new Array(threads).fill(null);
+    let initialLoaded = 0;
+
     for (let i = 0; i < threads; i++) {
       const start = i * chunkSize;
       const end = Math.min(start + chunkSize - 1, fileSize - 1);
       if (start >= fileSize) break;
-      initChunks.push({ id: i, loaded: 0, total: end - start + 1, done: false });
+      const chunkTotal = end - start + 1;
+
+      if (resumeState && resumeState.completedChunks[i]) {
+        // 此分片已完成，从缓存恢复
+        initChunks.push({ id: i, loaded: chunkTotal, total: chunkTotal, done: true });
+        buffers[i] = resumeState.chunkBuffers[i] || null;
+        if (buffers[i]) initialLoaded += buffers[i]!.byteLength;
+      } else {
+        // 此分片需要下载（续传时可能有部分进度）
+        const partialLoaded = resumeState?.chunkBuffers[i]?.byteLength || 0;
+        initChunks.push({ id: i, loaded: partialLoaded, total: chunkTotal, done: false });
+        if (resumeState?.chunkBuffers[i]) {
+          buffers[i] = resumeState.chunkBuffers[i];
+          initialLoaded += partialLoaded;
+        }
+      }
     }
     setChunks(initChunks);
+    setTotalLoaded(initialLoaded);
+    setResumeState(null); // 清除续传状态
+
+    // 保存下载状态到 IndexedDB（用于续传）
+    const saveState = () => {
+      saveDownloadState({
+        url: downloadUrl,
+        fileName: probeResult.fileName,
+        fileSize,
+        contentType: probeResult.contentType,
+        threadCount: threads,
+        chunkBuffers: buffers.filter((b): b is ArrayBuffer => b !== null),
+        completedChunks: initChunks.map(c => c.done),
+        startedAt: Date.now(),
+        updatedAt: Date.now(),
+      }).catch(() => {});
+    };
 
     const abortController = new AbortController();
     abortRef.current = abortController;
-    speedRef.current = { lastTime: Date.now(), lastLoaded: 0 };
+    speedRef.current = { lastTime: Date.now(), lastLoaded: initialLoaded };
 
     const speedInterval = setInterval(() => {
       const now = Date.now();
@@ -522,26 +796,40 @@ export default function FastDownloadPage() {
     }, 500);
 
     try {
-      const buffers: (ArrayBuffer | null)[] = new Array(initChunks.length).fill(null);
+      // 只下载未完成的分片
+      const pendingChunks = initChunks.filter(c => !c.done);
+      let saveCounter = 0;
 
       await Promise.all(
-        initChunks.map(async (chunk) => {
-          const start = chunk.id * chunkSize;
-          const end = Math.min(start + chunkSize - 1, fileSize - 1);
+        pendingChunks.map(async (chunk) => {
+          const start = chunk.id * chunkSize + chunk.loaded; // 从已下载的位置继续
+          const end = Math.min(chunk.id * chunkSize + chunkSize - 1, fileSize - 1);
 
-          const res = await fetch('/api/fast-download/download', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: downloadUrl, start, end }),
-            signal: abortController.signal,
-          });
+          if (start > end) return; // 已完成
+
+          const res = autoChannel === 'cors'
+            ? await fetch(downloadUrl, {
+                headers: { Range: `bytes=${start}-${end}` },
+                signal: abortController.signal,
+              })
+            : await fetch('/api/fast-download/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: downloadUrl, start, end }),
+                signal: abortController.signal,
+              });
 
           if (!res.ok) throw new Error(`分片 ${chunk.id + 1} 下载失败`);
 
           const reader = res.body?.getReader();
           if (!reader) throw new Error('无法读取响应流');
 
+          // 如果有部分数据，先合并
           const parts: Uint8Array[] = [];
+          if (buffers[chunk.id]) {
+            parts.push(new Uint8Array(buffers[chunk.id]!));
+          }
+
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -549,6 +837,21 @@ export default function FastDownloadPage() {
             chunk.loaded += value.byteLength;
             setTotalLoaded((prev) => prev + value.byteLength);
             setChunks([...initChunks]);
+
+            // 每 20 个 chunk 保存一次状态（防止中断丢失太多进度）
+            saveCounter++;
+            if (saveCounter % 20 === 0) {
+              // 合并当前分片数据到 buffers
+              const totalLen = parts.reduce((s, p) => s + p.byteLength, 0);
+              const merged = new Uint8Array(totalLen);
+              let off = 0;
+              for (const part of parts) {
+                merged.set(part, off);
+                off += part.byteLength;
+              }
+              buffers[chunk.id] = merged.buffer;
+              saveState();
+            }
           }
 
           const totalLen = parts.reduce((s, p) => s + p.byteLength, 0);
@@ -561,9 +864,11 @@ export default function FastDownloadPage() {
           buffers[chunk.id] = merged.buffer;
           chunk.done = true;
           setChunks([...initChunks]);
+          saveState();
         })
       );
 
+      // 全部完成，合并并下载
       const validBuffers = buffers.filter((b): b is ArrayBuffer => b !== null);
       const totalLen = validBuffers.reduce((s, b) => s + b.byteLength, 0);
       const merged = new Uint8Array(totalLen);
@@ -582,16 +887,21 @@ export default function FastDownloadPage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
+
+      // 下载完成，删除 IndexedDB 中的状态
+      deleteDownloadState(downloadUrl).catch(() => {});
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
-        setError(`下载失败: ${(err as Error).message}`);
+        // 下载失败，保存当前进度（断点续传）
+        saveState();
+        setError(`下载失败，已保存进度，可点击「继续下载」重试`);
       }
     } finally {
       clearInterval(speedInterval);
       setDownloading(false);
       abortRef.current = null;
     }
-  }, [url, probeResult, threadCount, method, aria2Rpc]);
+  }, [url, probeResult, threadCount, method, aria2Rpc, resumeState, autoChannel, bestUrl]);
 
   // 生成启动脚本并下载
   const downloadStartScript = useCallback((type: 'bat' | 'sh') => {
@@ -669,12 +979,44 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
     URL.revokeObjectURL(url);
   }, [aria2Host, aria2Port]);
 
+  // 复制启动命令到剪贴板
+  const aria2StartCmd = `aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=%USERPROFILE%\\Downloads --max-connection-per-server=16 --split=16 --min-split-size=1M`;
+  const [copied, setCopied] = useState(false);
+  const copyStartCommand = useCallback(() => {
+    const ta = document.createElement('textarea');
+    ta.value = aria2StartCmd;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [aria2StartCmd]);
+
+  // 下载开机自启脚本
+  const downloadAutoStartScript = useCallback(() => {
+    // Windows VBS：静默启动 aria2（无 cmd 窗口）
+    const vbsContent = `Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run "cmd /c aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=%USERPROFILE%\\Downloads --max-connection-per-server=16 --split=16 --min-split-size=1M", 0, False`;
+    const blob = new Blob([vbsContent], { type: 'application/vbs' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'aria2-开机自启.vbs';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [aria2Port]);
+
   // aria2 未连接时自动轮询检测
   useEffect(() => {
-    if (method !== 'aria2' || aria2Status === 'ok') return;
-    const timer = setInterval(checkAria2, 3000);
+    if (aria2Status === 'ok') return;
+    const timer = setInterval(checkAria2, 5000);
     return () => clearInterval(timer);
-  }, [method, aria2Status, checkAria2]);
+  }, [aria2Status, checkAria2]);
 
   const handleCancel = useCallback(() => {
     abortRef.current?.abort();
@@ -700,355 +1042,7 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
         <div className="text-center mb-8 animate-fade-in">
           <div className="text-4xl mb-3">⚡</div>
           <h2 className="text-2xl font-bold text-white mb-2">高速下载</h2>
-          <p className="text-white/40 text-sm">调用本地下载器，充分利用带宽</p>
-        </div>
-
-        {/* 下载方式选择 */}
-        <div className="glass-card p-6 mb-6 animate-fade-in">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-semibold text-white">下载方式</h3>
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className="text-xs text-white/40 hover:text-[#fb6400] transition-colors"
-            >
-              {showSettings ? '收起设置' : '设置'}
-            </button>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2 mb-4">
-            {[
-              { key: 'browser' as const, label: '浏览器', desc: '无需安装，加速有限' },
-              { key: 'aria2' as const, label: 'aria2', desc: '需安装，速度更快' },
-              { key: 'idm' as const, label: 'IDM', desc: '需安装，Windows' },
-            ].map((opt) => (
-              <button
-                key={opt.key}
-                onClick={() => setMethod(opt.key)}
-                className={`p-3 rounded-xl text-center transition-all ${
-                  method === opt.key
-                    ? 'bg-gradient-to-br from-[#fb6400] to-[#ff8c00] text-white shadow-lg shadow-orange-500/30'
-                    : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                <div className="text-sm font-bold">{opt.label}</div>
-                <div className="text-[10px] mt-1 opacity-70">{opt.desc}</div>
-              </button>
-            ))}
-          </div>
-
-          {/* aria2 设置 */}
-          {method === 'aria2' && showSettings && (
-            <div className="bg-white/5 rounded-xl p-4 space-y-3 animate-slide-up">
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="text-xs text-white/40 mb-1 block">主机</label>
-                  <input
-                    type="text"
-                    value={aria2Host}
-                    onChange={(e) => setAria2Host(e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#fb6400]"
-                  />
-                </div>
-                <div className="w-24">
-                  <label className="text-xs text-white/40 mb-1 block">端口</label>
-                  <input
-                    type="text"
-                    value={aria2Port}
-                    onChange={(e) => setAria2Port(e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#fb6400]"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-white/40 mb-1 block">密钥（可选）</label>
-                <input
-                  type="password"
-                  value={aria2Secret}
-                  onChange={(e) => setAria2Secret(e.target.value)}
-                  placeholder="aria2 RPC secret"
-                  className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:border-[#fb6400]"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={checkAria2}
-                  className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-lg text-white/60 hover:text-[#fb6400] transition-colors"
-                >
-                  测试连接
-                </button>
-                <span className={`text-xs ${aria2Status === 'ok' ? 'text-green-400' : aria2Status === 'error' ? 'text-red-400' : 'text-white/30'}`}>
-                  {aria2Status === 'ok' ? '连接成功' : aria2Status === 'error' ? '连接失败' : '未检测'}
-                </span>
-              </div>
-              <p className="text-[10px] text-white/30">
-                修改后点击「测试连接」确认。默认配置适用于大多数情况。
-              </p>
-            </div>
-          )}
-
-          {/* aria2 状态提示（非设置模式） */}
-          {method === 'aria2' && !showSettings && (
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${aria2Status === 'ok' ? 'bg-green-400' : aria2Status === 'error' ? 'bg-red-400' : 'bg-white/20'}`} />
-              <span className="text-xs text-white/40">
-                {aria2Status === 'ok' ? `aria2 已连接 (${aria2Host}:${aria2Port})` : aria2Status === 'error' ? 'aria2 未连接' : '检测中...'}
-              </span>
-            </div>
-          )}
-
-          {/* aria2 未连接时的引导 */}
-          {method === 'aria2' && aria2Status === 'error' && (
-            <div className="mt-4 bg-[#fb6400]/10 border border-[#fb6400]/20 rounded-xl p-4 animate-slide-up">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-[#fb6400] text-sm font-medium">aria2 未启动</span>
-                <button
-                  onClick={checkAria2}
-                  className="ml-auto px-3 py-1 text-xs bg-white/5 border border-white/10 rounded-lg text-white/60 hover:text-[#fb6400] transition-colors"
-                >
-                  重新检测
-                </button>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#fb6400]/20 text-[#fb6400] text-xs font-bold">1</span>
-                  <div className="flex-1">
-                    <p className="text-sm text-white/70 mb-2">下载 aria2（已安装请跳过）</p>
-                    {aria2Release ? (
-                      <div className="space-y-3">
-                        <p className="text-xs text-white/40">最新版本：{aria2Release.version}</p>
-
-                        {/* 加速下载 */}
-                        <div>
-                          <p className="text-[10px] text-white/30 mb-1.5">加速下载（8线程，通过服务器中转）</p>
-                          <div className="flex flex-wrap gap-2">
-                            {aria2Release.win64 && (
-                              <button
-                                onClick={() => downloadAria2Pkg(aria2Release.win64!)}
-                                disabled={aria2DlStatus === 'downloading' || aria2DirectStatus === 'downloading'}
-                                className="px-3 py-1.5 text-xs bg-[#fb6400]/20 border border-[#fb6400]/30 rounded-lg text-[#fb6400] hover:bg-[#fb6400]/30 transition-colors disabled:opacity-50"
-                              >
-                                {aria2DlStatus === 'downloading' ? '下载中...' : `Win 64位 (${formatSize(aria2Release.win64.size)})`}
-                              </button>
-                            )}
-                            {aria2Release.win32 && (
-                              <button
-                                onClick={() => downloadAria2Pkg(aria2Release.win32!)}
-                                disabled={aria2DlStatus === 'downloading' || aria2DirectStatus === 'downloading'}
-                                className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-lg text-white/60 hover:text-[#fb6400] transition-colors disabled:opacity-50"
-                              >
-                                Win 32位
-                              </button>
-                            )}
-                          </div>
-                          {aria2DlStatus === 'downloading' && aria2DlProgress.total > 0 && (
-                            <div className="mt-2 space-y-1">
-                              <div className="flex justify-between text-[10px] text-white/40">
-                                <span>{formatSize(aria2DlProgress.loaded)} / {formatSize(aria2DlProgress.total)}</span>
-                                <span>{((aria2DlProgress.loaded / aria2DlProgress.total) * 100).toFixed(1)}%</span>
-                              </div>
-                              <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                                <div
-                                  className="h-full bg-gradient-to-r from-[#fb6400] to-[#ff8c00] rounded-full transition-all duration-300"
-                                  style={{ width: `${(aria2DlProgress.loaded / aria2DlProgress.total) * 100}%` }}
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* 原链接下载 */}
-                        <div>
-                          <p className="text-[10px] text-white/30 mb-1.5">原链接直连（不经服务器中转，更稳定）</p>
-                          <div className="flex flex-wrap gap-2">
-                            {aria2Release.win64 && (
-                              <button
-                                onClick={() => downloadAria2Direct(aria2Release.win64!)}
-                                disabled={aria2DlStatus === 'downloading' || aria2DirectStatus === 'downloading'}
-                                className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-lg text-white/60 hover:text-[#fb6400] transition-colors disabled:opacity-50"
-                              >
-                                {aria2DirectStatus === 'downloading' ? '下载中...' : aria2DirectStatus === 'done' ? '下载完成 ✓' : `Win 64位 (${formatSize(aria2Release.win64.size)})`}
-                              </button>
-                            )}
-                            {aria2Release.win32 && (
-                              <button
-                                onClick={() => downloadAria2Direct(aria2Release.win32!)}
-                                disabled={aria2DlStatus === 'downloading' || aria2DirectStatus === 'downloading'}
-                                className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-lg text-white/60 hover:text-[#fb6400] transition-colors disabled:opacity-50"
-                              >
-                                Win 32位
-                              </button>
-                            )}
-                          </div>
-                          {aria2DirectStatus === 'downloading' && aria2DirectProgress.total > 0 && (
-                            <div className="mt-2 space-y-1">
-                              <div className="flex justify-between text-[10px] text-white/40">
-                                <span>{formatSize(aria2DirectProgress.loaded)} / {formatSize(aria2DirectProgress.total)}</span>
-                                <span>{((aria2DirectProgress.loaded / aria2DirectProgress.total) * 100).toFixed(1)}%</span>
-                              </div>
-                              <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                                <div
-                                  className="h-full bg-white/20 rounded-full transition-all duration-300"
-                                  style={{ width: `${(aria2DirectProgress.loaded / aria2DirectProgress.total) * 100}%` }}
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-white/30">正在获取版本信息...</p>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#fb6400]/20 text-[#fb6400] text-xs font-bold">2</span>
-                  <div>
-                    <p className="text-sm text-white/70 mb-2">解压后运行启动脚本</p>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => downloadStartScript('bat')}
-                        className="px-3 py-1.5 text-xs bg-[#fb6400]/20 border border-[#fb6400]/30 rounded-lg text-[#fb6400] hover:bg-[#fb6400]/30 transition-colors"
-                      >
-                        下载 .bat 脚本（Windows）
-                      </button>
-                      <button
-                        onClick={() => downloadStartScript('sh')}
-                        className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-lg text-white/60 hover:text-[#fb6400] transition-colors"
-                      >
-                        下载 .sh 脚本（Mac/Linux）
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#fb6400]/20 text-[#fb6400] text-xs font-bold">3</span>
-                  <p className="text-sm text-white/70">运行脚本后，本页会自动检测连接</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* IDM 未安装时的教程 */}
-          {method === 'idm' && (
-            <div className="mt-4 bg-[#fb6400]/10 border border-[#fb6400]/20 rounded-xl p-4 animate-slide-up">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-[#fb6400] text-sm font-medium">IDM 使用教程</span>
-                <button
-                  onClick={() => setShowIdmTutorial(!showIdmTutorial)}
-                  className="ml-auto px-3 py-1 text-xs bg-white/5 border border-white/10 rounded-lg text-white/60 hover:text-[#fb6400] transition-colors"
-                >
-                  {showIdmTutorial ? '收起' : '展开教程'}
-                </button>
-              </div>
-
-              <div
-                className="transition-all duration-500 ease-in-out"
-                style={{
-                  maxHeight: showIdmTutorial ? '800px' : '0px',
-                  opacity: showIdmTutorial ? 1 : 0,
-                  overflow: 'hidden',
-                }}
-              >
-                <div className="space-y-3 pt-2">
-                  <div className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#fb6400]/20 text-[#fb6400] text-xs font-bold">1</span>
-                    <div>
-                      <p className="text-sm text-white/70 mb-1">下载安装 IDM</p>
-                      <p className="text-xs text-white/40 mb-2">IDM 是付费软件，$24.95 终身授权，有 30 天免费试用</p>
-                      {idmRelease ? (
-                        <div className="space-y-3">
-                          {/* 加速下载 */}
-                          <div>
-                            <p className="text-[10px] text-white/30 mb-1.5">加速下载（8线程，通过服务器中转）</p>
-                            <button
-                              onClick={downloadIdmPkg}
-                              disabled={idmDlStatus === 'downloading' || idmDirectStatus === 'downloading'}
-                              className="px-3 py-1.5 text-xs bg-[#fb6400]/20 border border-[#fb6400]/30 rounded-lg text-[#fb6400] hover:bg-[#fb6400]/30 transition-colors disabled:opacity-50"
-                            >
-                              {idmDlStatus === 'downloading' ? '下载中...' : idmDlStatus === 'done' ? '下载完成 ✓' : `下载 IDM ${idmRelease.version}`}
-                            </button>
-                            {idmDlStatus === 'downloading' && idmDlProgress.total > 0 && (
-                              <div className="mt-2 space-y-1">
-                                <div className="flex justify-between text-[10px] text-white/40">
-                                  <span>{formatSize(idmDlProgress.loaded)} / {formatSize(idmDlProgress.total)}</span>
-                                  <span>{((idmDlProgress.loaded / idmDlProgress.total) * 100).toFixed(1)}%</span>
-                                </div>
-                                <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-gradient-to-r from-[#fb6400] to-[#ff8c00] rounded-full transition-all duration-300"
-                                    style={{ width: `${(idmDlProgress.loaded / idmDlProgress.total) * 100}%` }}
-                                  />
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* 原链接下载 */}
-                          <div>
-                            <p className="text-[10px] text-white/30 mb-1.5">原链接直连（不经服务器中转，更稳定）</p>
-                            <button
-                              onClick={downloadIdmDirect}
-                              disabled={idmDlStatus === 'downloading' || idmDirectStatus === 'downloading'}
-                              className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-lg text-white/60 hover:text-[#fb6400] transition-colors disabled:opacity-50"
-                            >
-                              {idmDirectStatus === 'downloading' ? '下载中...' : idmDirectStatus === 'done' ? '下载完成 ✓' : `下载 IDM ${idmRelease.version}`}
-                            </button>
-                            {idmDirectStatus === 'downloading' && idmDirectProgress.total > 0 && (
-                              <div className="mt-2 space-y-1">
-                                <div className="flex justify-between text-[10px] text-white/40">
-                                  <span>{formatSize(idmDirectProgress.loaded)} / {formatSize(idmDirectProgress.total)}</span>
-                                  <span>{((idmDirectProgress.loaded / idmDirectProgress.total) * 100).toFixed(1)}%</span>
-                                </div>
-                                <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                                  <div
-                                    className="h-full bg-white/20 rounded-full transition-all duration-300"
-                                    style={{ width: `${(idmDirectProgress.loaded / idmDirectProgress.total) * 100}%` }}
-                                  />
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-white/30">正在获取版本信息...</p>
-                      )}
-                      <p className="text-[10px] text-white/30 mt-1">安装后需要购买授权或使用试用版</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#fb6400]/20 text-[#fb6400] text-xs font-bold">2</span>
-                    <div>
-                      <p className="text-sm text-white/70 mb-1">安装浏览器扩展</p>
-                      <p className="text-xs text-white/50">IDM 安装后会自动提示安装浏览器扩展。如果没有提示：</p>
-                      <ul className="text-xs text-white/40 mt-1 ml-3 space-y-0.5">
-                        <li>• Chrome：在 IDM 安装目录找到 <code className="text-[#fb6400]">IDMGCExt.crx</code>，拖入扩展页面</li>
-                        <li>• Firefox：在附加组件中搜索 "IDM Integration Module"</li>
-                        <li>• Edge：在扩展商店搜索 "IDM Integration Module"</li>
-                      </ul>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#fb6400]/20 text-[#fb6400] text-xs font-bold">3</span>
-                    <div>
-                      <p className="text-sm text-white/70 mb-1">配置 IDM</p>
-                      <ul className="text-xs text-white/40 ml-3 space-y-0.5">
-                        <li>• 打开 IDM → 选项 → 连接</li>
-                        <li>• 最大连接数改为 <strong className="text-white/60">16</strong>（或更高）</li>
-                        <li>• 勾选 "使用多段下载"</li>
-                      </ul>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-[#fb6400]/20 text-[#fb6400] text-xs font-bold">4</span>
-                    <div>
-                      <p className="text-sm text-white/70 mb-1">开始下载</p>
-                      <p className="text-xs text-white/50">安装完成后，回到本页粘贴下载链接，点击"调用 IDM 下载"即可。IDM 会自动接管下载，多线程跑满带宽。</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          <p className="text-white/40 text-sm">自动测速选最优线程，断点续传不丢进度</p>
         </div>
 
         {/* 输入区域 */}
@@ -1092,6 +1086,254 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
               {success}
             </div>
           )}
+
+          {/* 下载通道状态 */}
+          <div className="mt-4 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${aria2Status === 'ok' ? 'bg-green-400' : 'bg-white/20'}`} />
+              <span className="text-white/40">
+                {aria2Status === 'ok' ? `aria2 已连接` : aria2Status === 'error' ? 'aria2 未检测到' : '检测中...'}
+              </span>
+              <button
+                onClick={() => setShowAria2Intro(!showAria2Intro)}
+                className="text-white/20 hover:text-[#fb6400] transition-colors underline"
+              >
+                介绍
+              </button>
+            </div>
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className="text-white/30 hover:text-[#fb6400] transition-colors"
+            >
+              {showSettings ? '收起设置' : '高级设置'}
+            </button>
+          </div>
+
+          {/* aria2 介绍面板 */}
+          {showAria2Intro && (
+            <div className="mt-3 bg-[#fb6400]/5 border border-[#fb6400]/10 rounded-xl p-4 animate-slide-up">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[#fb6400] text-xs font-medium">什么是 aria2？</span>
+                <button onClick={() => setShowAria2Intro(false)} className="text-white/20 hover:text-white/50 text-xs">收起</button>
+              </div>
+              <div className="space-y-2 text-[11px] text-white/50 leading-relaxed">
+                <p>aria2 是一款开源免费的命令行下载工具，支持 HTTP/HTTPS/FTP/BT/磁力链等多种协议，是目前最强大的下载加速方案。</p>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <div className="bg-white/5 rounded-lg p-2">
+                    <p className="text-green-400 text-[10px] font-medium mb-1">核心优势</p>
+                    <ul className="space-y-0.5 text-[10px] text-white/40">
+                      <li>• 本地多线程直连，跑满带宽</li>
+                      <li>• 支持断点续传</li>
+                      <li>• 支持 BT/磁力链</li>
+                      <li>• 资源占用低（~50MB）</li>
+                    </ul>
+                  </div>
+                  <div className="bg-white/5 rounded-lg p-2">
+                    <p className="text-yellow-400 text-[10px] font-medium mb-1">vs 浏览器下载</p>
+                    <ul className="space-y-0.5 text-[10px] text-white/40">
+                      <li>• 浏览器：单线程，速度受限</li>
+                      <li>• aria2：多线程直连，满速</li>
+                      <li>• 浏览器：大文件可能内存溢出</li>
+                      <li>• aria2：磁盘直写，无限制</li>
+                    </ul>
+                  </div>
+                </div>
+                <p className="text-white/30 text-[10px]">安装后本页会自动检测连接，无需手动配置。</p>
+              </div>
+            </div>
+          )}
+
+          {/* 高级设置（aria2 配置 + 安装引导） */}
+          {showSettings && (
+            <div className="mt-3 bg-white/5 rounded-xl p-4 space-y-3 animate-slide-up">
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-xs text-white/40 mb-1 block">aria2 主机</label>
+                  <input
+                    type="text"
+                    value={aria2Host}
+                    onChange={(e) => setAria2Host(e.target.value)}
+                    className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#fb6400]"
+                  />
+                </div>
+                <div className="w-24">
+                  <label className="text-xs text-white/40 mb-1 block">端口</label>
+                  <input
+                    type="text"
+                    value={aria2Port}
+                    onChange={(e) => setAria2Port(e.target.value)}
+                    className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-[#fb6400]"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-white/40 mb-1 block">密钥（可选）</label>
+                <input
+                  type="password"
+                  value={aria2Secret}
+                  onChange={(e) => setAria2Secret(e.target.value)}
+                  placeholder="aria2 RPC secret"
+                  className="w-full px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white placeholder:text-white/30 focus:outline-none focus:border-[#fb6400]"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={checkAria2}
+                  className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-lg text-white/60 hover:text-[#fb6400] transition-colors"
+                >
+                  测试连接
+                </button>
+                <span className={`text-xs ${aria2Status === 'ok' ? 'text-green-400' : aria2Status === 'error' ? 'text-red-400' : 'text-white/30'}`}>
+                  {aria2Status === 'ok' ? '连接成功' : aria2Status === 'error' ? '连接失败' : '未检测'}
+                </span>
+              </div>
+
+              {/* aria2 未连接时的安装引导 */}
+              {aria2Status === 'error' && (
+                <div className="mt-3 pt-3 border-t border-white/10">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-[#fb6400] text-xs font-medium">aria2 安装引导</span>
+                    <button
+                      onClick={checkAria2}
+                      className="ml-auto px-2 py-0.5 text-[10px] bg-white/5 border border-white/10 rounded text-white/40 hover:text-[#fb6400] transition-colors"
+                    >
+                      重新检测
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-[#fb6400]/20 text-[#fb6400] text-[10px] font-bold">1</span>
+                      <div className="flex-1">
+                        <p className="text-xs text-white/60 mb-1.5">下载 aria2（已安装请跳过）</p>
+                        {aria2Release ? (
+                          <div className="space-y-2">
+                            <p className="text-[10px] text-white/30">最新版本：{aria2Release.version}</p>
+                            {/* Windows 64位 */}
+                            <div className="flex flex-wrap gap-2">
+                              {aria2Release.win64 && (
+                                <button
+                                  onClick={() => downloadAria2Pkg(aria2Release.win64!)}
+                                  disabled={aria2DlStatus === 'downloading' || aria2DirectStatus === 'downloading'}
+                                  className="px-2 py-1 text-[10px] bg-[#fb6400]/20 border border-[#fb6400]/30 rounded text-[#fb6400] hover:bg-[#fb6400]/30 transition-colors disabled:opacity-50"
+                                >
+                                  {aria2DlStatus === 'downloading' ? '下载中...' : `Win 64位 加速下载`}
+                                </button>
+                              )}
+                              {aria2Release.win64 && (
+                                <button
+                                  onClick={() => downloadAria2Direct(aria2Release.win64!)}
+                                  disabled={aria2DlStatus === 'downloading' || aria2DirectStatus === 'downloading'}
+                                  className="px-2 py-1 text-[10px] bg-white/5 border border-white/10 rounded text-white/40 hover:text-[#fb6400] transition-colors disabled:opacity-50"
+                                >
+                                  {aria2DirectStatus === 'downloading' ? '下载中...' : aria2DirectStatus === 'done' ? '下载完成 ✓' : 'Win 64位 原链接'}
+                                </button>
+                              )}
+                            </div>
+                            {/* Windows 32位 */}
+                            <div className="flex flex-wrap gap-2">
+                              {aria2Release.win32 && (
+                                <button
+                                  onClick={() => downloadAria2Pkg(aria2Release.win32!)}
+                                  disabled={aria2DlStatus === 'downloading' || aria2DirectStatus === 'downloading'}
+                                  className="px-2 py-1 text-[10px] bg-[#fb6400]/20 border border-[#fb6400]/30 rounded text-[#fb6400] hover:bg-[#fb6400]/30 transition-colors disabled:opacity-50"
+                                >
+                                  {aria2DlStatus === 'downloading' ? '下载中...' : `Win 32位 加速下载`}
+                                </button>
+                              )}
+                              {aria2Release.win32 && (
+                                <button
+                                  onClick={() => downloadAria2Direct(aria2Release.win32!)}
+                                  disabled={aria2DlStatus === 'downloading' || aria2DirectStatus === 'downloading'}
+                                  className="px-2 py-1 text-[10px] bg-white/5 border border-white/10 rounded text-white/40 hover:text-[#fb6400] transition-colors disabled:opacity-50"
+                                >
+                                  {aria2DirectStatus === 'downloading' ? '下载中...' : aria2DirectStatus === 'done' ? '下载完成 ✓' : 'Win 32位 原链接'}
+                                </button>
+                              )}
+                            </div>
+                            {/* macOS / Linux */}
+                            <div className="p-2 bg-white/5 rounded-lg">
+                              <p className="text-[10px] text-white/30 mb-1">macOS / Linux 用户：</p>
+                              <code className="text-[10px] text-[#fb6400]">brew install aria2</code>
+                              <span className="text-[10px] text-white/30"> 或 </span>
+                              <code className="text-[10px] text-[#fb6400]">sudo apt install aria2</code>
+                            </div>
+                            {(aria2DlStatus === 'downloading' && aria2DlProgress.total > 0) && (
+                              <div className="space-y-1">
+                                <div className="flex justify-between text-[10px] text-white/40">
+                                  <span>{formatSize(aria2DlProgress.loaded)} / {formatSize(aria2DlProgress.total)}</span>
+                                  <span>{((aria2DlProgress.loaded / aria2DlProgress.total) * 100).toFixed(1)}%</span>
+                                </div>
+                                <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                                  <div className="h-full bg-gradient-to-r from-[#fb6400] to-[#ff8c00] rounded-full transition-all duration-300" style={{ width: `${(aria2DlProgress.loaded / aria2DlProgress.total) * 100}%` }} />
+                                </div>
+                              </div>
+                            )}
+                            {(aria2DirectStatus === 'downloading' && aria2DirectProgress.total > 0) && (
+                              <div className="space-y-1">
+                                <div className="flex justify-between text-[10px] text-white/40">
+                                  <span>{formatSize(aria2DirectProgress.loaded)} / {formatSize(aria2DirectProgress.total)}</span>
+                                  <span>{((aria2DirectProgress.loaded / aria2DirectProgress.total) * 100).toFixed(1)}%</span>
+                                </div>
+                                <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                                  <div className="h-full bg-white/20 rounded-full transition-all duration-300" style={{ width: `${(aria2DirectProgress.loaded / aria2DirectProgress.total) * 100}%` }} />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-white/30">正在获取版本信息...</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-[#fb6400]/20 text-[#fb6400] text-[10px] font-bold">2</span>
+                      <div className="flex-1">
+                        <p className="text-xs text-white/60 mb-1.5">启动 aria2</p>
+                        <div className="space-y-2">
+                          {/* 一键复制命令 */}
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={copyStartCommand}
+                              className="px-2 py-1 text-[10px] bg-[#fb6400]/20 border border-[#fb6400]/30 rounded text-[#fb6400] hover:bg-[#fb6400]/30 transition-colors"
+                            >
+                              {copied ? '已复制 ✓' : '复制启动命令'}
+                            </button>
+                            <span className="text-[10px] text-white/30">粘贴到终端运行（Win: Win+R 输入 cmd；Mac: 搜索"终端"）</span>
+                          </div>
+                          {/* 启动脚本下载 */}
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => downloadStartScript('bat')} className="px-2 py-1 text-[10px] bg-white/5 border border-white/10 rounded text-white/40 hover:text-[#fb6400] transition-colors">下载 .bat 脚本</button>
+                            <button onClick={() => downloadStartScript('sh')} className="px-2 py-1 text-[10px] bg-white/5 border border-white/10 rounded text-white/40 hover:text-[#fb6400] transition-colors">下载 .sh 脚本</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-[#fb6400]/20 text-[#fb6400] text-[10px] font-bold">3</span>
+                      <div className="flex-1">
+                        <p className="text-xs text-white/60 mb-1.5">开机自启（可选）</p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={downloadAutoStartScript}
+                            className="px-2 py-1 text-[10px] bg-green-500/10 border border-green-500/20 rounded text-green-400 hover:bg-green-500/20 transition-colors"
+                          >
+                            下载开机自启脚本
+                          </button>
+                          <span className="text-[10px] text-white/30">下载后放到 aria2 同目录，双击运行一次即可</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-[#fb6400]/20 text-[#fb6400] text-[10px] font-bold">4</span>
+                      <p className="text-xs text-white/60">运行后本页会自动检测连接</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* aria2 启动命令 */}
+            </div>
+          )}
         </div>
 
         {/* 检测结果 */}
@@ -1120,59 +1362,55 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
                   {probeResult.supportsRange ? '支持' : '不支持'}
                 </span>
               </div>
-              {method === 'browser' && probeResult.supportsRange && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-white/40">预计加速</span>
-                  <span className="text-[#fb6400]">最高 {threadCount}x</span>
-                </div>
-              )}
+              <div className="flex justify-between text-sm">
+                <span className="text-white/40">下载通道</span>
+                <span className="text-[#fb6400]">
+                  {autoChannel === 'aria2' ? 'aria2 本地多线程' : autoChannel === 'cors' ? `浏览器直连 ${autoThreadCount || '...'} 线程` : `服务器中转 ${autoThreadCount || '...'} 线程`}
+                </span>
+              </div>
             </div>
 
-            {/* 线程选择（仅浏览器模式） */}
-            {method === 'browser' && probeResult.supportsRange && (
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm text-white/60">选择线程数</span>
-                  <span className="text-xs text-white/30">内存占用 ≈ {formatSize(probeResult.fileSize)}</span>
-                </div>
-                <div className="grid grid-cols-5 gap-2">
-                  {THREAD_OPTIONS.map((t) => {
-                    const isSelected = threadCount === t;
-                    const chunkSize = Math.ceil(probeResult.fileSize / t);
-                    return (
-                      <button
-                        key={t}
-                        onClick={() => setThreadCount(t)}
-                        className={`p-3 rounded-xl text-center transition-all ${
-                          isSelected
-                            ? 'bg-gradient-to-br from-[#fb6400] to-[#ff8c00] text-white shadow-lg shadow-orange-500/30'
-                            : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white'
-                        }`}
-                      >
-                        <div className="text-lg font-bold">{t}</div>
-                        <div className="text-[10px] mt-0.5 opacity-70">线程</div>
-                        <div className="text-[10px] mt-1 opacity-50">
-                          {formatSize(chunkSize)}/片
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+            {/* GitHub 镜像测速 */}
+            {mirrorTesting && (
+              <div className="mb-4 bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                <span className="text-xs text-blue-400">正在测试 GitHub 镜像速度...</span>
+              </div>
+            )}
+
+            {/* 测速状态 */}
+            {speedTesting && (
+              <div className="mb-4 bg-[#fb6400]/10 border border-[#fb6400]/20 rounded-xl p-3 flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-[#fb6400] border-t-transparent rounded-full animate-spin" />
+                <span className="text-xs text-[#fb6400]">正在自动测速选最优线程...</span>
+              </div>
+            )}
+
+            {/* 断点续传提示 */}
+            {resumeState && autoChannel !== 'aria2' && (
+              <div className="mb-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 flex items-center gap-2">
+                <span className="text-yellow-400 text-xs">检测到未完成的下载，点击继续</span>
+                <button
+                  onClick={() => { deleteDownloadState(url.trim()).catch(() => {}); setResumeState(null); }}
+                  className="ml-auto text-[10px] text-white/30 hover:text-red-400 transition-colors"
+                >
+                  清除缓存
+                </button>
               </div>
             )}
 
             <button
               onClick={handleDownload}
-              disabled={method === 'aria2' && aria2Status === 'error'}
+              disabled={speedTesting || mirrorTesting}
               className="w-full py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white font-medium rounded-xl shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {method === 'aria2' ? '发送到 aria2' : method === 'idm' ? '调用 IDM 下载' : (probeResult.supportsRange ? `${threadCount} 线程下载` : '直接下载')}
+              {mirrorTesting ? '镜像测速中...' : speedTesting ? '测速中...' : autoChannel === 'aria2' ? 'aria2 加速下载' : resumeState ? '继续下载' : probeResult.supportsRange ? '加速下载' : '直接下载'}
             </button>
           </div>
         )}
 
-        {/* 下载进度（仅浏览器模式） */}
-        {downloading && method === 'browser' && (
+        {/* 下载进度 */}
+        {downloading && autoChannel !== 'aria2' && (
           <div className="glass-card p-6 mb-6 animate-slide-up">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-white font-medium">下载中</h3>
@@ -1222,131 +1460,6 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
           </div>
         )}
 
-        {/* 详情介绍 */}
-        <div className="glass-card animate-slide-up overflow-hidden" style={{ animationDelay: '100ms' }}>
-          <button
-            onClick={() => setShowDetails(!showDetails)}
-            className="w-full px-6 py-4 flex items-center justify-between group transition-colors hover:bg-white/5"
-          >
-            <span className="text-white/60 text-sm group-hover:text-[#fb6400] transition-colors">详情介绍</span>
-            <svg
-              className={`w-4 h-4 text-white/30 transition-transform duration-300 ${showDetails ? 'rotate-180' : ''}`}
-              fill="none" stroke="currentColor" viewBox="0 0 24 24"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-
-          <div
-            className="transition-all duration-500 ease-in-out"
-            style={{
-              maxHeight: showDetails ? '1200px' : '0px',
-              opacity: showDetails ? 1 : 0,
-              overflow: 'hidden',
-            }}
-          >
-            <div className="px-6 pb-6 space-y-6">
-              {/* 对比表格 */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-white/10">
-                      <th className="text-left text-white/40 py-2 pr-3 font-normal">对比项</th>
-                      <th className="text-center text-white/40 py-2 px-2 font-normal">浏览器</th>
-                      <th className="text-center text-[#fb6400] py-2 px-2 font-normal">aria2</th>
-                      <th className="text-center text-white/40 py-2 px-2 font-normal">IDM</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-white/60">
-                    <tr className="border-b border-white/5">
-                      <td className="py-2 pr-3 text-white/40">需要安装</td>
-                      <td className="text-center py-2 px-2 text-green-400">不需要</td>
-                      <td className="text-center py-2 px-2 text-yellow-400">需要</td>
-                      <td className="text-center py-2 px-2 text-yellow-400">需要</td>
-                    </tr>
-                    <tr className="border-b border-white/5">
-                      <td className="py-2 pr-3 text-white/40">占用资源</td>
-                      <td className="text-center py-2 px-2 text-green-400">无</td>
-                      <td className="text-center py-2 px-2 text-yellow-400">~50MB 内存</td>
-                      <td className="text-center py-2 px-2 text-yellow-400">~30MB 内存</td>
-                    </tr>
-                    <tr className="border-b border-white/5">
-                      <td className="py-2 pr-3 text-white/40">下载速度</td>
-                      <td className="text-center py-2 px-2 text-yellow-400">加速有限</td>
-                      <td className="text-center py-2 px-2 text-green-400">跑满带宽</td>
-                      <td className="text-center py-2 px-2 text-green-400">跑满带宽</td>
-                    </tr>
-                    <tr className="border-b border-white/5">
-                      <td className="py-2 pr-3 text-white/40">多线程</td>
-                      <td className="text-center py-2 px-2 text-yellow-400">服务器中转，作用有限</td>
-                      <td className="text-center py-2 px-2 text-green-400">本地直连</td>
-                      <td className="text-center py-2 px-2 text-green-400">本地直连</td>
-                    </tr>
-                    <tr className="border-b border-white/5">
-                      <td className="py-2 pr-3 text-white/40">BT/磁力</td>
-                      <td className="text-center py-2 px-2 text-red-400">不支持</td>
-                      <td className="text-center py-2 px-2 text-green-400">支持</td>
-                      <td className="text-center py-2 px-2 text-red-400">不支持</td>
-                    </tr>
-                    <tr className="border-b border-white/5">
-                      <td className="py-2 pr-3 text-white/40">大文件</td>
-                      <td className="text-center py-2 px-2 text-yellow-400">可能内存溢出</td>
-                      <td className="text-center py-2 px-2 text-green-400">磁盘直写</td>
-                      <td className="text-center py-2 px-2 text-green-400">磁盘直写</td>
-                    </tr>
-                    <tr>
-                      <td className="py-2 pr-3 text-white/40">支持平台</td>
-                      <td className="text-center py-2 px-2">全平台</td>
-                      <td className="text-center py-2 px-2">全平台</td>
-                      <td className="text-center py-2 px-2">仅 Windows</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              {/* aria2 优势 */}
-              <div>
-                <p className="text-white/70 font-medium mb-2 text-sm">aria2 的优势</p>
-                <ul className="space-y-1.5 text-white/50 text-xs ml-3">
-                  <li>• 开源免费，无广告无捆绑，社区活跃持续更新</li>
-                  <li>• 支持 HTTP/HTTPS/FTP/SFTP/BT/磁力链等多种协议</li>
-                  <li>• 本地多线程直连源服务器，跑满你的带宽</li>
-                  <li>• 支持断点续传，下载中断后从上次位置继续</li>
-                  <li>• 跨平台：Windows/macOS/Linux/Android 均可使用</li>
-                  <li>• 资源占用低，后台静默运行，不影响其他工作</li>
-                </ul>
-              </div>
-
-              {/* IDM 优势 */}
-              <div>
-                <p className="text-white/70 font-medium mb-2 text-sm">IDM 的优势</p>
-                <ul className="space-y-1.5 text-white/50 text-xs ml-3">
-                  <li>• 自动嗅探浏览器中的下载链接，点击即捕获</li>
-                  <li>• 内置站点抓取功能，可批量下载网页中的所有文件</li>
-                  <li>• 自动多线程分割，无需手动配置线程数</li>
-                  <li>• 下载完成后自动调用杀毒软件扫描</li>
-                  <li>• 图形界面操作简单，适合不熟悉命令行的用户</li>
-                </ul>
-              </div>
-
-              {/* BT/磁力解释 */}
-              <div>
-                <p className="text-white/70 font-medium mb-2 text-sm">什么是 BT/磁力？</p>
-                <div className="text-white/50 text-xs ml-3 space-y-2">
-                  <p>BT（BitTorrent）是一种点对点文件分享技术。与传统下载不同，BT 不是从一台服务器下载整个文件，而是从多个用户那里同时下载文件的不同片段。下载的人越多，速度越快。</p>
-                  <p>磁力链接（magnet:）是 BT 的一种链接形式，通过文件的唯一哈希值来定位资源，不需要依赖种子文件服务器。即使原始发布者下架了文件，只要网络中还有人持有该文件，就可以继续下载。</p>
-                  <p>简单说：普通下载是从一个地方拿文件，BT/磁力是从很多人那里拼文件，人越多越快。</p>
-                </div>
-              </div>
-
-              {/* aria2 启动命令 */}
-              <div className="p-3 bg-white/5 rounded-lg">
-                <p className="text-xs text-white/40 mb-1">aria2 快速启动命令：</p>
-                <code className="text-xs text-[#fb6400] break-all">aria2c --enable-rpc --rpc-listen-port=6800 --rpc-allow-origin-all</code>
-              </div>
-            </div>
-          </div>
-        </div>
       </main>
     </div>
   );

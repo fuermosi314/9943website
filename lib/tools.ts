@@ -504,6 +504,28 @@ export const tools: Tool[] = [
     tags: ['git', '学习', '分支', '教程', '交互'],
     keywords: ['学git', 'git教程', 'git分支', '版本控制', 'git可视化', 'git入门'],
   },
+  {
+    id: 'aishort',
+    name: 'AI Short',
+    description: 'AI 提示词精选库，一键复制 ChatGPT/Claude 高效提示词',
+    icon: '🤖',
+    category: 'website',
+    path: '/tools/site/aishort',
+    externalUrl: 'https://www.aishort.top',
+    tags: ['AI', '提示词', 'ChatGPT', 'Claude', 'Prompt'],
+    keywords: ['AI提示词', 'ChatGPT提示词', 'Claude提示词', 'AI工具', '提示词库', 'AI对话'],
+  },
+  {
+    id: 'cook',
+    name: '云游君的厨房',
+    description: '程序员菜谱，简单易学的家常菜做法',
+    icon: '🍳',
+    category: 'website',
+    path: '/tools/site/cook',
+    externalUrl: 'https://cook.yunyoujun.cn',
+    tags: ['菜谱', '做饭', '厨房', '家常菜', '美食'],
+    keywords: ['菜谱', '做菜', '家常菜', '烹饪', '食谱', '厨房'],
+  },
 ];
 
 export function getToolsByCategory(categoryId: string): Tool[] {

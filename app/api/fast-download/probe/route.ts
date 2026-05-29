@@ -51,6 +51,10 @@ export async function POST(request: NextRequest) {
       const acceptRanges = getResp.headers.get('accept-ranges');
       const contentType = getResp.headers.get('content-type') || '';
 
+      // 检测 CORS 支持
+      const acao = getResp.headers.get('access-control-allow-origin');
+      const supportsCors = acao === '*' || acao === 'null';
+
       // 从 URL 提取文件名
       const pathParts = parsedUrl.pathname.split('/');
       const lastPart = pathParts[pathParts.length - 1] || 'download';
@@ -60,6 +64,7 @@ export async function POST(request: NextRequest) {
         fileName,
         fileSize: contentLength ? parseInt(contentLength) : 0,
         supportsRange: acceptRanges === 'bytes' || getResp.status === 206,
+        supportsCors,
         contentType: contentType.split(';')[0],
       });
     }
@@ -67,6 +72,10 @@ export async function POST(request: NextRequest) {
     const contentLength = headResp.headers.get('content-length');
     const acceptRanges = headResp.headers.get('accept-ranges');
     const contentType = headResp.headers.get('content-type') || '';
+
+    // 检测 CORS 支持
+    const acao = headResp.headers.get('access-control-allow-origin');
+    const supportsCors = acao === '*' || acao === 'null';
 
     // 从 Content-Disposition 或 URL 提取文件名
     let fileName = '';
@@ -88,6 +97,7 @@ export async function POST(request: NextRequest) {
       fileName,
       fileSize,
       supportsRange: supportsRange && fileSize > 0,
+      supportsCors,
       contentType: contentType.split(';')[0],
     });
   } catch (err) {

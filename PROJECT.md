@@ -12,7 +12,7 @@
 - **技术栈**: Next.js 14 + React 18 + Tailwind CSS 3 + TypeScript
 - **项目路径**: `/home/huang/claude/vs/work/9943小工具大全`
 - **部署计划**: 本地开发 → Git → Vercel 发布
-- **当前工具数量**: 46 个（自动统计自 `lib/tools.ts`）
+- **当前工具数量**: 48 个（自动统计自 `lib/tools.ts`）
 
 ---
 
@@ -137,7 +137,7 @@
 | `dev` | 开发工具 | 🔧 | 在线编译器导航 |
 | `life` | 生活工具 | 🎯 | BMI 计算器、单位换算、专业计算器、视频去水印、简单记、耗知通 |
 | `entertainment` | 娱乐工具 | 🎮 | 大转盘、二维码生成、随机数生成器、爆款开头生成器、毁灭地球的电磁炮 |
-| `website` | 网站工具 | 🌐 | Excalidraw, Carbon, JSON, CodeSandbox, Photopea, KMS, PDF24, S7资源库, FMHY, 便民查询网, 爱看机器人, Steam 下载, 图吧工具箱, Image Splitter, 柒夜导航, PhWalls, 纸由我, VirusTotal, Learn Git Branching, Watt Toolkit |
+| `website` | 网站工具 | 🌐 | Excalidraw, Carbon, JSON, CodeSandbox, Photopea, KMS, PDF24, S7资源库, FMHY, 便民查询网, 爱看机器人, Steam 下载, 图吧工具箱, Image Splitter, 柒夜导航, PhWalls, 纸由我, VirusTotal, Learn Git Branching, Watt Toolkit, AI Short, 云游君的厨房 |
 
 ### 收藏和历史功能
 - **收藏工具**: 每个工具卡片右上角有心形收藏按钮，点击可收藏/取消收藏，收藏后在"收藏工具"分类页面显示
@@ -274,6 +274,9 @@ const backUrl = `/?category=${tool.category}`;
 
 ### 7.8 高速下载 (fast-download)
 - 多线程并行下载工具，支持 HTTP/HTTPS 直链
+- **自动测速选线程**: 探测成功后自动测试 1/2/4/8/16/32 线程速度，推荐最优线程数
+- **断点续传**: 下载中断自动保存进度到 IndexedDB，下次探测同一链接时可继续下载
+- **数据存储**: IndexedDB（`lib/download-db.ts`），下载完成或手动清除后自动删除
 - **网盘链接支持**: 自动识别夸克/阿里/百度/115/天翼/迅雷网盘分享链接
 - **解析后端**: 使用 alist 开源项目作为网盘解析服务（需自行部署）
 - **API 路由**: `/api/fast-download/parse` — 网盘链接解析为直链
@@ -317,6 +320,14 @@ const backUrl = `/?category=${tool.category}`;
 | `consumables-last-backup` | consumables 页面 | 上次备份时间戳 | 无 |
 
 > 注意：`lib/storage.ts` 的键名仍保留 `ai-hook-lab-` 前缀（从 Ai Hook Lab 迁移而来）
+
+### IndexedDB 数据库
+| 数据库 | 来源 | 用途 |
+|--------|------|------|
+| `simple-note-db` | simple-note 页面 | 日记条目 + 照片 |
+| `consumables-db` | consumables 页面 | 消耗品记录 |
+| `tianjige-db` | tianjige 页面 | 3D 场景数据 |
+| `fast-download-db` | fast-download 页面 | 下载进度缓存（断点续传） |
 
 ---
 

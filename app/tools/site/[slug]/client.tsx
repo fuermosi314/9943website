@@ -139,6 +139,20 @@ const siteFeatures: Record<string, string[]> = {
     '支持 Windows/macOS/Linux 多平台',
     '开源免费，无广告无捆绑，持续更新',
   ],
+  aishort: [
+    '精选 ChatGPT/Claude 高效提示词，一键复制',
+    '分类清晰：写作、编程、翻译、营销等场景',
+    '支持中英文切换，持续更新提示词库',
+    '免费开源，无需注册即可使用',
+    '社区贡献模式，人人可提交优质提示词',
+  ],
+  cook: [
+    '程序员友好的简洁菜谱，步骤清晰易懂',
+    '支持按食材、菜系、难度筛选',
+    '每道菜配有详细用料和时间说明',
+    '开源项目，支持暗黑模式',
+    '适合新手的家常菜做法，简单易学',
+  ],
 };
 
 export default function SiteDetailClient() {

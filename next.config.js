@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  allowedDevOrigins: ['192.168.148.248'],
+
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
