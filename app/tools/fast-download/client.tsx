@@ -919,15 +919,18 @@ echo   端口: ${aria2Port}
 echo ================================
 echo.
 
-:: 检查 aria2 是否已安装
-where aria2c >nul 2>&1
-if errorlevel 1 (
-    echo [错误] 未找到 aria2c，请先安装 aria2
-    echo 下载地址: https://github.com/aria2/aria2/releases/latest
-    echo.
-    pause
-    exit /b 1
-)
+:: 查找 aria2c.exe
+set "ARIA2C="
+for %%P in ("%ProgramFiles%\\aria2\\aria2c.exe" "%ProgramFiles(x86)%\\aria2\\aria2c.exe" "%USERPROFILE%\\Downloads\\aria2-*-win-64bit\\aria2c.exe" "%USERPROFILE%\\Downloads\\aria2\\aria2c.exe" ".\\aria2c.exe") do if exist %%P (set "ARIA2C=%%~P" & goto :found)
+where aria2c >nul 2>&1 && (set "ARIA2C=aria2c" & goto :found)
+echo [错误] 未找到 aria2c.exe，请确认已解压 aria2
+echo 下载地址: https://github.com/aria2/aria2/releases/latest
+echo.
+pause
+exit /b 1
+:found
+echo [找到] %ARIA2C%
+for %%F in ("%ARIA2C%") do cd /d "%%~dpF"
 
 echo [启动中] aria2 RPC 服务...
 echo [地址] http://${aria2Host}:${aria2Port}/jsonrpc
@@ -980,7 +983,18 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
   }, [aria2Host, aria2Port]);
 
   // 复制启动命令到剪贴板
-  const aria2StartCmd = `aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=%USERPROFILE%\\Downloads --max-connection-per-server=16 --split=16 --min-split-size=1M`;
+  const aria2StartCmd = `@echo off
+chcp 65001 >nul
+set "ARIA2C="
+for %%P in ("%ProgramFiles%\\aria2\\aria2c.exe" "%ProgramFiles(x86)%\\aria2\\aria2c.exe" "%USERPROFILE%\\Downloads\\aria2-*-win-64bit\\aria2c.exe" "%USERPROFILE%\\Downloads\\aria2\\aria2c.exe" ".\\aria2c.exe") do if exist %%P (set "ARIA2C=%%~P" & goto :found)
+where aria2c >nul 2>&1 && (set "ARIA2C=aria2c" & goto :found)
+echo [错误] 未找到 aria2c.exe，请确认已解压 aria2
+pause
+exit /b 1
+:found
+echo [找到] %ARIA2C%
+for %%F in ("%ARIA2C%") do cd /d "%%~dpF"
+"%ARIA2C%" --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=%USERPROFILE%\\Downloads --max-connection-per-server=16 --split=16 --min-split-size=1M`;
   const [copied, setCopied] = useState(false);
   const copyStartCommand = useCallback(() => {
     const ta = document.createElement('textarea');
