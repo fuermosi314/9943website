@@ -111,8 +111,8 @@ export default function HookGenerator() {
             </div>
             <h1 className="text-lg font-semibold text-white">爆款开头生成器</h1>
           </div>
+          <FullscreenButton className="ml-auto" />
         </div>
-        <FullscreenButton />
       </header>
 
       <div className="relative z-10 max-w-4xl mx-auto px-4 pt-20 pb-16">

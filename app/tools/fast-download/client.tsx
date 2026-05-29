@@ -692,8 +692,8 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
             <img src="/logo.png" alt="9943" className="w-8 h-8 rounded-lg shadow-lg shadow-orange-500/30" />
             <h1 className="text-lg font-semibold text-white">高速下载</h1>
           </div>
+          <FullscreenButton className="ml-auto" />
         </div>
-        <FullscreenButton />
       </header>
 
       <main className="max-w-2xl mx-auto px-6 pt-24 pb-16">

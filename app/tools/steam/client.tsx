@@ -42,8 +42,8 @@ export default function SteamPage() {
             </div>
             <h1 className="text-lg font-semibold text-white">Steam 下载</h1>
           </div>
+          <FullscreenButton className="ml-auto" />
         </div>
-        <FullscreenButton />
       </header>
 
       <main className="max-w-lg mx-auto px-6 pt-24 pb-16">

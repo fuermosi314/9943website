@@ -1637,8 +1637,8 @@ export default function EarthCannonPage() {
             <img src="/logo.png" alt="9943" className="w-8 h-8 rounded-lg shadow-lg shadow-orange-500/30" />
             <h1 className="text-lg font-semibold text-white">毁灭地球的电磁炮</h1>
           </div>
+          <FullscreenButton className="ml-auto" />
         </div>
-        <FullscreenButton />
       </header>
 
       <main className="relative w-full h-screen overflow-hidden">

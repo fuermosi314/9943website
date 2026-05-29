@@ -547,8 +547,8 @@ export default function IconExtractPage() {
             <img src="/logo.png" alt="9943" className="w-8 h-8 rounded-lg shadow-lg shadow-orange-500/30" />
             <h1 className="text-lg font-semibold text-white">图标提取</h1>
           </div>
+          <FullscreenButton className="ml-auto" />
         </div>
-        <FullscreenButton />
       </header>
 
       <main className="max-w-2xl mx-auto px-6 pt-24 pb-16">

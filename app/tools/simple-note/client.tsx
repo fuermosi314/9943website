@@ -708,8 +708,8 @@ export default function SimpleNotePage() {
               <path strokeWidth="2" d="M16 2v4M8 2v4M3 10h18" />
             </svg>
           </button>
+          <FullscreenButton className="ml-auto" />
         </div>
-        <FullscreenButton />
       </header>
       <main className="max-w-7xl mx-auto px-6 pt-24 pb-16">
         <div className="flex gap-6">
