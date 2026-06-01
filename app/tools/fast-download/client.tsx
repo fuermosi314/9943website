@@ -128,6 +128,7 @@ export default function FastDownloadPage() {
   const [aria2Secret, setAria2Secret] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [showAria2Intro, setShowAria2Intro] = useState(false);
+  const [aria2PathHint, setAria2PathHint] = useState('');
 
   // 从 localStorage 恢复配置（客户端挂载后）
   useEffect(() => {
@@ -139,6 +140,8 @@ export default function FastDownloadPage() {
     if (port) setAria2Port(port);
     const secret = localStorage.getItem('fast-dl-aria2-secret');
     if (secret) setAria2Secret(secret);
+    const hint = localStorage.getItem('fast-dl-aria2-path-hint');
+    if (hint) setAria2PathHint(hint);
   }, []);
 
   // 持久化配置
@@ -146,6 +149,7 @@ export default function FastDownloadPage() {
   useEffect(() => { localStorage.setItem('fast-dl-aria2-host', aria2Host); }, [aria2Host]);
   useEffect(() => { localStorage.setItem('fast-dl-aria2-port', aria2Port); }, [aria2Port]);
   useEffect(() => { localStorage.setItem('fast-dl-aria2-secret', aria2Secret); }, [aria2Secret]);
+  useEffect(() => { localStorage.setItem('fast-dl-aria2-path-hint', aria2PathHint); }, [aria2PathHint]);
 
   const handleUrlChange = (value: string) => {
     setUrl(value);
@@ -983,17 +987,14 @@ aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=
   }, [aria2Host, aria2Port]);
 
   // 复制启动命令到剪贴板
-  const aria2StartCmd = `@echo off
-chcp 65001 >nul
-set "ARIA2C="
-for %%P in ("%ProgramFiles%\\aria2\\aria2c.exe" "%ProgramFiles(x86)%\\aria2\\aria2c.exe" "%USERPROFILE%\\Downloads\\aria2-*-win-64bit\\aria2c.exe" "%USERPROFILE%\\Downloads\\aria2\\aria2c.exe" ".\\aria2c.exe") do if exist %%P (set "ARIA2C=%%~P" & goto :found)
-where aria2c >nul 2>&1 && (set "ARIA2C=aria2c" & goto :found)
-echo [错误] 未找到 aria2c.exe，请确认已解压 aria2
-pause
-exit /b 1
-:found
+  const searchHint = aria2PathHint.trim().replace(/\\+$/, '');
+  const hintSearch = searchHint ? `if not defined ARIA2C for /f "delims=" %F in ('where /r "${searchHint}" aria2c.exe') do set "ARIA2C=%F"\n` : '';
+  const aria2StartCmd = `set "ARIA2C="
+for %P in ("%ProgramFiles%\\aria2\\aria2c.exe" "%ProgramFiles(x86)%\\aria2\\aria2c.exe" "%USERPROFILE%\\Downloads\\aria2\\aria2c.exe" ".\\aria2c.exe") do if not defined ARIA2C if exist %P set "ARIA2C=%~P"
+${hintSearch}for %D in (C D E F G H) do if not defined ARIA2C if exist %D:\\ for /f "delims=" %F in ('where /r %D:\\ aria2c.exe') do if not defined ARIA2C set "ARIA2C=%F"
+if not defined ARIA2C echo [错误] 未找到 aria2c.exe && pause && exit /b 1
 echo [找到] %ARIA2C%
-for %%F in ("%ARIA2C%") do cd /d "%%~dpF"
+for %Z in ("%ARIA2C%") do cd /d "%~dpZ"
 "%ARIA2C%" --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=%USERPROFILE%\\Downloads --max-connection-per-server=16 --split=16 --min-split-size=1M`;
   const [copied, setCopied] = useState(false);
   const copyStartCommand = useCallback(() => {
@@ -1119,7 +1120,7 @@ WshShell.Run "cmd /c aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-al
               onClick={() => setShowSettings(!showSettings)}
               className="text-white/30 hover:text-[#fb6400] transition-colors"
             >
-              {showSettings ? '收起设置' : '高级设置'}
+              {showSettings ? '收起设置' : '进行配置'}
             </button>
           </div>
 
@@ -1157,7 +1158,7 @@ WshShell.Run "cmd /c aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-al
             </div>
           )}
 
-          {/* 高级设置（aria2 配置 + 安装引导） */}
+          {/* 进行配置（aria2 配置 + 安装引导） */}
           {showSettings && (
             <div className="mt-3 bg-white/5 rounded-xl p-4 space-y-3 animate-slide-up">
               <div className="flex gap-3">
@@ -1304,6 +1305,17 @@ WshShell.Run "cmd /c aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-al
                       <div className="flex-1">
                         <p className="text-xs text-white/60 mb-1.5">启动 aria2</p>
                         <div className="space-y-2">
+                          {/* 路径提示 */}
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={aria2PathHint}
+                              onChange={(e) => setAria2PathHint(e.target.value)}
+                              placeholder="aria2 所在目录（可选，如 D:\Tools）"
+                              className="flex-1 px-2 py-1 text-[10px] bg-white/5 border border-white/10 rounded text-white placeholder:text-white/30 focus:outline-none focus:border-[#fb6400]"
+                            />
+                            <span className="text-[10px] text-white/30">填了搜得更快</span>
+                          </div>
                           {/* 一键复制命令 */}
                           <div className="flex items-center gap-2">
                             <button
@@ -1383,6 +1395,19 @@ WshShell.Run "cmd /c aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-al
                 </span>
               </div>
             </div>
+
+            {/* 服务器中转大文件提示 */}
+            {autoChannel === 'proxy' && probeResult.fileSize > 100 * 1024 * 1024 && aria2Status !== 'ok' && (
+              <div className="mt-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 text-xs text-yellow-400 leading-relaxed">
+                当前走服务器中转，多线程加速效果有限。大文件建议使用 aria2 本地多线程直连，可跑满带宽。
+                <button
+                  onClick={() => setShowAria2Intro(true)}
+                  className="ml-1 underline hover:text-yellow-300 transition-colors"
+                >
+                  了解 aria2
+                </button>
+              </div>
+            )}
 
             {/* GitHub 镜像测速 */}
             {mirrorTesting && (

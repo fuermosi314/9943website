@@ -12,7 +12,7 @@
 - **技术栈**: Next.js 14 + React 18 + Tailwind CSS 3 + TypeScript
 - **项目路径**: `/home/huang/claude/vs/work/9943小工具大全`
 - **部署计划**: 本地开发 → Git → Vercel 发布
-- **当前工具数量**: 48 个（自动统计自 `lib/tools.ts`）
+- **当前工具数量**: 49 个（自动统计自 `lib/tools.ts`）
 
 ---
 
@@ -137,7 +137,7 @@
 | `dev` | 开发工具 | 🔧 | 在线编译器导航 |
 | `life` | 生活工具 | 🎯 | BMI 计算器、单位换算、专业计算器、视频去水印、简单记、耗知通 |
 | `entertainment` | 娱乐工具 | 🎮 | 大转盘、二维码生成、随机数生成器、爆款开头生成器、毁灭地球的电磁炮 |
-| `website` | 网站工具 | 🌐 | Excalidraw, Carbon, JSON, CodeSandbox, Photopea, KMS, PDF24, S7资源库, FMHY, 便民查询网, 爱看机器人, Steam 下载, 图吧工具箱, Image Splitter, 柒夜导航, PhWalls, 纸由我, VirusTotal, Learn Git Branching, Watt Toolkit, AI Short, 云游君的厨房 |
+| `website` | 网站工具 | 🌐 | Excalidraw, Carbon, JSON, CodeSandbox, Photopea, KMS, PDF24, S7资源库, FMHY, 便民查询网, 爱看机器人, Steam 下载, 图吧工具箱, Image Splitter, 柒夜导航, PhWalls, 纸由我, VirusTotal, Learn Git Branching, Watt Toolkit, AI Short, 云游君的厨房, Everything 下载 |
 
 ### 收藏和历史功能
 - **收藏工具**: 每个工具卡片右上角有心形收藏按钮，点击可收藏/取消收藏，收藏后在"收藏工具"分类页面显示
