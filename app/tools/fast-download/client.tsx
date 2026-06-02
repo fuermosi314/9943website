@@ -292,9 +292,24 @@ export default function FastDownloadPage() {
     }
   }, []);
 
-  // aria2 RPC 调用（通过服务端代理，解决 HTTPS 混合内容问题）
+  // aria2 RPC 调用：先尝试浏览器直连（localhost 就是用户本机），失败再走服务端代理
   const aria2Rpc = useCallback(async (method: string, params: unknown[]) => {
     const host = aria2Host || 'localhost';
+    const rpcBody = { jsonrpc: '2.0', id: Date.now().toString(), method, params: aria2Secret ? [`token:${aria2Secret}`, ...params] : params };
+
+    // 1. 尝试浏览器直连（最快，aria2 通常在本机）
+    try {
+      const directRes = await fetch(`http://${host}:${aria2Port}/jsonrpc`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(rpcBody),
+        signal: AbortSignal.timeout(3000),
+      });
+      const data = await directRes.json();
+      if (!data.error) return data.result;
+    } catch {}
+
+    // 2. 走服务端代理（解决 HTTPS 混合内容 / 远程访问场景）
     const res = await fetch('/api/aria2', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
