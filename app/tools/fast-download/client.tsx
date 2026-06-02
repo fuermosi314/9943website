@@ -123,7 +123,7 @@ export default function FastDownloadPage() {
   const [idmDirectStatus, setIdmDirectStatus] = useState<'idle' | 'downloading' | 'done'>('idle');
   const [idmDirectProgress, setIdmDirectProgress] = useState({ loaded: 0, total: 0 });
   const [method, setMethod] = useState<DownloadMethod>('browser');
-  const [aria2Host, setAria2Host] = useState('localhost');
+  const [aria2Host, setAria2Host] = useState('');
   const [aria2Port, setAria2Port] = useState('6800');
   const [aria2Secret, setAria2Secret] = useState('');
   const [showSettings, setShowSettings] = useState(false);
@@ -292,17 +292,13 @@ export default function FastDownloadPage() {
     }
   }, []);
 
-  // aria2 RPC 调用
+  // aria2 RPC 调用（通过服务端代理，解决 HTTPS 混合内容问题）
   const aria2Rpc = useCallback(async (method: string, params: unknown[]) => {
-    const rpcUrl = `http://${aria2Host}:${aria2Port}/jsonrpc`;
-    const id = Date.now().toString();
-    const body: Record<string, unknown> = { jsonrpc: '2.0', id, method, params };
-    if (aria2Secret) body.params = [`token:${aria2Secret}`, ...params];
-
-    const res = await fetch(rpcUrl, {
+    const host = aria2Host || 'localhost';
+    const res = await fetch('/api/aria2', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ host, port: aria2Port, secret: aria2Secret, method, params }),
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error.message || 'aria2 调用失败');

@@ -284,6 +284,16 @@ export const tools: Tool[] = [
     keywords: ['文件搜索', 'everything', '秒搜', '文件查找', '文件管理'],
   },
   {
+    id: 'treesize',
+    name: 'TreeSize 下载',
+    description: '专业磁盘空间分析工具，快速找出大文件',
+    icon: '🌳',
+    category: 'website',
+    path: '/tools/treesize',
+    tags: ['磁盘', '空间', '分析', '大文件', '清理', 'treesize'],
+    keywords: ['磁盘分析', '大文件查找', '磁盘清理', '空间不足', '磁盘满了', '找大文件'],
+  },
+  {
     id: 'steam',
     name: 'Steam 下载',
     description: 'Steam 客户端官方下载地址，支持 Windows/Mac/Linux',
