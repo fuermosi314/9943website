@@ -292,45 +292,20 @@ export default function FastDownloadPage() {
     }
   }, []);
 
-  // aria2 RPC 调用：先尝试浏览器直连，失败再走服务端代理
+  // aria2 RPC 调用（浏览器直连，用 text/plain 避免 CORS preflight）
   const aria2Rpc = useCallback(async (method: string, params: unknown[]) => {
     const host = aria2Host || 'localhost';
     const rpcBody = { jsonrpc: '2.0', id: Date.now().toString(), method, params: aria2Secret ? [`token:${aria2Secret}`, ...params] : params };
 
-    // 1. 尝试浏览器直连
-    try {
-      const directRes = await fetch(`http://${host}:${aria2Port}/jsonrpc`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(rpcBody),
-        signal: AbortSignal.timeout(3000),
-      });
-      const data = await directRes.json();
-      if (!data.error) {
-        console.log('[aria2] 直连成功');
-        return data.result;
-      }
-      console.log('[aria2] 直连返回错误:', data.error);
-    } catch (e) {
-      console.log('[aria2] 直连失败:', e instanceof Error ? e.message : e);
-    }
-
-    // 2. 走服务端代理
-    try {
-      console.log('[aria2] 尝试服务端代理...');
-      const res = await fetch('/api/aria2', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ host, port: aria2Port, secret: aria2Secret, method, params }),
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error.message);
-      console.log('[aria2] 代理成功');
-      return data.result;
-    } catch (e) {
-      console.log('[aria2] 代理失败:', e instanceof Error ? e.message : e);
-      throw new Error('无法连接 aria2。如果是本机使用，请通过 http://localhost:3000 访问网站');
-    }
+    const res = await fetch(`http://${host}:${aria2Port}/jsonrpc`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(rpcBody),
+      signal: AbortSignal.timeout(5000),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message || 'aria2 调用失败');
+    return data.result;
   }, [aria2Host, aria2Port, aria2Secret]);
 
   // aria2 版本检测
