@@ -4,8 +4,8 @@ import { NextResponse } from 'next/server';
 const GITHUB_MIRRORS = [
   { name: 'gh-proxy', prefix: 'https://gh-proxy.com/' },
   { name: 'ghfast', prefix: 'https://ghfast.top/' },
-  { name: 'ghproxy', prefix: 'https://ghproxy.cc/' },
-  { name: 'moeyy', prefix: 'https://github.moeyy.xyz/' },
+  { name: 'ur1', prefix: 'https://github.ur1.fun/' },
+  { name: 'llkk', prefix: 'https://gh.llkk.cc/' },
 ];
 
 export async function GET() {
