@@ -56,15 +56,25 @@ async function resolveBestMirror(u: string): Promise<string> {
   const mirrors = getMirrorUrls(u);
   const candidates = [{ name: '原始', url: u }, ...mirrors];
   const results: { url: string; time: number }[] = [];
+
   await Promise.all(candidates.map(async (c) => {
     try {
       const t = Date.now();
-      const r = await fetch(c.url, { method: 'HEAD', redirect: 'follow', signal: AbortSignal.timeout(5000) });
-      if (r.ok || r.status === 302 || r.status === 301) {
-        results.push({ url: c.url, time: Date.now() - t });
+      const r = await fetch(c.url, { method: 'HEAD', redirect: 'follow', signal: AbortSignal.timeout(8000) });
+
+      // 严格验证：必须是 200 状态，且有有效的 Content-Length
+      if (r.ok) {
+        const contentLength = r.headers.get('content-length');
+        const contentType = r.headers.get('content-type') || '';
+
+        // 检查是否是有效的文件响应（有大小，且不是 HTML 错误页面）
+        if (contentLength && parseInt(contentLength) > 1000 && !contentType.includes('text/html')) {
+          results.push({ url: c.url, time: Date.now() - t });
+        }
       }
     } catch {}
   }));
+
   if (results.length === 0) return u;
   results.sort((a, b) => a.time - b.time);
   return results[0].url;
@@ -737,25 +747,23 @@ export default function FastDownloadPage() {
     }
   }, [idmRelease]);
 
-  const handleDownload = useCallback(async () => {
-    if (!probeResult) return;
-    let downloadUrl = bestUrl || url.trim();
-    setError('');
-    setSuccess('');
+  // aria2 下载，失败时自动切换镜像
+  const aria2DownloadWithMirrorRetry = useCallback(async (originalUrl: string, fileName: string) => {
+    // 获取所有候选 URL
+    const candidates = [originalUrl];
+    if (isGitHubReleasesUrl(originalUrl)) {
+      const mirrors = getMirrorUrls(originalUrl);
+      candidates.push(...mirrors.map(m => m.url));
+    }
 
-    if (method === 'aria2') {
-      // aria2 RPC 下载（GitHub 链接强制使用镜像，因为本地 aria2 可能没有代理）
-      if (isGitHubReleasesUrl(downloadUrl) && !downloadUrl.includes('gh-proxy.com') && !downloadUrl.includes('ghfast.top') && !downloadUrl.includes('github.ur1.fun') && !downloadUrl.includes('gh.llkk.cc')) {
-        // 测试镜像，选最快的
-        const mirrorUrl = await resolveBestMirror(downloadUrl);
-        if (mirrorUrl !== downloadUrl) {
-          downloadUrl = mirrorUrl;
-          setSuccess('已自动切换到镜像链接（aria2 加速）');
-        }
-      }
+    let lastError = '';
+
+    for (const downloadUrl of candidates) {
       try {
+        setSuccess(`尝试: ${downloadUrl.includes('gh-proxy.com') ? 'gh-proxy' : downloadUrl.includes('ghfast.top') ? 'ghfast' : downloadUrl.includes('github.ur1.fun') ? 'ur1' : downloadUrl.includes('gh.llkk.cc') ? 'llkk' : '原始链接'}...`);
+
         const params: Record<string, string>[] = [];
-        if (probeResult.fileName) params.push({ out: probeResult.fileName });
+        if (fileName) params.push({ out: fileName });
 
         const gid = await aria2Rpc('aria2.addUri', [[downloadUrl], ...params]);
         setAria2DlGid(gid);
@@ -769,37 +777,84 @@ export default function FastDownloadPage() {
 
         // 轮询下载进度
         if (aria2PollRef.current) clearInterval(aria2PollRef.current);
-        aria2PollRef.current = setInterval(async () => {
-          try {
-            const status = await aria2Rpc('aria2.tellStatus', [gid]);
-            const completed = parseInt(status.completedLength || '0');
-            const total = parseInt(status.totalLength || '0');
-            const dlSpeed = parseInt(status.downloadSpeed || '0');
-            setAria2DlProgress2({ loaded: completed, total, speed: dlSpeed, status: status.status });
-            if (status.status === 'complete' || status.status === 'removed' || status.status === 'error') {
+
+        const result = await new Promise<boolean>((resolve) => {
+          aria2PollRef.current = setInterval(async () => {
+            try {
+              const status = await aria2Rpc('aria2.tellStatus', [gid]);
+              const completed = parseInt(status.completedLength || '0');
+              const total = parseInt(status.totalLength || '0');
+              const dlSpeed = parseInt(status.downloadSpeed || '0');
+              setAria2DlProgress2({ loaded: completed, total, speed: dlSpeed, status: status.status });
+
+              if (status.status === 'complete') {
+                if (aria2PollRef.current) clearInterval(aria2PollRef.current);
+                aria2PollRef.current = null;
+                resolve(true);
+              } else if (status.status === 'error') {
+                if (aria2PollRef.current) clearInterval(aria2PollRef.current);
+                aria2PollRef.current = null;
+                lastError = status.errorMessage || '下载失败';
+                // 移除失败的任务
+                try { await aria2Rpc('aria2.remove', [gid]); } catch {}
+                resolve(false);
+              } else if (status.status === 'removed') {
+                if (aria2PollRef.current) clearInterval(aria2PollRef.current);
+                aria2PollRef.current = null;
+                resolve(false);
+              }
+            } catch {
               if (aria2PollRef.current) clearInterval(aria2PollRef.current);
               aria2PollRef.current = null;
+              resolve(false);
             }
-          } catch {
-            if (aria2PollRef.current) clearInterval(aria2PollRef.current);
-            aria2PollRef.current = null;
-          }
-        }, 1000);
+          }, 1000);
+        });
+
+        if (result) {
+          setSuccess('下载完成');
+          return true;
+        }
+
+        // 当前镜像失败，尝试下一个
+        setAria2DlGid('');
+        continue;
+      } catch (err) {
+        lastError = (err as Error).message;
+        continue;
+      }
+    }
+
+    // 所有镜像都失败
+    setError(`所有镜像下载失败: ${lastError}`);
+    return false;
+  }, [aria2Rpc]);
+
+  const handleDownload = useCallback(async () => {
+    if (!probeResult) return;
+    let downloadUrl = bestUrl || url.trim();
+    setError('');
+    setSuccess('');
+
+    if (method === 'aria2') {
+      // aria2 RPC 下载（GitHub 链接自动使用镜像并支持失败重试）
+      try {
+        await aria2DownloadWithMirrorRetry(downloadUrl, probeResult.fileName);
       } catch (err) {
         setError(`aria2 下载失败: ${(err as Error).message}。请确认 aria2 已启动且 RPC 端口正确。`);
       }
       return;
     }
 
+    // 浏览器下载逻辑...
     if (method === 'idm') {
-      // IDM 协议调用
       const idmUrl = `idm://dl/${encodeURIComponent(downloadUrl)}`;
       window.open(idmUrl, '_blank');
       setSuccess('已调用 IDM，请在 IDM 中查看下载任务');
       return;
     }
 
-    // 浏览器多线程下载（支持断点续传）
+    // 浏览器多线程下载
     if (!probeResult.supportsRange) {
       window.open(downloadUrl, '_blank');
       return;
@@ -814,7 +869,7 @@ export default function FastDownloadPage() {
     const fileSize = probeResult.fileSize;
     const chunkSize = Math.ceil(fileSize / threads);
 
-    // 初始化分片状态（支持续传：从 resumeState 恢复已完成的分片）
+    // 初始化分片状态
     const initChunks: ChunkProgress[] = [];
     const buffers: (ArrayBuffer | null)[] = new Array(threads).fill(null);
     let initialLoaded = 0;
@@ -826,12 +881,10 @@ export default function FastDownloadPage() {
       const chunkTotal = end - start + 1;
 
       if (resumeState && resumeState.completedChunks[i]) {
-        // 此分片已完成，从缓存恢复
         initChunks.push({ id: i, loaded: chunkTotal, total: chunkTotal, done: true });
         buffers[i] = resumeState.chunkBuffers[i] || null;
         if (buffers[i]) initialLoaded += buffers[i]!.byteLength;
       } else {
-        // 此分片需要下载（续传时可能有部分进度）
         const partialLoaded = resumeState?.chunkBuffers[i]?.byteLength || 0;
         initChunks.push({ id: i, loaded: partialLoaded, total: chunkTotal, done: false });
         if (resumeState?.chunkBuffers[i]) {
@@ -842,9 +895,8 @@ export default function FastDownloadPage() {
     }
     setChunks(initChunks);
     setTotalLoaded(initialLoaded);
-    setResumeState(null); // 清除续传状态
+    setResumeState(null);
 
-    // 保存下载状态到 IndexedDB（用于续传）
     const saveState = () => {
       saveDownloadState({
         url: downloadUrl,
@@ -875,16 +927,15 @@ export default function FastDownloadPage() {
     }, 500);
 
     try {
-      // 只下载未完成的分片
       const pendingChunks = initChunks.filter(c => !c.done);
       let saveCounter = 0;
 
       await Promise.all(
         pendingChunks.map(async (chunk) => {
-          const start = chunk.id * chunkSize + chunk.loaded; // 从已下载的位置继续
+          const start = chunk.id * chunkSize + chunk.loaded;
           const end = Math.min(chunk.id * chunkSize + chunkSize - 1, fileSize - 1);
 
-          if (start > end) return; // 已完成
+          if (start > end) return;
 
           const res = autoChannel === 'cors'
             ? await fetch(downloadUrl, {
@@ -903,7 +954,6 @@ export default function FastDownloadPage() {
           const reader = res.body?.getReader();
           if (!reader) throw new Error('无法读取响应流');
 
-          // 如果有部分数据，先合并
           const parts: Uint8Array[] = [];
           if (buffers[chunk.id]) {
             parts.push(new Uint8Array(buffers[chunk.id]!));
@@ -917,10 +967,8 @@ export default function FastDownloadPage() {
             setTotalLoaded((prev) => prev + value.byteLength);
             setChunks([...initChunks]);
 
-            // 每 20 个 chunk 保存一次状态（防止中断丢失太多进度）
             saveCounter++;
             if (saveCounter % 20 === 0) {
-              // 合并当前分片数据到 buffers
               const totalLen = parts.reduce((s, p) => s + p.byteLength, 0);
               const merged = new Uint8Array(totalLen);
               let off = 0;
@@ -967,11 +1015,9 @@ export default function FastDownloadPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
 
-      // 下载完成，删除 IndexedDB 中的状态
       deleteDownloadState(downloadUrl).catch(() => {});
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
-        // 下载失败，保存当前进度（断点续传）
         saveState();
         setError(`下载失败，已保存进度，可点击「继续下载」重试`);
       }
@@ -980,7 +1026,7 @@ export default function FastDownloadPage() {
       setDownloading(false);
       abortRef.current = null;
     }
-  }, [url, probeResult, threadCount, method, aria2Rpc, resumeState, autoChannel, bestUrl]);
+  }, [url, probeResult, threadCount, method, aria2Rpc, resumeState, autoChannel, bestUrl, aria2DownloadWithMirrorRetry]);
 
   // 生成启动脚本并下载
   const downloadStartScript = useCallback((type: 'bat' | 'sh') => {
