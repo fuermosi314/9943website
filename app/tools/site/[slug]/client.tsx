@@ -153,6 +153,13 @@ const siteFeatures: Record<string, string[]> = {
     '开源项目，支持暗黑模式',
     '适合新手的家常菜做法，简单易学',
   ],
+  runoob: [
+    '涵盖 HTML/CSS/JavaScript/Python/Java 等主流技术栈',
+    '每篇教程配有在线实例，边学边练',
+    '提供完整的参考手册和速查表',
+    '支持在线代码运行工具，即时验证',
+    '中文友好，适合编程入门和日常查阅',
+  ],
 };
 
 export default function SiteDetailClient() {
