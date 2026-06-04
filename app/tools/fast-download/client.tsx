@@ -89,6 +89,12 @@ export default function FastDownloadPage() {
   const abortRef = useRef<AbortController | null>(null);
   const speedRef = useRef({ lastTime: Date.now(), lastLoaded: 0 });
 
+  // aria2 下载进度追踪
+  const [aria2DlGid, setAria2DlGid] = useState('');
+  const [aria2DlDir, setAria2DlDir] = useState('');
+  const [aria2DlProgress2, setAria2DlProgress2] = useState({ loaded: 0, total: 0, speed: 0, status: '' });
+  const aria2PollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // 自动测速 & 断点续传
   const [autoThreadCount, setAutoThreadCount] = useState<number | null>(null);
   const [speedTesting, setSpeedTesting] = useState(false);
@@ -143,6 +149,28 @@ export default function FastDownloadPage() {
     const hint = localStorage.getItem('fast-dl-aria2-path-hint');
     if (hint) setAria2PathHint(hint);
   }, []);
+
+  // 从 URL 参数读取下载链接并自动开始检测
+  const autoProbeRef = useRef(false);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlParam = params.get('url');
+    if (urlParam && !autoProbeRef.current) {
+      autoProbeRef.current = true;
+      setUrl(urlParam);
+    }
+  }, []);
+
+  // 当 url 被设置后自动触发检测
+  useEffect(() => {
+    if (autoProbeRef.current && url) {
+      autoProbeRef.current = false;
+      const timer = setTimeout(() => {
+        handleProbe();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [url]);
 
   // 持久化配置
   useEffect(() => { localStorage.setItem('fast-dl-method', method); }, [method]);
@@ -708,7 +736,33 @@ export default function FastDownloadPage() {
         if (probeResult.fileName) params.push({ out: probeResult.fileName });
 
         const gid = await aria2Rpc('aria2.addUri', [[downloadUrl], ...params]);
-        setSuccess(`已发送到 aria2，GID: ${gid}`);
+        setAria2DlGid(gid);
+        setAria2DlProgress2({ loaded: 0, total: 0, speed: 0, status: 'active' });
+
+        // 获取下载目录
+        try {
+          const opts = await aria2Rpc('aria2.getGlobalOption', []);
+          setAria2DlDir(opts.dir || '');
+        } catch {}
+
+        // 轮询下载进度
+        if (aria2PollRef.current) clearInterval(aria2PollRef.current);
+        aria2PollRef.current = setInterval(async () => {
+          try {
+            const status = await aria2Rpc('aria2.tellStatus', [gid]);
+            const completed = parseInt(status.completedLength || '0');
+            const total = parseInt(status.totalLength || '0');
+            const dlSpeed = parseInt(status.downloadSpeed || '0');
+            setAria2DlProgress2({ loaded: completed, total, speed: dlSpeed, status: status.status });
+            if (status.status === 'complete' || status.status === 'removed' || status.status === 'error') {
+              if (aria2PollRef.current) clearInterval(aria2PollRef.current);
+              aria2PollRef.current = null;
+            }
+          } catch {
+            if (aria2PollRef.current) clearInterval(aria2PollRef.current);
+            aria2PollRef.current = null;
+          }
+        }, 1000);
       } catch (err) {
         setError(`aria2 下载失败: ${(err as Error).message}。请确认 aria2 已启动且 RPC 端口正确。`);
       }
@@ -1075,7 +1129,19 @@ WshShell.Run "cmd /c aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-al
                 className="w-full px-4 py-3 pr-20 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-white/30 focus:outline-none focus:border-[#fb6400] transition-all"
               />
               <button
-                onClick={() => navigator.clipboard.readText().then(handleUrlChange).catch(() => {})}
+                onClick={async () => {
+                  try {
+                    if (navigator.clipboard && navigator.clipboard.readText) {
+                      const text = await navigator.clipboard.readText();
+                      handleUrlChange(text);
+                    } else {
+                      // HTTP 环境下 clipboard API 不可用，提示用户手动粘贴
+                      alert('请使用 Ctrl+V 粘贴链接');
+                    }
+                  } catch {
+                    alert('请使用 Ctrl+V 粘贴链接');
+                  }
+                }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 text-xs text-white/40 hover:text-[#fb6400] bg-white/5 rounded-lg transition-colors"
               >
                 粘贴
@@ -1098,6 +1164,42 @@ WshShell.Run "cmd /c aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-al
           {success && (
             <div className="mt-4 bg-green-500/10 border border-green-500/20 rounded-xl p-4 text-sm text-green-400">
               {success}
+            </div>
+          )}
+
+          {/* aria2 下载进度 */}
+          {aria2DlGid && aria2DlProgress2.status !== '' && (
+            <div className="mt-4 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-sm">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-blue-400 font-medium">
+                  {aria2DlProgress2.status === 'complete' ? '下载完成' :
+                   aria2DlProgress2.status === 'error' ? '下载出错' :
+                   aria2DlProgress2.status === 'paused' ? '已暂停' :
+                   aria2DlProgress2.status === 'waiting' ? '等待中' : '下载中'}
+                </span>
+                {aria2DlProgress2.speed > 0 && (
+                  <span className="text-blue-300">{formatSpeed(aria2DlProgress2.speed)}</span>
+                )}
+              </div>
+              {aria2DlProgress2.total > 0 && (
+                <>
+                  <div className="w-full bg-white/10 rounded-full h-2 mb-2">
+                    <div
+                      className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${(aria2DlProgress2.loaded / aria2DlProgress2.total * 100).toFixed(1)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-white/40">
+                    <span>{formatSize(aria2DlProgress2.loaded)} / {formatSize(aria2DlProgress2.total)}</span>
+                    <span>{(aria2DlProgress2.loaded / aria2DlProgress2.total * 100).toFixed(1)}%</span>
+                  </div>
+                </>
+              )}
+              {aria2DlDir && (
+                <div className="mt-2 text-xs text-white/30">
+                  保存到: {aria2DlDir}\{probeResult?.fileName || ''}
+                </div>
+              )}
             </div>
           )}
 

@@ -20,6 +20,7 @@ export const categories = [
   { id: 'life', name: '生活工具', icon: '🎯' },
   { id: 'entertainment', name: '娱乐工具', icon: '🎮' },
   { id: 'website', name: '网站工具', icon: '🌐' },
+  { id: 'software', name: '软件工具', icon: '💿' },
 ];
 
 export const tools: Tool[] = [
@@ -324,6 +325,17 @@ export const tools: Tool[] = [
     tags: ['硬件', '检测', '工具箱', 'diy', '装机', '图吧', 'cpu', 'gpu'],
     keywords: ['电脑检测', '硬件检测', '显卡检测', 'cpu检测', '跑分', '温度监控', '鲁大师替代'],
   },
+  // ===== 软件工具 =====
+  {
+    id: 'desktop-cleaner',
+    name: 'AI智能桌面整理大师',
+    description: 'AI驱动的桌面图标整理工具，一键优化桌面布局',
+    icon: '🧹',
+    category: 'software',
+    path: '/tools/desktop-cleaner',
+    tags: ['桌面', '整理', '清理', '图标', '优化', 'AI'],
+    keywords: ['桌面整理', '图标整理', '桌面清理', '桌面优化', '桌面图标', '桌面美化'],
+  },
   // ===== 开发工具 =====
   {
     id: 'online-compiler',
@@ -544,6 +556,17 @@ export const tools: Tool[] = [
     externalUrl: 'https://cook.yunyoujun.cn',
     tags: ['菜谱', '做饭', '厨房', '家常菜', '美食'],
     keywords: ['菜谱', '做菜', '家常菜', '烹饪', '食谱', '厨房'],
+  },
+  {
+    id: 'runoob',
+    name: '菜鸟教程',
+    description: '编程技术在线教程，HTML/CSS/JS/Python/Java 等全栈学习',
+    icon: '📚',
+    category: 'website',
+    path: '/tools/site/runoob',
+    externalUrl: 'https://www.runoob.com/',
+    tags: ['教程', '编程', '学习', '前端', '后端', 'python', 'java'],
+    keywords: ['学编程', '编程入门', '前端教程', 'python教程', 'java教程', 'html教程', '在线教程', '菜鸟'],
   },
 ];
 
