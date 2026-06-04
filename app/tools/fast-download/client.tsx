@@ -739,12 +739,20 @@ export default function FastDownloadPage() {
 
   const handleDownload = useCallback(async () => {
     if (!probeResult) return;
-    const downloadUrl = bestUrl || url.trim();
+    let downloadUrl = bestUrl || url.trim();
     setError('');
     setSuccess('');
 
     if (method === 'aria2') {
-      // aria2 RPC 下载
+      // aria2 RPC 下载（GitHub 链接强制使用镜像，因为本地 aria2 可能没有代理）
+      if (isGitHubReleasesUrl(downloadUrl) && !downloadUrl.includes('gh-proxy.com') && !downloadUrl.includes('ghfast.top') && !downloadUrl.includes('github.ur1.fun') && !downloadUrl.includes('gh.llkk.cc')) {
+        // 测试镜像，选最快的
+        const mirrorUrl = await resolveBestMirror(downloadUrl);
+        if (mirrorUrl !== downloadUrl) {
+          downloadUrl = mirrorUrl;
+          setSuccess('已自动切换到镜像链接（aria2 加速）');
+        }
+      }
       try {
         const params: Record<string, string>[] = [];
         if (probeResult.fileName) params.push({ out: probeResult.fileName });
