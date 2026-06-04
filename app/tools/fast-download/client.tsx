@@ -27,8 +27,8 @@ const DEFAULT_THREADS = 8;
 
 // GitHub 镜像代理列表
 const GITHUB_MIRRORS = [
-  { name: 'ghproxy', prefix: 'https://mirror.ghproxy.com/' },
   { name: 'gh-proxy', prefix: 'https://gh-proxy.com/' },
+  { name: 'ghfast', prefix: 'https://ghfast.top/' },
 ];
 
 function isGitHubReleasesUrl(u: string): boolean {
