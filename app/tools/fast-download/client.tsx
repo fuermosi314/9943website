@@ -25,11 +25,22 @@ interface ChunkProgress {
 const THREAD_OPTIONS = [1, 2, 4, 8, 16, 32];
 const DEFAULT_THREADS = 8;
 
-// GitHub 镜像代理列表
-const GITHUB_MIRRORS = [
+// GitHub 镜像代理列表（从 API 动态获取）
+let GITHUB_MIRRORS: { name: string; prefix: string }[] = [
   { name: 'gh-proxy', prefix: 'https://gh-proxy.com/' },
   { name: 'ghfast', prefix: 'https://ghfast.top/' },
 ];
+
+// 从 API 获取最新镜像列表
+async function fetchMirrors() {
+  try {
+    const res = await fetch('/api/github-mirrors');
+    const data = await res.json();
+    if (data.mirrors && data.mirrors.length > 0) {
+      GITHUB_MIRRORS = data.mirrors;
+    }
+  } catch { /* 使用默认列表 */ }
+}
 
 function isGitHubReleasesUrl(u: string): boolean {
   return /^https?:\/\/github\.com\/[^/]+\/[^/]+\/releases\/download\//.test(u);
@@ -148,6 +159,9 @@ export default function FastDownloadPage() {
     if (secret) setAria2Secret(secret);
     const hint = localStorage.getItem('fast-dl-aria2-path-hint');
     if (hint) setAria2PathHint(hint);
+
+    // 获取最新镜像列表
+    fetchMirrors();
   }, []);
 
   // 从 URL 参数读取下载链接并自动开始检测
