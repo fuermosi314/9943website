@@ -1018,7 +1018,7 @@ echo 保持此窗口打开，关闭即停止服务
 echo ================================
 echo.
 
-aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=%USERPROFILE%\\Downloads --max-connection-per-server=16 --split=16 --min-split-size=1M`;
+aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --check-certificate=false --dir=%USERPROFILE%\\Downloads --max-connection-per-server=16 --split=16 --min-split-size=1M`;
       filename = '启动aria2下载服务.bat';
       mime = 'application/bat';
     } else {
@@ -1045,7 +1045,7 @@ echo "保持此终端打开，Ctrl+C 停止服务"
 echo "================================"
 echo ""
 
-aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir="$HOME/Downloads" --max-connection-per-server=16 --split=16 --min-split-size=1M`;
+aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --check-certificate=false --dir="$HOME/Downloads" --max-connection-per-server=16 --split=16 --min-split-size=1M`;
       filename = 'start-aria2.sh';
       mime = 'application/x-sh';
     }
@@ -1070,7 +1070,7 @@ ${hintSearch}for %D in (C D E F G H) do if not defined ARIA2C if exist %D:\\ for
 if not defined ARIA2C echo [错误] 未找到 aria2c.exe && pause && exit /b 1
 echo [找到] %ARIA2C%
 for %Z in ("%ARIA2C%") do cd /d "%~dpZ"
-"%ARIA2C%" --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=%USERPROFILE%\\Downloads --max-connection-per-server=16 --split=16 --min-split-size=1M`;
+"%ARIA2C%" --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --check-certificate=false --dir=%USERPROFILE%\\Downloads --max-connection-per-server=16 --split=16 --min-split-size=1M`;
   const [copied, setCopied] = useState(false);
   const copyStartCommand = useCallback(() => {
     const ta = document.createElement('textarea');
@@ -1089,7 +1089,7 @@ for %Z in ("%ARIA2C%") do cd /d "%~dpZ"
   const downloadAutoStartScript = useCallback(() => {
     // Windows VBS：静默启动 aria2（无 cmd 窗口）
     const vbsContent = `Set WshShell = CreateObject("WScript.Shell")
-WshShell.Run "cmd /c aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --dir=%USERPROFILE%\\Downloads --max-connection-per-server=16 --split=16 --min-split-size=1M", 0, False`;
+WshShell.Run "cmd /c aria2c --enable-rpc --rpc-listen-port=${aria2Port} --rpc-allow-origin-all --check-certificate=false --dir=%USERPROFILE%\\Downloads --max-connection-per-server=16 --split=16 --min-split-size=1M", 0, False`;
     const blob = new Blob([vbsContent], { type: 'application/vbs' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
