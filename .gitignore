@@ -3,4 +3,5 @@ node_modules/
 .env.local
 *.tsbuildinfo
 .claude/
+.vscode/
 .vercel
