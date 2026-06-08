@@ -336,6 +336,16 @@ export const tools: Tool[] = [
     tags: ['桌面', '整理', '清理', '图标', '优化', 'AI'],
     keywords: ['桌面整理', '图标整理', '桌面清理', '桌面优化', '桌面图标', '桌面美化'],
   },
+  {
+    id: 'smart-danmu',
+    name: '智能弹幕',
+    description: '桌面弹幕助手，AI生成弹幕，让桌面不再孤单',
+    icon: '💬',
+    category: 'software',
+    path: '/tools/smart-danmu',
+    tags: ['弹幕', '桌面', 'AI', '陪伴', '直播'],
+    keywords: ['桌面弹幕', '弹幕助手', 'AI弹幕', '直播弹幕', '桌面陪伴', '弹幕软件'],
+  },
   // ===== 开发工具 =====
   {
     id: 'online-compiler',
