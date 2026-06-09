@@ -1,10 +1,12 @@
 'use client';
 import { useToolHistory } from '@/lib/useToolHistory';
 import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
 
-const downloadUrl = 'https://github.com/fuermosi314/apps/releases/download/v2.0.0/AI.Setup.2.0.0.exe';
+const GITHUB_REPO = 'fuermosi314/apps';
+const ASSET_NAME = 'AI.Setup.2.0.0.exe'; // 默认文件名，用于匹配
 
 const features = [
   { icon: '🤖', title: 'AI 智能分析', desc: '神经网络驱动的桌面布局优化算法' },
@@ -16,6 +18,25 @@ const features = [
 export default function DesktopCleanerPage() {
   useToolHistory('desktop-cleaner');
   const router = useRouter();
+  const [downloadUrl, setDownloadUrl] = useState('');
+  const [version, setVersion] = useState('');
+
+  useEffect(() => {
+    fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`)
+      .then(res => res.json())
+      .then(data => {
+        const asset = data.assets?.find((a: any) => a.name.includes('Setup') || a.name.includes('.exe'));
+        if (asset) {
+          setDownloadUrl(asset.browser_download_url);
+          setVersion(data.tag_name);
+        }
+      })
+      .catch(() => {
+        // fallback
+        setDownloadUrl(`https://github.com/${GITHUB_REPO}/releases/download/v2.0.0/AI.Setup.2.0.0.exe`);
+        setVersion('v2.0.0');
+      });
+  }, []);
 
   return (
     <div className="min-h-screen relative z-10">
@@ -40,7 +61,7 @@ export default function DesktopCleanerPage() {
             🧹
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">AI智能桌面整理大师</h2>
-          <p className="text-white/40 text-sm">v2.0.0 · Windows 64位 · 97MB</p>
+          <p className="text-white/40 text-sm">{version || 'v2.0.0'} · Windows 64位 · 97MB</p>
         </div>
 
         {/* Download Button */}

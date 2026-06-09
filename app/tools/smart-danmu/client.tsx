@@ -1,10 +1,12 @@
 'use client';
 import { useToolHistory } from '@/lib/useToolHistory';
 import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
 
-const downloadUrl = 'https://github.com/fuermosi314/apps/releases/download/v2.0.1/smart-danmu.zip';
+const GITHUB_REPO = 'fuermosi314/apps';
+const ASSET_NAME = 'smart-danmu.zip'; // 默认文件名，用于匹配
 
 const features = [
   { icon: '🤖', title: 'AI 智能生成', desc: '视觉AI分析屏幕内容，自动生成弹幕' },
@@ -16,6 +18,25 @@ const features = [
 export default function SmartDanmuPage() {
   useToolHistory('smart-danmu');
   const router = useRouter();
+  const [downloadUrl, setDownloadUrl] = useState('');
+  const [version, setVersion] = useState('');
+
+  useEffect(() => {
+    fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`)
+      .then(res => res.json())
+      .then(data => {
+        const asset = data.assets?.find((a: any) => a.name.includes('danmu') || a.name.includes('.zip'));
+        if (asset) {
+          setDownloadUrl(asset.browser_download_url);
+          setVersion(data.tag_name);
+        }
+      })
+      .catch(() => {
+        // fallback
+        setDownloadUrl(`https://github.com/${GITHUB_REPO}/releases/download/v2.0.1/smart-danmu.zip`);
+        setVersion('v2.0.1');
+      });
+  }, []);
 
   return (
     <div className="min-h-screen relative z-10">
@@ -40,7 +61,7 @@ export default function SmartDanmuPage() {
             💬
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">智能弹幕</h2>
-          <p className="text-white/40 text-sm">v2.0.1 · Windows 64位 · 75MB</p>
+          <p className="text-white/40 text-sm">{version || 'v2.0.1'} · Windows 64位 · 75MB</p>
         </div>
 
         {/* Download Button */}
