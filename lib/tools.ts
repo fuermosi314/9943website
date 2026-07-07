@@ -205,6 +205,16 @@ export const tools: Tool[] = [
     keywords: ['pdf瘦身', '减小pdf', 'pdf变小', 'pdf文件太大'],
   },
   {
+    id: 'md-to-html',
+    name: 'Markdown 转 HTML',
+    description: '将 Markdown 文件或代码转换为 HTML，支持实时预览',
+    icon: '📝',
+    category: 'document',
+    path: '/tools/md-to-html',
+    tags: ['markdown', 'html', 'md', '转换', '预览'],
+    keywords: ['md转html', 'markdown渲染', 'markdown预览', 'markdown转网页', '生成html', 'markdown导出'],
+  },
+  {
     id: 'wheel',
     name: '大转盘',
     description: '随机决策转盘，支持自定义选项',

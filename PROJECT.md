@@ -12,7 +12,7 @@
 - **技术栈**: Next.js 14 + React 18 + Tailwind CSS 3 + TypeScript
 - **项目路径**: `/home/huang/claude/vs/work/9943小工具大全`
 - **部署计划**: 本地开发 → Git → Vercel 发布
-- **当前工具数量**: 53 个（自动统计自 `lib/tools.ts`）
+- **当前工具数量**: 65 个（自动统计自 `lib/tools.ts`）
 
 ---
 
@@ -73,50 +73,75 @@
 │   │   └── route.ts         # DeepSeek API 调用（爆款开头生成器）
 │   ├── api/video-parse/
 │   │   └── route.ts         # 视频去水印解析 API（抖音/B站/西瓜）
+│   ├── api/github-mirrors/
+│   │   └── route.ts         # GitHub 镜像列表 API
 │   ├── api/fast-download/
 │   │   ├── parse/route.ts   # 网盘链接解析（夸克/阿里/百度/115/天翼/迅雷）
-│   │   ├── probe/route.ts   # 下载链接探测（文件大小/Range支持）
-│   │   └── download/route.ts # 分片下载代理
+│   │   ├── probe/route.ts   # 下载链接探测（文件大小/Range/CORS支持）
+│   │   ├── download/route.ts # 分片下载代理
+│   │   └── aria2-release/route.ts # aria2 最新版本信息
 │   └── tools/
 │       ├── bmi/             # BMI 计算器
 │       ├── calculator/      # 专业计算器
+│       ├── consumables/     # 耗知通（消耗品管理）
+│       ├── desktop-cleaner/ # AI智能桌面整理大师
+│       ├── earth-cannon/    # 毁灭地球的电磁炮
+│       ├── everything/      # Everything 下载
+│       ├── fast-download/   # 高速下载
 │       ├── hook-generator/  # 爆款开头生成器
+│       ├── icon-extract/    # 图标提取
 │       ├── image-compress/  # 图片压缩
 │       ├── image-convert/   # 图片格式转换
 │       ├── image-crop/      # 图片裁剪
 │       ├── image-resize/    # 图片调整大小
 │       ├── image-rotate/    # 图片旋转/翻转
+│       ├── md-to-html/      # Markdown 转 HTML
 │       ├── office-to-pdf/   # Office 转 PDF
+│       ├── online-compiler/ # 在线编译器导航
 │       ├── pdf-compress/    # PDF 压缩
 │       ├── pdf-merge/       # PDF 合并
 │       ├── pdf-split/       # PDF 拆分
 │       ├── pdf-to-office/   # PDF 转 Office
 │       ├── qrcode/          # 二维码生成
 │       ├── random-generator/# 随机数生成器
+│       ├── simple-note/     # 简单记（日记工具）
+│       ├── site/[slug]/     # 网站工具详情页（动态路由）
+│       ├── smart-danmu/     # 智能弹幕
+│       ├── steam/           # Steam 客户端下载
+│       ├── steampp/         # Watt Toolkit 下载
+│       ├── tianjige/        # 天机阁（3D 家居收纳）
+│       ├── treesize/        # TreeSize 下载
 │       ├── unit-converter/  # 单位换算
-│       ├── online-compiler/ # 在线编译器导航
 │       ├── video-unwatermark/ # 视频去水印
 │       ├── wheel/           # 大转盘
-│       ├── word-count/      # 字数统计
-│       ├── simple-note/      # 简单记（日记工具）
-│       ├── site/[slug]/     # 网站工具详情页（动态路由）
-│       └── steam/           # Steam 客户端下载
+│       └── word-count/      # 字数统计
 ├── components/
 │   ├── Header.tsx           # 顶栏：Logo + 搜索框 + 在线状态
 │   ├── CategoryNav.tsx      # 分类导航栏（sticky）
 │   ├── ToolCard.tsx         # 工具卡片组件
+│   ├── BackButton.tsx       # 统一返回按钮（回分类页）
+│   ├── FullscreenButton.tsx # 全屏切换按钮
+│   ├── CategorySelector.tsx # 分类选择器
+│   ├── DatePicker.tsx       # 日期选择器
 │   ├── TopicInput.tsx       # [爆款开头] 主题输入框
 │   ├── PlatformSelector.tsx # [爆款开头] 平台选择器
 │   ├── ContentTypeSelector.tsx # [爆款开头] 内容类型选择
 │   ├── HookCard.tsx         # [爆款开头] 单个 hook 卡片
 │   ├── HookGrid.tsx         # [爆款开头] hook 网格展示
 │   ├── ErrorBanner.tsx      # [爆款开头] 错误提示
-│   └── HistoryPanel.tsx     # [爆款开头] 历史记录面板
+│   ├── HistoryPanel.tsx     # [爆款开头] 历史记录面板
+│   └── tianjige/            # [天机阁] 3D 相关组件
 ├── lib/
 │   ├── tools.ts             # 工具数据定义 + 分类 + 搜索
 │   ├── types.ts             # TypeScript 类型
 │   ├── prompts.ts           # DeepSeek 提示词模板
-│   └── storage.ts           # localStorage 封装
+│   ├── storage.ts           # localStorage 封装
+│   ├── useToolHistory.ts    # 工具历史记录 hook
+│   ├── category-manager.ts  # 分类管理工具
+│   ├── consumables-db.ts    # 消耗品 IndexedDB
+│   ├── download-db.ts       # 下载进度 IndexedDB（断点续传）
+│   ├── simple-note-db.ts    # 简单记 IndexedDB
+│   └── tianjige-db.ts       # 天机阁 IndexedDB
 ├── .env.local               # DeepSeek API 配置
 ├── tailwind.config.ts
 ├── postcss.config.js
@@ -154,26 +179,10 @@
 
 ## 5. 关键设计规则
 
-### 5.1 导航返回逻辑（重要，待修复）
-**现状**: 所有工具页面使用 `router.back()`，依赖浏览器历史记录。如果用户直接通过 URL 进入工具页，返回会出错。网站工具详情页 (`site/[slug]`) 用 `router.push('/')` 直接跳回首页（更差）。
+### 5.1 导航返回逻辑
+**状态**: 已修复。使用 `BackButton` 组件统一处理，传入 `category` 参数即可跳转到 `/?category=xxx`。
 
-**目标**: 从具体工具页面返回时，必须回到上级分类，不能跳回"全部工具"。
-
-**修复方案**: 每个工具页面的返回按钮应根据工具的 category 构造目标 URL：
-```tsx
-// 工具页面应这样实现返回：
-import { tools } from '@/lib/tools';
-const tool = tools.find(t => t.id === '当前工具id');
-const backUrl = `/?category=${tool.category}`;
-// 然后 <Link href={backUrl}> 或 router.push(backUrl)
-```
-效果：
-```
-从娱乐工具打开大转盘 → 返回 /?category=entertainment
-从文档工具打开 PDF 合并 → 返回 /?category=document
-从网站工具打开详情页 → 返回 /?category=website
-```
-**所有工具页面和新增工具都必须遵守此规则。**
+**所有工具页面和新增工具都必须使用 `BackButton` 返回。**
 
 ### 5.2 Header 组件
 - 固定顶部 (`fixed top-0`)，滚动后加深背景 + 毛玻璃效果
@@ -275,12 +284,16 @@ const backUrl = `/?category=${tool.category}`;
 
 ### 7.8 高速下载 (fast-download)
 - 多线程并行下载工具，支持 HTTP/HTTPS 直链
+- **自动通道选择**: aria2 本地多线程 > CORS 直连 > 服务器中转，优先使用最优通道
 - **自动测速选线程**: 探测成功后自动测试 1/2/4/8/16/32 线程速度，推荐最优线程数
+- **aria2 集成**: 页面加载时自动检测 aria2 RPC，支持手动配置主机/端口/密钥
 - **断点续传**: 下载中断自动保存进度到 IndexedDB，下次探测同一链接时可继续下载
+- **GitHub 镜像自动测速**: 识别 GitHub Releases 链接，自动测试多个镜像源选最快
 - **数据存储**: IndexedDB（`lib/download-db.ts`），下载完成或手动清除后自动删除
 - **网盘链接支持**: 自动识别夸克/阿里/百度/115/天翼/迅雷网盘分享链接
 - **解析后端**: 使用 alist 开源项目作为网盘解析服务（需自行部署）
 - **API 路由**: `/api/fast-download/parse` — 网盘链接解析为直链
+- **API 路由**: `/api/fast-download/aria2-release` — 获取 aria2 最新版本信息
 - **环境变量**: `ALIST_URL`（alist 服务地址）、`ALIST_TOKEN`（可选认证令牌）
 - 百度网盘、115网盘支持提取码输入
 - 未配置 alist 时网盘解析不可用，直链下载不受影响
@@ -302,6 +315,17 @@ const backUrl = `/?category=${tool.category}`;
 - **备份提醒**: localStorage 记录上次备份时间，超过 24 小时提醒用户
 - **UI**: 响应式布局，全屏编辑器弹窗，删除确认对话框，Toast 提示
 
+### 7.11 Markdown 转 HTML (md-to-html)
+- 两种输入模式：上传 .md 文件 / 直接粘贴 Markdown 代码
+- **实时预览**: 300ms debounce，左右分栏（桌面端）/ 上下堆叠（移动端）
+- **Markdown 解析**: 使用 `marked` 库，支持 GFM（表格、任务列表、删除线等）
+- **XSS 防护**: `DOMPurify` 清理输出 + iframe sandbox 双重防护
+- **输出选项**:
+  - 复制完整 HTML 代码（含内嵌 GitHub 风格 CSS）
+  - 下载 .html 文件（文件名与 .md 文件同名）
+- **内嵌 CSS**: GitHub 风格排版样式，独立打开时也能正确渲染
+- 无代码语法高亮
+
 ---
 
 ## 8. 数据持久化
@@ -319,6 +343,11 @@ const backUrl = `/?category=${tool.category}`;
 | `ai-hook-lab-history` | storage.ts | 爆款开头生成历史 | 50 条 |
 | `ai-hook-lab-favorites` | storage.ts | 收藏的生成结果 | 无 |
 | `consumables-last-backup` | consumables 页面 | 上次备份时间戳 | 无 |
+| `fast-dl-method` | fast-download 页面 | 下载方式偏好（aria2/browser/idm）| 无 |
+| `fast-dl-aria2-host` | fast-download 页面 | aria2 主机地址 | 无 |
+| `fast-dl-aria2-port` | fast-download 页面 | aria2 端口 | 无 |
+| `fast-dl-aria2-secret` | fast-download 页面 | aria2 密钥 | 无 |
+| `fast-dl-aria2-path-hint` | fast-download 页面 | aria2 搜索路径提示 | 无 |
 
 > 注意：`lib/storage.ts` 的键名仍保留 `ai-hook-lab-` 前缀（从 Ai Hook Lab 迁移而来）
 
@@ -364,6 +393,8 @@ ALIST_TOKEN=
 | docx | Word 文档操作 |
 | pptxgenjs | PPT 生成 |
 | xlsx | Excel 操作 |
+| marked | Markdown 解析（md-to-html 工具） |
+| dompurify | HTML 净化/XSS 防护（md-to-html 工具） |
 | alist | 网盘解析服务（外部部署，非 npm 包） |
 
 ---
@@ -388,7 +419,11 @@ lang: 'zh-CN'
 4. 工具页面的顶部导航栏、背景效果要与网站整体风格一致
 5. 网站工具需同时添加到 `lib/tools.ts`（含 `externalUrl`）和 `app/tools/site/[slug]/page.tsx` 的 `siteFeatures`
 6. 所有工具卡片框的尺寸必须一致
-7. **每次增删工具后，必须更新本文档的工具数量**（第1节"当前工具数量"）
+7. **每次增删工具后，必须更新本文档**（工具数量、架构图、分类表、数据持久化表等所有相关内容）
+8. **每次修改代码后，检查本文档是否有过时内容**，如有则同步更新
+
+### 自动维护要求
+本文档是项目的唯一权威设计文档。任何代码变更如导致本文档描述与实际情况不一致，**必须同步更新**本文档对应章节，确保文档始终反映项目当前状态。
 
 ### 风格一致性：
 - 主色 `#fb6400` 不可更改
