@@ -268,7 +268,7 @@ export default function MdToHtml() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".md,.markdown"
+                    accept=".md,.markdown,text/markdown,text/plain"
                     onChange={handleFileChange}
                     className="hidden"
                   />
