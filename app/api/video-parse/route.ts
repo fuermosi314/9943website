@@ -392,14 +392,210 @@ function parseKuaishou(_url: string): ParseResult {
   };
 }
 
-// ===== TikTok：返回第三方工具链接 =====
-function parseTiktok(_url: string): ParseResult {
+// ===== TikTok 解析（多策略并行） =====
+async function parseTiktok(url: string): Promise<ParseResult> {
+  // 可能传入的是完整 URL，也可能只有视频 ID
+  let videoId = extractTiktokVideoId(url);
+
+  // 两个策略并行执行
+  const [strategy1, strategy2] = await Promise.allSettled([
+    // 策略 1: 主站页面 → __UNIVERSAL_DATA_FOR_REHYDRATION__ JSON
+    (async (): Promise<ParseResult> => {
+      let pageUrl = url;
+      if (!videoId) {
+        // 可能是短链，跟随重定向提取真实 URL
+        const redirectResp = await fetch(url, {
+          headers: {
+            ...HEADERS,
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+          redirect: 'follow',
+          signal: AbortSignal.timeout(5000),
+        });
+        pageUrl = redirectResp.url || url;
+        videoId = extractTiktokVideoId(pageUrl);
+      }
+      if (!videoId) throw new Error('no video_id');
+
+      const resp = await fetch(`https://www.tiktok.com/@i/video/${videoId}`, {
+        headers: {
+          ...HEADERS,
+          'Accept-Language': 'en-US,en;q=0.9',
+          Cookie: '',  // 空 cookie，避免 TikTok 返回个性化内容
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+      const html = await resp.text();
+      return extractTiktokFromHtml(html, videoId);
+    })(),
+    // 策略 2: Embed 页面解析
+    (async (): Promise<ParseResult> => {
+      let vid = videoId;
+      if (!vid) {
+        const redirectResp = await fetch(url, {
+          headers: {
+            ...HEADERS,
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+          redirect: 'follow',
+          signal: AbortSignal.timeout(5000),
+        });
+        vid = extractTiktokVideoId(redirectResp.url || url);
+      }
+      if (!vid) throw new Error('no video_id from embed');
+
+      const resp = await fetch(`https://www.tiktok.com/embed/v2/${vid}`, {
+        headers: {
+          ...HEADERS,
+          'Accept-Language': 'en-US,en;q=0.9',
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+      const html = await resp.text();
+      return extractTiktokFromHtml(html, vid);
+    })(),
+  ]);
+
+  // 返回第一个成功的结果
+  for (const r of [strategy1, strategy2]) {
+    if (r.status === 'fulfilled' && r.value.success) return r.value;
+  }
+  for (const r of [strategy1, strategy2]) {
+    if (r.status === 'fulfilled') return r.value;
+  }
+
   return {
     success: false,
     platform: 'tiktok',
-    error: 'TikTok 暂不支持服务端解析，请使用第三方工具',
-    fallbackUrl: 'https://douyin.wtf/',
+    error: '服务端解析失败，建议使用第三方工具',
+    fallbackUrl: 'https://snaptik.app/',
   };
+}
+
+// 从 TikTok URL 中提取视频 ID
+function extractTiktokVideoId(url: string): string | null {
+  // 主站: /video/123456
+  const videoMatch = url.match(/\/video\/(\d+)/);
+  if (videoMatch) return videoMatch[1];
+  // 短链重定向后: tiktok.com/@user/video/123456
+  const altMatch = url.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/);
+  if (altMatch) return altMatch[1];
+  return null;
+}
+
+// 从 TikTok 页面 HTML 中提取视频信息
+function extractTiktokFromHtml(html: string, videoId: string): ParseResult {
+  try {
+    // 查找 __UNIVERSAL_DATA_FOR_REHYDRATION__ JSON
+    const rehydrationIdx = html.indexOf('"__UNIVERSAL_DATA_FOR_REHYDRATION__"');
+    if (rehydrationIdx < 0) {
+      return {
+        success: false,
+        platform: 'tiktok',
+        error: '页面数据解析失败（可能被反爬拦截）',
+        fallbackUrl: 'https://snaptik.app/',
+      };
+    }
+
+    // 定位 JSON 起始位置（<script> 标签内）
+    const scriptStart = html.indexOf('>', rehydrationIdx);
+    const jsonStart = html.indexOf('{', scriptStart);
+
+    // 括号匹配找出完整 JSON
+    let depth = 0;
+    let jsonEnd = jsonStart;
+    while (jsonEnd < html.length) {
+      if (html[jsonEnd] === '{') depth++;
+      else if (html[jsonEnd] === '}') {
+        depth--;
+        if (depth === 0) break;
+      }
+      jsonEnd++;
+    }
+    jsonEnd++; // include the closing }
+
+    const data = JSON.parse(html.substring(jsonStart, jsonEnd));
+    const scope = data?.__DEFAULT_SCOPE__;
+    if (!scope) {
+      return {
+        success: false,
+        platform: 'tiktok',
+        error: '数据格式异常',
+        fallbackUrl: 'https://snaptik.app/',
+      };
+    }
+
+    // 路径: __DEFAULT_SCOPE__["webapp.video-detail"].itemInfo.itemStruct
+    const videoDetail = scope['webapp.video-detail'];
+    const itemStruct = videoDetail?.itemInfo?.itemStruct;
+    if (!itemStruct) {
+      return {
+        success: false,
+        platform: 'tiktok',
+        error: '无法提取视频信息（视频可能已删除或私密）',
+        fallbackUrl: 'https://snaptik.app/',
+      };
+    }
+
+    const desc = itemStruct.desc || 'TikTok 作品';
+    const author = itemStruct.author?.uniqueId || itemStruct.author?.nickname;
+    const video = itemStruct.video;
+
+    // 处理图文作品
+    if (itemStruct.imagePost) {
+      const images = itemStruct.imagePost.images;
+      if (images?.length > 0) {
+        const imageUrls = images.map(
+          (img: { imageURL?: { urlList?: string[] } }) =>
+            img.imageURL?.urlList?.[0]
+        ).filter((u: string | undefined): u is string => !!u);
+        if (imageUrls.length > 0) {
+          return {
+            success: true,
+            platform: 'tiktok',
+            type: 'images',
+            title: desc,
+            imageUrls,
+            coverUrl: imageUrls[0],
+            author,
+          };
+        }
+      }
+    }
+
+    // 处理视频作品
+    if (video) {
+      // downloadAddr 通常是无水印的最高质量
+      const videoUrl = video.downloadAddr || video.playAddr;
+      const coverUrl = video.cover || video.originCover || video.dynamicCover;
+
+      if (videoUrl) {
+        return {
+          success: true,
+          platform: 'tiktok',
+          type: 'video',
+          title: desc,
+          videoUrl,
+          coverUrl,
+          author,
+        };
+      }
+    }
+
+    return {
+      success: false,
+      platform: 'tiktok',
+      error: '无法获取下载地址',
+      fallbackUrl: 'https://snaptik.app/',
+    };
+  } catch {
+    return {
+      success: false,
+      platform: 'tiktok',
+      error: '页面解析失败',
+      fallbackUrl: 'https://snaptik.app/',
+    };
+  }
 }
 
 const PARSERS: Record<string, (url: string) => Promise<ParseResult> | ParseResult> = {
@@ -448,8 +644,8 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         platform: 'unknown',
-        error: '不支持的平台，目前支持：抖音、B站、西瓜视频',
-        supportedPlatforms: ['douyin', 'bilibili', 'xigua', 'kuaishou', 'tiktok'],
+        error: '不支持的平台，目前支持：抖音、TikTok、B站、西瓜视频',
+        supportedPlatforms: ['douyin', 'tiktok', 'bilibili', 'xigua', 'kuaishou'],
       },
       { status: 400 }
     );

@@ -252,10 +252,11 @@
 
 ### 7.4 视频去水印 (video-unwatermark)
 - 混合模式：服务端解析 + 第三方工具 Fallback
-- **服务端解析**: 抖音、B站、西瓜视频（通过各平台 API 直接解析）
-- **Fallback**: 快手、TikTok 等不支持的平台跳转第三方工具
+- **服务端解析**: 抖音、TikTok、B站、西瓜视频（通过各平台 API/页面数据直接解析）
+- **Fallback**: 快手等不支持的平台跳转第三方工具
 - API 路由: `/api/video-parse`，支持 IP 速率限制（每 IP 每分钟 10 次）
-- 抖音解析流程: 短链重定向 → 提取 aweme_id → 调用详情 API → 获取无水印视频 URL
+- 抖音解析流程: 多策略并行 → 短链重定向 + 移动端 UA → 提取 aweme_id → 调用详情 API / 分享页解析 → 获取无水印视频 URL
+- TikTok 解析流程: 多策略并行 → 主站页面提取 `__UNIVERSAL_DATA_FOR_REHYDRATION__` JSON / Embed 页面备用 → 提取 `itemStruct.video.downloadAddr` → 获取无水印视频 URL
 - Bilibili 解析: 提取 BV ID → 获取视频信息 → 获取播放地址（DASH 格式）
 - 解析失败时推荐第三方去水印网站
 

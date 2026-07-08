@@ -143,7 +143,7 @@ export default function VideoUnwatermarkPage() {
         {/* 输入区域 */}
         <div className="glass-card p-6 mb-6 animate-fade-in">
           <h2 className="text-base font-semibold text-white mb-1">粘贴视频链接</h2>
-          <p className="text-sm text-white/40 mb-4">支持抖音、B站、西瓜视频等平台的分享链接</p>
+          <p className="text-sm text-white/40 mb-4">支持抖音、TikTok、B站、西瓜视频等平台的分享链接</p>
 
           <div className="flex gap-2">
             <div className="flex-1 relative">
@@ -331,7 +331,7 @@ export default function VideoUnwatermarkPage() {
                 {/* 提示信息 */}
                 <div className="mt-4 bg-white/5 rounded-xl p-4">
                   <p className="text-sm text-white/60 mb-3">
-                    {result.platform === 'kuaishou' || result.platform === 'tiktok'
+                    {result.platform === 'kuaishou'
                       ? '该平台暂不支持自动解析，请使用第三方工具。'
                       : '服务端解析失败，可以尝试第三方工具。'}
                   </p>
@@ -358,8 +358,8 @@ export default function VideoUnwatermarkPage() {
             <li>• 打开抖音/B站等APP，点击分享按钮，复制视频链接</li>
             <li>• 粘贴链接到上方输入框，点击解析</li>
             <li>• 解析成功后点击下载按钮保存无水印视频</li>
-            <li>• 目前支持：抖音、B站、西瓜视频（服务端解析）</li>
-            <li>• 快手、TikTok 会自动推荐第三方工具</li>
+            <li>• 目前支持：抖音、TikTok、B站、西瓜视频（服务端解析）</li>
+            <li>• 快手会自动推荐第三方工具</li>
             <li>• 请尊重原创作者版权，仅供个人学习参考使用</li>
           </ul>
         </div>
