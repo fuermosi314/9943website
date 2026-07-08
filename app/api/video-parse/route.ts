@@ -606,6 +606,98 @@ const PARSERS: Record<string, (url: string) => Promise<ParseResult> | ParseResul
   tiktok: parseTiktok,
 };
 
+export async function GET(request: NextRequest) {
+  const videoUrl = request.nextUrl.searchParams.get('url');
+  const filename = request.nextUrl.searchParams.get('filename') || 'video.mp4';
+
+  if (!videoUrl) {
+    return NextResponse.json({ error: '请提供视频链接' }, { status: 400 });
+  }
+
+  // 校验域名
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(videoUrl);
+  } catch {
+    return NextResponse.json({ error: '无效的视频链接' }, { status: 400 });
+  }
+
+  const allowedHosts = [
+    'tiktok.com', 'tiktokcdn.com', 'tiktokcdn-us.com',
+    'iesdouyin.com', 'douyinvod.com', 'douyin.com',
+    'bilibili.com', 'bilivideo.com',
+    'ixigua.com', 'ixiguavideo.com',
+    'snssdk.com', 'bytecdn.cn', 'byteimg.com', 'byteoversea.com',
+    'musical.ly',
+  ];
+  if (!allowedHosts.some((h) => parsedUrl.hostname.endsWith(h))) {
+    return NextResponse.json({ error: '不支持的 CDN 域名' }, { status: 400 });
+  }
+
+  const platformReferer = getDownloadReferer(parsedUrl.hostname);
+
+  try {
+    const resp = await fetch(videoUrl, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        Accept: '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'identity',
+        Referer: platformReferer,
+        Origin: platformReferer,
+        'Sec-Fetch-Dest': 'video',
+        'Sec-Fetch-Mode': 'no-cors',
+        'Sec-Fetch-Site': 'cross-site',
+        'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"Windows"',
+        'Range': request.headers.get('range') || '',
+      },
+      signal: AbortSignal.timeout(60000),
+      redirect: 'follow',
+    });
+
+    if (!resp.ok && resp.status !== 206) {
+      return NextResponse.json(
+        { error: `CDN 返回 ${resp.status}` },
+        { status: resp.status }
+      );
+    }
+
+    const contentType = resp.headers.get('content-type') || 'video/mp4';
+    const contentLength = resp.headers.get('content-length');
+    const contentRange = resp.headers.get('content-range');
+
+    const headers: Record<string, string> = {
+      'Content-Type': contentType,
+      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+      'Cache-Control': 'public, max-age=3600',
+      'Accept-Ranges': 'bytes',
+    };
+    if (contentLength) headers['Content-Length'] = contentLength;
+    if (contentRange) headers['Content-Range'] = contentRange;
+
+    return new NextResponse(resp.body, {
+      status: resp.status === 206 ? 206 : 200,
+      headers,
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { error: `下载失败: ${err instanceof Error ? err.message : '未知错误'}` },
+      { status: 502 }
+    );
+  }
+}
+
+function getDownloadReferer(hostname: string): string {
+  if (hostname.includes('tiktok')) return 'https://www.tiktok.com/';
+  if (hostname.includes('douyin') || hostname.includes('iesdouyin')) return 'https://www.douyin.com/';
+  if (hostname.includes('bilibili') || hostname.includes('bilivideo')) return 'https://www.bilibili.com/';
+  if (hostname.includes('xigua') || hostname.includes('ixigua')) return 'https://www.ixigua.com/';
+  return '';
+}
+
 export async function POST(request: NextRequest) {
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown';
   if (!checkRateLimit(ip)) {

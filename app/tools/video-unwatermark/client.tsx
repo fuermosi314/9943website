@@ -91,23 +91,14 @@ export default function VideoUnwatermarkPage() {
 
   const handleDownloadVideo = useCallback(async () => {
     if (!result?.videoUrl) return;
-    try {
-      const resp = await fetch(result.videoUrl, {
-        referrerPolicy: 'no-referrer',
-      });
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const blob = await resp.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${result?.title?.slice(0, 30) || 'video'}.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch {
-      window.open(result.videoUrl, '_blank');
-    }
+    // 通过服务端代理下载（解决 TikTok CDN 的 Referer 和 IP 限制）
+    const downloadUrl = `/api/video-parse?url=${encodeURIComponent(result.videoUrl)}&filename=${encodeURIComponent((result.title || 'video') + '.mp4')}`;
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `${result?.title?.slice(0, 30) || 'video'}.mp4`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }, [result]);
 
   const [pasteError, setPasteError] = useState(false);
@@ -270,20 +261,17 @@ export default function VideoUnwatermarkPage() {
                   </div>
                 )}
 
-                {/* 视频作品：内嵌播放器 */}
-                {result.type !== 'images' && result.videoUrl && (
-                  <div className="mb-4 rounded-xl overflow-hidden bg-black">
-                    <video
-                      src={result.videoUrl}
-                      controls
-                      autoPlay
-                      muted
-                      playsInline
-                      className="w-full max-h-[60vh]"
+                {/* 视频作品：显示封面 */}
+                {result.type !== 'images' && result.coverUrl && (
+                  <div className="mb-4 rounded-xl overflow-hidden">
+                    <img
+                      src={result.coverUrl}
+                      alt="视频封面"
+                      className="w-full h-48 object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
                     />
-                    <p className="text-xs text-white/30 text-center py-2">
-                      点击下方「下载」按钮保存无水印视频
-                    </p>
                   </div>
                 )}
 
@@ -301,14 +289,12 @@ export default function VideoUnwatermarkPage() {
                     ))
                   ) : (
                     <>
-                      {result.videoUrl && (
-                        <button
-                          onClick={handleDownloadVideo}
-                          className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white font-medium rounded-xl text-center shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all active:scale-[0.98]"
-                        >
-                          🎬 下载无水印视频
-                        </button>
-                      )}
+                      <button
+                        onClick={handleDownloadVideo}
+                        className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white font-medium rounded-xl text-center shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all active:scale-[0.98]"
+                      >
+                        🎬 下载无水印视频
+                      </button>
                       <button
                         onClick={handleCopyUrl}
                         className="px-4 py-3 bg-white/5 border border-white/10 text-white/60 hover:text-[#fb6400] hover:border-[#fb6400]/30 rounded-xl transition-all"
