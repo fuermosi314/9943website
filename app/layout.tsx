@@ -1,5 +1,12 @@
 import type { Metadata, Viewport } from 'next';
+import { Noto_Sans_SC } from 'next/font/google';
 import './globals.css';
+
+const notoSansSC = Noto_Sans_SC({
+  subsets: ['latin'],
+  weight: ['400', '500', '700'],
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: '9943小工具大全 - 简单好用的在线工具集',
@@ -22,7 +29,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN" className="scroll-smooth">
-      <body className="antialiased">{children}</body>
+      <body className={`${notoSansSC.className} antialiased`}>{children}</body>
     </html>
   );
 }
