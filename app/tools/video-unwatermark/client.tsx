@@ -72,7 +72,6 @@ export default function VideoUnwatermarkPage() {
     try {
       const resp = await fetch(imgUrl);
       const blob = await resp.blob();
-      // 动图直接打开原图保留动画
       if (blob.type === 'image/gif' || imgUrl.includes('.gif')) {
         window.open(imgUrl, '_blank');
         return;
@@ -102,7 +101,6 @@ export default function VideoUnwatermarkPage() {
     } catch {
       // clipboard API failed, try fallback
     }
-    // Fallback: 创建临时 textarea 让用户手动粘贴
     const ta = document.createElement('textarea');
     ta.style.position = 'fixed';
     ta.style.left = '-9999px';
@@ -121,7 +119,6 @@ export default function VideoUnwatermarkPage() {
       // execCommand failed
     }
     document.body.removeChild(ta);
-    // 最终提示用户手动粘贴
     setPasteError(true);
     setTimeout(() => setPasteError(false), 3000);
   }, []);
@@ -252,17 +249,20 @@ export default function VideoUnwatermarkPage() {
                   </div>
                 )}
 
-                {/* 视频作品：显示封面 */}
-                {result.type !== 'images' && result.coverUrl && (
-                  <div className="mb-4 rounded-xl overflow-hidden">
-                    <img
-                      src={result.coverUrl}
-                      alt="视频封面"
-                      className="w-full h-48 object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                      }}
+                {/* 视频作品：内嵌播放器 */}
+                {result.type !== 'images' && result.videoUrl && (
+                  <div className="mb-4 rounded-xl overflow-hidden bg-black">
+                    <video
+                      src={result.videoUrl}
+                      controls
+                      autoPlay
+                      muted
+                      playsInline
+                      className="w-full max-h-[60vh]"
                     />
+                    <p className="text-xs text-white/30 text-center py-2">
+                      点击下方「下载」按钮或右键视频选择「另存为」
+                    </p>
                   </div>
                 )}
 
@@ -280,12 +280,15 @@ export default function VideoUnwatermarkPage() {
                     ))
                   ) : (
                     <>
-                      <a
-                        href={`/api/video-parse/download?url=${encodeURIComponent(result.videoUrl!)}&filename=${encodeURIComponent((result.title || 'video') + '.mp4')}`}
-                        className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white font-medium rounded-xl text-center shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all"
-                      >
-                        🎬 下载无水印视频
-                      </a>
+                      {result.videoUrl && (
+                        <a
+                          href={result.videoUrl}
+                          target="_blank"
+                          className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white font-medium rounded-xl text-center shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all"
+                        >
+                          🎬 下载无水印视频
+                        </a>
+                      )}
                       <button
                         onClick={handleCopyUrl}
                         className="px-4 py-3 bg-white/5 border border-white/10 text-white/60 hover:text-[#fb6400] hover:border-[#fb6400]/30 rounded-xl transition-all"
@@ -296,14 +299,14 @@ export default function VideoUnwatermarkPage() {
                   )}
                 </div>
 
-                {result.type === 'images' && (
+                {/* 底部提示 */}
+                {result.type === 'images' ? (
                   <p className="text-xs text-white/30 mt-3 text-center">
                     图文作品由平台提供静态图片，下载为 WebP 格式
                   </p>
-                )}
-                {result.type !== 'images' && (
+                ) : (
                   <p className="text-xs text-white/30 mt-3 text-center">
-                    点击下载后，长按视频保存到相册，或右键另存为
+                    点击下载按钮在新标签页打开视频，右键或长按保存
                   </p>
                 )}
               </div>
@@ -353,7 +356,7 @@ export default function VideoUnwatermarkPage() {
         <div className="glass-card p-6 mt-6 animate-slide-up" style={{ animationDelay: '100ms' }}>
           <h3 className="text-white font-semibold mb-3">💡 使用说明</h3>
           <ul className="space-y-2 text-white/50 text-sm">
-            <li>• 打开抖音/B站等APP，点击分享按钮，复制视频链接</li>
+            <li>• 打开抖音/TikTok/B站等APP，点击分享按钮，复制视频链接</li>
             <li>• 粘贴链接到上方输入框，点击解析</li>
             <li>• 解析成功后点击下载按钮保存无水印视频</li>
             <li>• 目前支持：抖音、TikTok、B站、西瓜视频（服务端解析）</li>
