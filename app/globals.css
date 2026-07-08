@@ -237,3 +237,28 @@ html\:fullscreen .max-w-sm,
     font-size: 16px !important;
   }
 }
+
+/* react-image-crop theme overrides — match project orange */
+:root {
+  --rc-border-color: rgba(251, 100, 0, 0.7);
+  --rc-focus-color: #fb6400;
+}
+
+.ReactCrop .ReactCrop__drag-handle {
+  border-color: #fb6400;
+  background: rgba(251, 100, 0, 0.3);
+}
+
+.ReactCrop .ReactCrop__crop-selection {
+  /* Override the animated border to use orange instead of the black/white pattern */
+  background-image:
+    linear-gradient(90deg, rgba(251, 100, 0, 0.5) 50%, rgba(0, 0, 0, 0.3) 50%),
+    linear-gradient(90deg, rgba(251, 100, 0, 0.5) 50%, rgba(0, 0, 0, 0.3) 50%),
+    linear-gradient(rgba(251, 100, 0, 0.5) 50%, rgba(0, 0, 0, 0.3) 50%),
+    linear-gradient(rgba(251, 100, 0, 0.5) 50%, rgba(0, 0, 0, 0.3) 50%);
+  outline-color: rgba(251, 100, 0, 0.6);
+}
+
+.ReactCrop .ReactCrop__crop-selection:focus {
+  outline-color: #fb6400;
+}
