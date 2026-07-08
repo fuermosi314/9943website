@@ -89,6 +89,27 @@ export default function VideoUnwatermarkPage() {
     }
   }, [result]);
 
+  const handleDownloadVideo = useCallback(async () => {
+    if (!result?.videoUrl) return;
+    try {
+      const resp = await fetch(result.videoUrl, {
+        referrerPolicy: 'no-referrer',
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${result?.title?.slice(0, 30) || 'video'}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      window.open(result.videoUrl, '_blank');
+    }
+  }, [result]);
+
   const [pasteError, setPasteError] = useState(false);
 
   const handlePaste = useCallback(async () => {
@@ -261,7 +282,7 @@ export default function VideoUnwatermarkPage() {
                       className="w-full max-h-[60vh]"
                     />
                     <p className="text-xs text-white/30 text-center py-2">
-                      点击下方「下载」按钮或右键视频选择「另存为」
+                      点击下方「下载」按钮保存无水印视频
                     </p>
                   </div>
                 )}
@@ -281,13 +302,12 @@ export default function VideoUnwatermarkPage() {
                   ) : (
                     <>
                       {result.videoUrl && (
-                        <a
-                          href={result.videoUrl}
-                          target="_blank"
-                          className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white font-medium rounded-xl text-center shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all"
+                        <button
+                          onClick={handleDownloadVideo}
+                          className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white font-medium rounded-xl text-center shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all active:scale-[0.98]"
                         >
                           🎬 下载无水印视频
-                        </a>
+                        </button>
                       )}
                       <button
                         onClick={handleCopyUrl}
@@ -306,7 +326,7 @@ export default function VideoUnwatermarkPage() {
                   </p>
                 ) : (
                   <p className="text-xs text-white/30 mt-3 text-center">
-                    点击下载按钮在新标签页打开视频，右键或长按保存
+                    下载通过浏览器实现，文件较大时请耐心等待
                   </p>
                 )}
               </div>
