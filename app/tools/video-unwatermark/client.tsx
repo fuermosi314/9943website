@@ -281,9 +281,7 @@ export default function VideoUnwatermarkPage() {
                   ) : (
                     <>
                       <a
-                        href={result.videoUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        href={`/api/video-parse/download?url=${encodeURIComponent(result.videoUrl!)}&filename=${encodeURIComponent((result.title || 'video') + '.mp4')}`}
                         className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white font-medium rounded-xl text-center shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all"
                       >
                         🎬 下载无水印视频
