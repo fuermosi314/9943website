@@ -91,9 +91,16 @@ export default function VideoUnwatermarkPage() {
 
   const handleDownloadVideo = useCallback(async () => {
     if (!result?.videoUrl) return;
-    // TikTok CDN 禁止跨域 fetch + 禁止非浏览器 Referer
-    // 唯一可靠方式：新标签页打开，让浏览器直接请求（带系统代理 + 正确 Referer）
-    window.open(result.videoUrl, '_blank');
+    // 用 a 标签 + no-referrer: 浏览器不发 Referer，TikTok CDN 放行
+    // download 属性触发另存为，不受 CORS 限制
+    const a = document.createElement('a');
+    a.href = result.videoUrl;
+    a.download = `${result?.title?.slice(0, 30) || 'video'}.mp4`;
+    a.referrerPolicy = 'no-referrer';
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }, [result]);
 
   const [pasteError, setPasteError] = useState(false);
