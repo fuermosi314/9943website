@@ -91,14 +91,23 @@ export default function VideoUnwatermarkPage() {
 
   const handleDownloadVideo = useCallback(async () => {
     if (!result?.videoUrl) return;
-    // 通过服务端代理下载（解决 TikTok CDN 的 Referer 和 IP 限制）
-    const downloadUrl = `/api/video-parse?url=${encodeURIComponent(result.videoUrl)}&filename=${encodeURIComponent((result.title || 'video') + '.mp4')}`;
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = `${result?.title?.slice(0, 30) || 'video'}.mp4`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    try {
+      const resp = await fetch(result.videoUrl, {
+        referrerPolicy: 'no-referrer',
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${result?.title?.slice(0, 30) || 'video'}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      window.open(result.videoUrl, '_blank');
+    }
   }, [result]);
 
   const [pasteError, setPasteError] = useState(false);
@@ -312,7 +321,7 @@ export default function VideoUnwatermarkPage() {
                   </p>
                 ) : (
                   <p className="text-xs text-white/30 mt-3 text-center">
-                    下载通过浏览器实现，文件较大时请耐心等待
+                    下载通过浏览器获取，文件较大时请耐心等待
                   </p>
                 )}
               </div>
