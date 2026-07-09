@@ -17,6 +17,8 @@ interface ParseResult {
   error?: string;
   fallbackUrl?: string;
   supportedPlatforms?: string[];
+  browserFallback?: boolean;
+  warning?: string;
 }
 
 const PLATFORM_NAMES: Record<string, string> = {
@@ -45,7 +47,7 @@ export default function VideoUnwatermarkPage() {
       const res = await fetch('/api/video-parse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url.trim() }),
+        body: JSON.stringify({ url: url.trim(), forceBrowser }),
       });
       const data = await res.json();
       setResult(data);
@@ -103,7 +105,15 @@ export default function VideoUnwatermarkPage() {
     document.body.removeChild(a);
   }, [result]);
 
+  const handleOpenTikTok = useCallback(() => {
+    // 用原始用户输入的链接跳转到 TikTok 页面，方便 AIX 插件或手动查看
+    if (url) {
+      window.open(url, '_blank');
+    }
+  }, [url]);
+
   const [pasteError, setPasteError] = useState(false);
+  const [forceBrowser, setForceBrowser] = useState(false);
 
   const handlePaste = useCallback(async () => {
     try {
@@ -206,6 +216,31 @@ export default function VideoUnwatermarkPage() {
               ))}
           </div>
 
+          {/* 浏览器直连模式开关 */}
+          <div className="flex items-center gap-2 mt-3">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={forceBrowser}
+              onClick={() => setForceBrowser(!forceBrowser)}
+              className={`relative w-10 h-5 rounded-full transition-colors ${
+                forceBrowser ? 'bg-[#fb6400]' : 'bg-white/10'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                  forceBrowser ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+            <span className="text-xs text-white/40">
+              浏览器直连模式
+            </span>
+            {forceBrowser && (
+              <span className="text-xs text-yellow-400/60">（跳过服务端 API，直接从 TikTok 页面解析）</span>
+            )}
+          </div>
+
           {/* 粘贴失败提示 */}
           {pasteError && (
             <div className="mt-2 px-3 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-yellow-400 text-xs animate-fade-in">
@@ -234,6 +269,21 @@ export default function VideoUnwatermarkPage() {
                     </p>
                   </div>
                 </div>
+
+                {/* 浏览器直连模式的警告 */}
+                {result.browserFallback && (
+                  <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 mb-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-yellow-400 text-lg">⚠️</span>
+                      <span className="text-yellow-400 text-sm font-semibold">
+                        {result.warning || '服务端 API 额度已用完'}
+                      </span>
+                    </div>
+                    <p className="text-yellow-400/60 text-xs ml-6">
+                      已改用页面直连模式，请确认代理已开启，然后点击下方按钮下载
+                    </p>
+                  </div>
+                )}
 
                 {/* 视频标题 */}
                 {result.title && (
@@ -289,6 +339,27 @@ export default function VideoUnwatermarkPage() {
                         🖼️ 下载图片 {result.imageUrls!.length > 1 ? `${i + 1}` : ''}
                       </button>
                     ))
+                  ) : result.browserFallback ? (
+                    <>
+                      <button
+                        onClick={handleDownloadVideo}
+                        className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white font-medium rounded-xl text-center shadow-lg shadow-orange-500/30 hover:shadow-orange-500/50 transition-all active:scale-[0.98]"
+                      >
+                        🔄 浏览器直连下载
+                      </button>
+                      <button
+                        onClick={handleOpenTikTok}
+                        className="px-4 py-3 bg-white/5 border border-white/10 text-white/60 hover:text-[#fb6400] hover:border-[#fb6400]/30 rounded-xl transition-all"
+                      >
+                        📺 TikTok
+                      </button>
+                      <button
+                        onClick={handleCopyUrl}
+                        className="px-4 py-3 bg-white/5 border border-white/10 text-white/60 hover:text-[#fb6400] hover:border-[#fb6400]/30 rounded-xl transition-all"
+                      >
+                        {copied ? '✓' : '📋'}
+                      </button>
+                    </>
                   ) : (
                     <>
                       <button
@@ -311,6 +382,10 @@ export default function VideoUnwatermarkPage() {
                 {result.type === 'images' ? (
                   <p className="text-xs text-white/30 mt-3 text-center">
                     图文作品由平台提供静态图片，下载为 WebP 格式
+                  </p>
+                ) : result.browserFallback ? (
+                  <p className="text-xs text-white/30 mt-3 text-center">
+                    浏览器直连模式：从 TikTok 页面提取链接后直接下载，请确保代理已开启
                   </p>
                 ) : (
                   <p className="text-xs text-white/30 mt-3 text-center">
@@ -368,6 +443,7 @@ export default function VideoUnwatermarkPage() {
             <li>• 粘贴链接到上方输入框，点击解析</li>
             <li>• 解析成功后点击下载按钮保存无水印视频</li>
             <li>• 目前支持：抖音、TikTok、B站、西瓜视频（服务端解析）</li>
+            <li>• TikTok API 额度用完时自动切换浏览器直连模式，请确保代理已开启</li>
             <li>• 快手会自动推荐第三方工具</li>
             <li>• 请尊重原创作者版权，仅供个人学习参考使用</li>
           </ul>

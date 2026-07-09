@@ -11,6 +11,8 @@ interface ParseResult {
   author?: string;
   error?: string;
   fallbackUrl?: string;
+  browserFallback?: boolean;
+  warning?: string;
 }
 
 // 简易 IP 速率限制（每 IP 每分钟最多 10 次）
@@ -443,15 +445,13 @@ async function fetchTiktokFromTikHub(videoUrl: string): Promise<{ videoUrl?: str
   }
 }
 
-// ===== TikTok 解析（多策略并行） =====
-async function parseTiktok(url: string): Promise<ParseResult> {
+// ===== TikTok 解析（多策略并行，支持浏览器直连模式） =====
+async function parseTiktok(url: string, forceBrowser?: boolean): Promise<ParseResult> {
   // 可能传入的是完整 URL，也可能只有视频 ID
   let videoId = extractTiktokVideoId(url);
 
-  // 三个策略并行执行：
-  // 策略 1 & 2: 页面解析获取元数据（免费）
-  // 策略 3: TikHub API 获取可下载的 videoUrl（付费 $0.001/次，免费额度 2000 次）
-  const [strategy1, strategy2, strategy3] = await Promise.allSettled([
+  // 页面解析策略（策略 1 & 2），无论是否浏览器直连模式都执行
+  const pageStrategies = [
     // 策略 1: 主站页面 → __UNIVERSAL_DATA_FOR_REHYDRATION__ JSON
     (async (): Promise<ParseResult> => {
       let pageUrl = url;
@@ -506,39 +506,48 @@ async function parseTiktok(url: string): Promise<ParseResult> {
       const html = await resp.text();
       return extractTiktokFromHtml(html, vid);
     })(),
-    // 策略 3: TikHub API — 获取可下载的无水印直链
-    (async (): Promise<ParseResult> => {
-      const result = await fetchTiktokFromTikHub(url);
-      // 如果 TikHub 返回了完整结果（含元数据），优先使用
-      if (result.result) return result.result;
-      // 如果只返回了 videoUrl（页面解析已有元数据），抛异常由合并逻辑处理
-      if (result.videoUrl) {
-        // 构造一个只含 videoUrl 的 result，后续合并时会用这个覆盖
-        return {
-          success: true,
-          platform: 'tiktok',
-          type: 'video',
-          title: '',
-          videoUrl: result.videoUrl,
-        };
-      }
-      throw new Error(result.error || 'TikHub failed');
-    })(),
-  ]);
+  ];
+
+  // 构建完整策略列表：forceBrowser=true 时跳过 TikHub API（手动测试浏览器直连模式）
+  const allStrategies = [...pageStrategies];
+  if (forceBrowser !== true) {
+    allStrategies.push(
+      // 策略 3: TikHub API — 获取可下载的无水印直链
+      (async (): Promise<ParseResult> => {
+        const result = await fetchTiktokFromTikHub(url);
+        // 如果 TikHub 返回了完整结果（含元数据），优先使用
+        if (result.result) return result.result;
+        // 如果只返回了 videoUrl（页面解析已有元数据），抛异常由合并逻辑处理
+        if (result.videoUrl) {
+          // 构造一个只含 videoUrl 的 result，后续合并时会用这个覆盖
+          return {
+            success: true,
+            platform: 'tiktok',
+            type: 'video',
+            title: '',
+            videoUrl: result.videoUrl,
+          };
+        }
+        throw new Error(result.error || 'TikHub failed');
+      })()
+    );
+  }
+
+  const [s1, s2, s3] = await Promise.allSettled(allStrategies);
 
   // 合并结果：页面解析提供元数据，TikHub 提供可下载的 videoUrl
   let pageResult: ParseResult | null = null;
   let tikHubResult: ParseResult | null = null;
 
-  for (const r of [strategy1, strategy2]) {
+  for (const r of [s1, s2]) {
     if (r.status === 'fulfilled' && r.value.success) {
       pageResult = r.value;
       break;
     }
   }
 
-  if (strategy3.status === 'fulfilled' && strategy3.value.success) {
-    tikHubResult = strategy3.value;
+  if (s3?.status === 'fulfilled' && s3?.value?.success) {
+    tikHubResult = s3.value;
   }
 
   // 如果 TikHub 有完整结果（页面解析全失败时），直接返回
@@ -550,6 +559,12 @@ async function parseTiktok(url: string): Promise<ParseResult> {
   if (pageResult) {
     if (tikHubResult?.videoUrl) {
       pageResult.videoUrl = tikHubResult.videoUrl;
+    } else if (pageResult.success) {
+      // TikHub 失败（额度用完/报错，或 forceBrowser=true），标记为浏览器端直连模式
+      pageResult.browserFallback = true;
+      pageResult.warning = forceBrowser
+        ? '已启用浏览器直连模式，请点击下方按钮尝试下载'
+        : '服务端 API 额度已用完，已启用浏览器端直连解析';
     }
     return pageResult;
   }
@@ -560,7 +575,7 @@ async function parseTiktok(url: string): Promise<ParseResult> {
   }
 
   // 全部失败，返回第一个失败结果
-  for (const r of [strategy1, strategy2]) {
+  for (const r of [s1, s2]) {
     if (r.status === 'fulfilled') return r.value;
   }
 
@@ -698,7 +713,7 @@ function extractTiktokFromHtml(html: string, videoId: string): ParseResult {
   }
 }
 
-const PARSERS: Record<string, (url: string) => Promise<ParseResult> | ParseResult> = {
+const PARSERS: Record<string, (url: string, forceBrowser?: boolean) => Promise<ParseResult> | ParseResult> = {
   douyin: parseDouyin,
   bilibili: parseBilibili,
   xigua: parseXigua,
@@ -712,14 +727,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '请求过于频繁，请稍后再试' }, { status: 429 });
   }
 
-  let body: { url?: string };
+  let body: { url?: string; forceBrowser?: boolean };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: '请求格式错误' }, { status: 400 });
   }
 
-  const { url } = body;
+  const { url, forceBrowser } = body;
   if (!url) {
     return NextResponse.json({ error: '请提供视频链接' }, { status: 400 });
   }
@@ -752,7 +767,7 @@ export async function POST(request: NextRequest) {
   }
 
   const parser = PARSERS[platform];
-  const result = await parser(parsedUrl.href);
+  const result = await parser(parsedUrl.href, forceBrowser);
 
   return NextResponse.json(result);
 }
