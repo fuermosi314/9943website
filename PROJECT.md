@@ -256,7 +256,11 @@
 - **Fallback**: 快手等不支持的平台跳转第三方工具
 - API 路由: `/api/video-parse`，支持 IP 速率限制（每 IP 每分钟 10 次）
 - 抖音解析流程: 多策略并行 → 短链重定向 + 移动端 UA → 提取 aweme_id → 调用详情 API / 分享页解析 → 获取无水印视频 URL
-- TikTok 解析流程: 多策略并行 → 主站页面提取 `__UNIVERSAL_DATA_FOR_REHYDRATION__` JSON / Embed 页面备用 → 提取 `itemStruct.video.downloadAddr` → 获取无水印视频 URL
+- TikTok 解析流程:
+  - **元数据**（免费）: 主站页面提取 `__UNIVERSAL_DATA_FOR_REHYDRATION__` JSON / Embed 页面备用 → 提取 `itemStruct.video.downloadAddr`
+  - **下载直链**（付费 $0.001/次）: 并行调用 TikHub V3 API（`fetch_one_video_by_share_url`）→ 提取 `download_no_watermark_addr`（`need_set_token: false`，无 Referer 校验，不绑定 IP）
+  - 用户浏览器通过代理直连 TikTok CDN 下载无水印视频
+  - 环境变量: `TIKHUB_API_KEY`（TikHub API Key，$2 免费额度 ≈ 2000 次调用）
 - Bilibili 解析: 提取 BV ID → 获取视频信息 → 获取播放地址（DASH 格式）
 - 解析失败时推荐第三方去水印网站
 

@@ -392,18 +392,69 @@ function parseKuaishou(_url: string): ParseResult {
   };
 }
 
+// ===== TikHub API 调用（获取可下载的无水印直链） =====
+async function fetchTiktokFromTikHub(videoUrl: string): Promise<{ videoUrl?: string; result?: ParseResult; error?: string }> {
+  const TIKHUB_KEY = process.env.TIKHUB_API_KEY;
+  if (!TIKHUB_KEY) return { error: 'TikHub API key not configured' };
+
+  try {
+    const resp = await fetch(
+      `https://api.tikhub.io/api/v1/tiktok/app/v3/fetch_one_video_by_share_url?share_url=${encodeURIComponent(videoUrl)}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${TIKHUB_KEY}`,
+          'User-Agent': HEADERS['User-Agent'],
+        },
+        signal: AbortSignal.timeout(10000),
+      }
+    );
+    if (!resp.ok) return { error: `TikHub API HTTP ${resp.status}` };
+
+    const data = await resp.json();
+    if (data.code !== 200) return { error: data.message || 'TikHub API error' };
+
+    const aweme = data.data?.aweme_detail;
+    if (!aweme) return { error: 'TikHub: no video data' };
+
+    const video = aweme.video;
+    const noWmUrl = video?.download_no_watermark_addr?.url_list?.[0];
+    const desc = aweme.desc || 'TikTok 作品';
+    const author = aweme.author?.nickname || aweme.author?.unique_id || '';
+    const coverUrl = video?.cover?.url_list?.[0] || video?.origin_cover?.url_list?.[0] || '';
+
+    if (noWmUrl) {
+      return {
+        videoUrl: noWmUrl,
+        result: {
+          success: true,
+          platform: 'tiktok',
+          type: 'video',
+          title: desc,
+          videoUrl: noWmUrl,
+          coverUrl,
+          author,
+        },
+      };
+    }
+    return { error: 'TikHub: no download URL' };
+  } catch (err) {
+    return { error: `TikHub: ${err instanceof Error ? err.message : 'unknown'}` };
+  }
+}
+
 // ===== TikTok 解析（多策略并行） =====
 async function parseTiktok(url: string): Promise<ParseResult> {
   // 可能传入的是完整 URL，也可能只有视频 ID
   let videoId = extractTiktokVideoId(url);
 
-  // 两个策略并行执行
-  const [strategy1, strategy2] = await Promise.allSettled([
+  // 三个策略并行执行：
+  // 策略 1 & 2: 页面解析获取元数据（免费）
+  // 策略 3: TikHub API 获取可下载的 videoUrl（付费 $0.001/次，免费额度 2000 次）
+  const [strategy1, strategy2, strategy3] = await Promise.allSettled([
     // 策略 1: 主站页面 → __UNIVERSAL_DATA_FOR_REHYDRATION__ JSON
     (async (): Promise<ParseResult> => {
       let pageUrl = url;
       if (!videoId) {
-        // 可能是短链，跟随重定向提取真实 URL
         const redirectResp = await fetch(url, {
           headers: {
             ...HEADERS,
@@ -421,7 +472,7 @@ async function parseTiktok(url: string): Promise<ParseResult> {
         headers: {
           ...HEADERS,
           'Accept-Language': 'en-US,en;q=0.9',
-          Cookie: '',  // 空 cookie，避免 TikTok 返回个性化内容
+          Cookie: '',
         },
         signal: AbortSignal.timeout(8000),
       });
@@ -454,12 +505,60 @@ async function parseTiktok(url: string): Promise<ParseResult> {
       const html = await resp.text();
       return extractTiktokFromHtml(html, vid);
     })(),
+    // 策略 3: TikHub API — 获取可下载的无水印直链
+    (async (): Promise<ParseResult> => {
+      const result = await fetchTiktokFromTikHub(url);
+      // 如果 TikHub 返回了完整结果（含元数据），优先使用
+      if (result.result) return result.result;
+      // 如果只返回了 videoUrl（页面解析已有元数据），抛异常由合并逻辑处理
+      if (result.videoUrl) {
+        // 构造一个只含 videoUrl 的 result，后续合并时会用这个覆盖
+        return {
+          success: true,
+          platform: 'tiktok',
+          type: 'video',
+          title: '',
+          videoUrl: result.videoUrl,
+        };
+      }
+      throw new Error(result.error || 'TikHub failed');
+    })(),
   ]);
 
-  // 返回第一个成功的结果
+  // 合并结果：页面解析提供元数据，TikHub 提供可下载的 videoUrl
+  let pageResult: ParseResult | null = null;
+  let tikHubResult: ParseResult | null = null;
+
   for (const r of [strategy1, strategy2]) {
-    if (r.status === 'fulfilled' && r.value.success) return r.value;
+    if (r.status === 'fulfilled' && r.value.success) {
+      pageResult = r.value;
+      break;
+    }
   }
+
+  if (strategy3.status === 'fulfilled' && strategy3.value.success) {
+    tikHubResult = strategy3.value;
+  }
+
+  // 如果 TikHub 有完整结果（页面解析全失败时），直接返回
+  if (!pageResult && tikHubResult?.videoUrl && tikHubResult.title) {
+    return tikHubResult;
+  }
+
+  // 页面解析有结果：用 TikHub 的 videoUrl 覆盖
+  if (pageResult) {
+    if (tikHubResult?.videoUrl) {
+      pageResult.videoUrl = tikHubResult.videoUrl;
+    }
+    return pageResult;
+  }
+
+  // 页面解析失败，但 TikHub 有 videoUrl
+  if (tikHubResult?.videoUrl) {
+    return tikHubResult;
+  }
+
+  // 全部失败，返回第一个失败结果
   for (const r of [strategy1, strategy2]) {
     if (r.status === 'fulfilled') return r.value;
   }
