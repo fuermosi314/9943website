@@ -60,7 +60,7 @@ export default function VideoUnwatermarkPage() {
     } finally {
       setLoading(false);
     }
-  }, [url]);
+  }, [url, forceBrowser]);
 
   const handleCopyUrl = useCallback(() => {
     if (result?.videoUrl) {
