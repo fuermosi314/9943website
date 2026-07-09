@@ -417,7 +417,8 @@ async function fetchTiktokFromTikHub(videoUrl: string): Promise<{ videoUrl?: str
     if (!aweme) return { error: 'TikHub: no video data' };
 
     const video = aweme.video;
-    const noWmUrl = video?.download_no_watermark_addr?.url_list?.[0];
+    // 优先用 download_no_watermark_addr，部分视频没有此字段则降级到 play_addr
+    const noWmUrl = video?.download_no_watermark_addr?.url_list?.[0] || video?.play_addr?.url_list?.[0];
     const desc = aweme.desc || 'TikTok 作品';
     const author = aweme.author?.nickname || aweme.author?.unique_id || '';
     const coverUrl = video?.cover?.url_list?.[0] || video?.origin_cover?.url_list?.[0] || '';
