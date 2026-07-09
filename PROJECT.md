@@ -260,7 +260,13 @@
   - **元数据**（免费）: 主站页面提取 `__UNIVERSAL_DATA_FOR_REHYDRATION__` JSON / Embed 页面备用 → 提取 `itemStruct.video.downloadAddr`
   - **下载直链**（付费 $0.001/次）: 并行调用 TikHub V3 API（`fetch_one_video_by_share_url`）→ 提取 `download_no_watermark_addr`（`need_set_token: false`，无 Referer 校验，不绑定 IP）
   - 用户浏览器通过代理直连 TikTok CDN 下载无水印视频
-  - 环境变量: `TIKHUB_API_KEY`（TikHub API Key，$2 免费额度 ≈ 2000 次调用）
+  - 环境变量: `TIKHUB_API_KEY`（TikHub API Key）
+- TikTok 解析当前限制:
+  - **调用次数有限**: TikHub 注册送 $2 额度（≈2000 次调用），用完后需付费（$0.001/次）或签到获取免费额度
+  - **API 限制**: TikHub 部分端点有调用频率限制（默认 10 RPS），频繁使用可能被限流；TikTok 内容本身可能被删除或设私密，导致解析失败
+  - **RapidAPI 未生效**: 已注册 `tiktok-video-downloader-7690-video-per-months-for-free` 并添加 API Key，但因订阅未完全激活，无法作为免费 fallback 使用
+  - **依赖代理**: 用户浏览器必须配置代理才能访问 TikTok CDN 下载视频（TikTok 在部分地区被屏蔽）
+  - **短链/分享口令**: 部分 TikTok 短链或 APP 内复制链接可能包含额外参数，解析器会自动提取其中的标准 URL
 - Bilibili 解析: 提取 BV ID → 获取视频信息 → 获取播放地址（DASH 格式）
 - 解析失败时推荐第三方去水印网站
 
