@@ -36,6 +36,7 @@ export default function VideoUnwatermarkPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ParseResult | null>(null);
   const [copied, setCopied] = useState(false);
+  const [forceBrowser, setForceBrowser] = useState(false);
 
   const handleParse = useCallback(async () => {
     if (!url.trim()) return;
@@ -113,7 +114,6 @@ export default function VideoUnwatermarkPage() {
   }, [url]);
 
   const [pasteError, setPasteError] = useState(false);
-  const [forceBrowser, setForceBrowser] = useState(false);
 
   const handlePaste = useCallback(async () => {
     try {
