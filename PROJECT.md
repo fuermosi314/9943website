@@ -12,7 +12,7 @@
 - **技术栈**: Next.js 14 + React 18 + Tailwind CSS 3 + TypeScript
 - **项目路径**: `/home/huang/claude/vs/work/9943小工具大全`
 - **部署计划**: 本地开发 → Git → Vercel 发布
-- **当前工具数量**: 65 个（自动统计自 `lib/tools.ts`）
+- **当前工具数量**: 66 个（自动统计自 `lib/tools.ts`）
 
 ---
 
@@ -162,7 +162,7 @@
 | `dev` | 开发工具 | 🔧 | 在线编译器导航 |
 | `life` | 生活工具 | 🎯 | BMI 计算器、单位换算、专业计算器、视频去水印、简单记、耗知通 |
 | `entertainment` | 娱乐工具 | 🎮 | 大转盘、二维码生成、随机数生成器、爆款开头生成器、毁灭地球的电磁炮 |
-| `website` | 网站工具 | 🌐 | Excalidraw, Carbon, JSON, CodeSandbox, Photopea, KMS, PDF24, S7资源库, FMHY, 便民查询网, 爱看机器人, Steam 下载, 图吧工具箱, Image Splitter, 柒夜导航, PhWalls, 纸由我, VirusTotal, Learn Git Branching, Watt Toolkit, AI Short, 云游君的厨房, 菜鸟教程, Everything 下载, TreeSize 下载 |
+| `website` | 网站工具 | 🌐 | Excalidraw, Carbon, JSON, CodeSandbox, Photopea, KMS, PDF24, S7资源库, FMHY, 便民查询网, 爱看机器人, Steam 下载, 图吧工具箱, Image Splitter, 柒夜导航, PhWalls, 纸由我, VirusTotal, Learn Git Branching, Watt Toolkit, AI Short, 云游君的厨房, 菜鸟教程, Human Benchmark, Everything 下载, TreeSize 下载 |
 | `software` | 软件工具 | 💿 | AI智能桌面整理大师、智能弹幕 |
 
 ### 收藏和历史功能
@@ -335,17 +335,29 @@
 - **UI**: 响应式布局，全屏编辑器弹窗，删除确认对话框，Toast 提示
 
 ### 7.11 Markdown 转 HTML (md-to-html)
-- 两种输入模式：上传 .md 文件 / 直接粘贴 Markdown 代码
-- **实时预览**: 300ms debounce，左右分栏（桌面端）/ 上下堆叠（移动端）
+- **三种输入模式**:
+  - ✏️ **粘贴内容**: 直接输入 Markdown 代码，300ms 实时预览
+  - 📁 **上传文件**: 上传单个 .md/.markdown 文件（支持拖拽），上传后可重新选择替换
+  - 📂 **批量上传**: 上传多个 .md 文件（文件选择器多选或拖拽），左侧文件列表点选切换预览
+- **实时预览**: 300ms debounce，左右分栏（桌面端）/ 上下堆叠（移动端），批量模式下右侧显示当前选中文件的预览
 - **Markdown 解析**: 使用 `marked` 库，支持 GFM（表格、任务列表、删除线等）
 - **XSS 防护**: `DOMPurify` 清理输出 + iframe sandbox 双重防护
 - **输出选项**:
   - 复制完整 HTML 代码（含内嵌 GitHub 风格 CSS）
-  - 下载 .html 文件（文件名与 .md 文件同名）
+  - 下载单个 .html 文件
+  - 📦 **批量下载**: 一键逐个下载所有 HTML 文件（300ms 间隔避免浏览器拦截），不打包 ZIP
 - **内嵌 CSS**: GitHub 风格排版样式，独立打开时也能正确渲染
+- 批量模式下支持：添加更多文件、重新选择替换、清除全部
 - 无代码语法高亮
 
-### 7.12 图片裁剪 (image-crop)
+### 7.12 Human Benchmark (human-benchmark)
+- 网站工具，归类于「网站工具」分类
+- 在线认知能力测试集合，挑战反应力与记忆力
+- **测试项目**: 反应时间、序列记忆、数字记忆、词汇记忆、视觉记忆、打字速度、Chimp Test
+- 所有测试结果可追踪历史，查看进步趋势
+- 完全免费，无需注册，浏览器直接运行
+
+### 7.13 图片裁剪 (image-crop)
 - 上传图片后通过 `react-image-crop` 提供**交互式可视化裁剪选区**
 - **交互功能**: 拖拽框选 / 8 手柄调整大小 / 拖拽选区移动 / 三分线辅助网格 / 宽高比锁定
 - **5 个宽高比预设按钮**: 自由 / 1:1 / 4:3 / 16:9 / 9:16（竖屏）

@@ -588,6 +588,17 @@ export const tools: Tool[] = [
     tags: ['教程', '编程', '学习', '前端', '后端', 'python', 'java'],
     keywords: ['学编程', '编程入门', '前端教程', 'python教程', 'java教程', 'html教程', '在线教程', '菜鸟'],
   },
+  {
+    id: 'human-benchmark',
+    name: 'Human Benchmark',
+    description: '在线认知能力测试，挑战你的反应力与记忆力',
+    icon: '🧠',
+    category: 'website',
+    path: '/tools/site/human-benchmark',
+    externalUrl: 'https://humanbenchmark.com/',
+    tags: ['测试', '反应力', '记忆', '大脑', '认知', '练习', '脑力'],
+    keywords: ['反应速度测试', '记忆力测试', '脑力训练', '认知测试', 'sequence memory', 'number memory', 'typing speed', 'chimp test'],
+  },
 ];
 
 export function getToolsByCategory(categoryId: string): Tool[] {
