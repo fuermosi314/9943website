@@ -288,31 +288,10 @@ function EntryEditor({
 }) {
   const draftKey = `simple-note-draft-${entry?.id || 'new'}`;
 
-  // 从草稿恢复
-  const [date, setDate] = useState(() => {
-    if (entry) return entry.date;
-    try {
-      const draft = JSON.parse(localStorage.getItem(draftKey) || 'null');
-      if (draft?.date) return draft.date;
-    } catch {}
-    return selectedDate;
-  });
-  const [mood, setMood] = useState<Mood>(() => {
-    if (entry) return entry.mood || '😊';
-    try {
-      const draft = JSON.parse(localStorage.getItem(draftKey) || 'null');
-      if (draft?.mood) return draft.mood;
-    } catch {}
-    return '😊';
-  });
-  const [content, setContent] = useState(() => {
-    if (entry) return entry.content || '';
-    try {
-      const draft = JSON.parse(localStorage.getItem(draftKey) || 'null');
-      if (draft?.content) return draft.content;
-    } catch {}
-    return '';
-  });
+  // 初始值不读草稿（渲染期读 localStorage 会导致 hydration 首帧不一致），草稿在下方 effect 中恢复
+  const [date, setDate] = useState(entry ? entry.date : selectedDate);
+  const [mood, setMood] = useState<Mood>(entry ? entry.mood || '😊' : '😊');
+  const [content, setContent] = useState(entry ? entry.content || '' : '');
   const [photos, setPhotos] = useState<{ id: string; thumbnail: string; blob?: Blob; width: number; height: number }[]>(
     entry?.photos.map(p => ({ ...p })) || []
   );
@@ -321,12 +300,15 @@ function EntryEditor({
   const [hasDraft, setHasDraft] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 检查是否有草稿（仅新建时提示）
+  // 检查是否有草稿并恢复（仅新建时；effect 中读取避免 hydration 首帧不一致）
   useEffect(() => {
     if (!entry) {
       try {
         const draft = JSON.parse(localStorage.getItem(draftKey) || 'null');
         if (draft?.content || draft?.mood) setHasDraft(true);
+        if (draft?.date) setDate(draft.date);
+        if (draft?.mood) setMood(draft.mood);
+        if (typeof draft?.content === 'string') setContent(draft.content);
       } catch {}
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

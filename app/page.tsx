@@ -249,23 +249,17 @@ function HomeContent() {
     return () => el.removeEventListener('touchmove', nativeTouchMove);
   }, [handleDragOver, startAutoScroll]);
 
-  const animatedCatsRef = useRef<Set<string> | null>(null);
-  if (!animatedCatsRef.current) {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = sessionStorage.getItem('tools-animated-categories');
-        animatedCatsRef.current = new Set<string>(raw ? JSON.parse(raw) : []);
-      } catch {
-        animatedCatsRef.current = new Set<string>();
-      }
-    } else {
-      animatedCatsRef.current = new Set<string>();
-    }
-  }
-  const animatedCats = animatedCatsRef.current;
   const [animated, setAnimated] = useState(false);
 
   useEffect(() => {
+    // 恢复已动画分类（必须在 effect 中读取 sessionStorage：渲染期读取会导致客户端首帧与服务端不一致，触发 hydration 错误）
+    let animatedCats: Set<string>;
+    try {
+      const raw = sessionStorage.getItem('tools-animated-categories');
+      animatedCats = new Set<string>(raw ? JSON.parse(raw) : []);
+    } catch {
+      animatedCats = new Set<string>();
+    }
     const cat = searchParams.get('category') || 'all';
     setActiveCategory(cat);
     // 切换分类时刷新数据
@@ -277,7 +271,7 @@ function HomeContent() {
     } else {
       setAnimated(false);
     }
-  }, [searchParams, animatedCats, refreshData]);
+  }, [searchParams, refreshData]);
 
   const handleCategoryChange = useCallback((id: string) => {
     setActiveCategory(id);

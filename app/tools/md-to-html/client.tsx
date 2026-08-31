@@ -3,12 +3,15 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
-// html2canvas/jspdf are dynamically imported only in client-side callbacks to avoid SSR issues
+import { markdownToPdf, htmlToPdf, getTurndown } from '@/lib/md2pdf';
+import { EMBED_CSS, buildFullHtml } from '@/lib/html-export';
+import { htmlToImagePdf } from '@/lib/html-to-image-pdf';
 import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
 import { useToolHistory } from '@/lib/useToolHistory';
+import PdfToMdContent from './pdf-to-md';
 
-type ToolTab = 'md-to-html' | 'html-to-pdf';
+type ToolTab = 'md-to-html' | 'html-to-pdf' | 'pdf-to-md';
 
 type MdMode = 'paste' | 'upload' | 'batch';
 
@@ -16,6 +19,7 @@ interface BatchMdFile {
   id: string;
   name: string;
   previewHtml: string;
+  rawMd: string; // 原始 Markdown，用于 PDF 转换
 }
 
 interface BatchHtmlFile {
@@ -24,59 +28,11 @@ interface BatchHtmlFile {
   rawHtml: string;
 }
 
-const EMBED_CSS = `
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif;font-size:16px;line-height:1.6;color:#1f2328;max-width:900px;margin:0 auto;padding:2rem;background:#fff;word-wrap:break-word}
-h1,h2,h3,h4,h5,h6{margin-top:1.5em;margin-bottom:0.5em;font-weight:600;line-height:1.25}
-h1{font-size:2em;border-bottom:1px solid #d0d7de;padding-bottom:.3em}
-h2{font-size:1.5em;border-bottom:1px solid #d0d7de;padding-bottom:.3em}
-h3{font-size:1.25em}h4{font-size:1em}h5{font-size:.875em}h6{font-size:.85em;color:#656d76}
-p{margin:0.5em 0}
-a{color:#0969da;text-decoration:none}
-a:hover{text-decoration:underline}
-strong{font-weight:600}
-code{background:#f6f8fa;padding:.2em .4em;border-radius:3px;font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;font-size:85%}
-pre{background:#f6f8fa;padding:1rem;border-radius:6px;overflow-x:auto;margin:0.5em 0}
-pre code{background:none;padding:0;font-size:85%}
-blockquote{border-left:4px solid #d0d7de;padding:0 1em;color:#656d76;margin:0.5em 0}
-ul,ol{padding-left:2em;margin:0.5em 0}
-li{margin:0.25em 0}
-li:has(input[type=checkbox]){list-style:none}
-input[type=checkbox]{margin-right:.5em}
-table{border-collapse:collapse;margin:0.5em 0;width:100%;display:block;overflow-x:auto}
-th,td{border:1px solid #d0d7de;padding:.5em 1em;text-align:left}
-th{background:#f6f8fa;font-weight:600}
-tr:nth-child(even){background:#f6f8fa}
-img{max-width:100%;height:auto}
-hr{border:none;border-top:1px solid #d0d7de;margin:1em 0}
-@media(max-width:640px){body{padding:1rem;font-size:14px}}
-@media print{body{max-width:none;padding:1cm}}
-`.trim();
-
-function buildFullHtml(body: string, title: string): string {
-  const escapedTitle = title
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-  return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${escapedTitle}</title>
-<style>${EMBED_CSS}</style>
-</head>
-<body>
-${body}
-</body>
-</html>`;
-}
-
 // ─── Sidebar ────────────────────────────────────
 const tools: { id: ToolTab; label: string; icon: string }[] = [
-  { id: 'md-to-html', label: 'MD → HTML', icon: '📝' },
-  { id: 'html-to-pdf', label: 'HTML → PDF', icon: '📄' },
+  { id: 'md-to-html', label: 'MD → HTML/PDF', icon: '📝' },
+  { id: 'html-to-pdf', label: 'HTML → PDF/MD', icon: '📄' },
+  { id: 'pdf-to-md', label: 'PDF → MD/HTML', icon: '📑' },
 ];
 
 export default function MdToHtml() {
@@ -96,7 +52,7 @@ export default function MdToHtml() {
               alt="9943"
               className="w-8 h-8 rounded-lg shadow-lg shadow-orange-500/30"
             />
-            <h1 className="text-lg font-semibold text-white">Markdown 转 HTML</h1>
+            <h1 className="text-lg font-semibold text-white">Markdown 转 HTML/PDF</h1>
           </div>
           <FullscreenButton className="ml-auto" />
         </div>
@@ -105,14 +61,17 @@ export default function MdToHtml() {
       <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-24 pb-16">
         <div className="animate-fade-in">
           <p className="text-white/50 text-sm mb-4">
-            {toolTab === 'md-to-html'
-              ? '将 Markdown 文件或代码转换为 HTML，支持实时预览、复制代码和下载文件'
-              : '将 HTML 文件转换为 PDF，支持直接下载和批量转换'}
+            {toolTab === 'md-to-html' &&
+              '将 Markdown 转换为 HTML 或 PDF，支持实时预览、复制代码和下载文件'}
+            {toolTab === 'html-to-pdf' &&
+              '将 HTML 转换为 PDF 或 Markdown，支持直接下载和批量转换'}
+            {toolTab === 'pdf-to-md' &&
+              '将 PDF 文件转换为 Markdown 或 HTML，支持 AI 增强还原结构'}
           </p>
 
           <div className="flex gap-4">
             {/* ─── Sidebar ─── */}
-            <aside className="w-40 flex-shrink-0 space-y-1">
+            <aside className="w-52 flex-shrink-0 space-y-1">
               {tools.map((t) => (
                 <button
                   key={t.id}
@@ -131,7 +90,9 @@ export default function MdToHtml() {
 
             {/* ─── Content ─── */}
             <div className="flex-1 min-w-0 space-y-4">
-              {toolTab === 'md-to-html' ? <MdToHtmlContent /> : <HtmlToPdfContent />}
+              {toolTab === 'md-to-html' && <MdToHtmlContent />}
+              {toolTab === 'html-to-pdf' && <HtmlToPdfContent />}
+              {toolTab === 'pdf-to-md' && <PdfToMdContent />}
             </div>
           </div>
         </div>
@@ -142,7 +103,7 @@ export default function MdToHtml() {
 
 // ─── MD → HTML (unchanged) ─────────────────────
 function MdToHtmlContent() {
-  const [mode, setMode] = useState<MdMode>('paste');
+  const [mode, setMode] = useState<MdMode>('upload');
   const [markdown, setMarkdown] = useState('');
   const [fileName, setFileName] = useState('document');
   const [isDragging, setIsDragging] = useState(false);
@@ -154,6 +115,7 @@ function MdToHtmlContent() {
   const [batchFiles, setBatchFiles] = useState<BatchMdFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const replaceModeRef = useRef(false);
+  const [converting, setConverting] = useState(false);
 
   const [debouncedMd, setDebouncedMd] = useState('');
   useEffect(() => {
@@ -247,6 +209,7 @@ function MdToHtmlContent() {
             id: `${uniqueName}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
             name: uniqueName,
             previewHtml: clean,
+            rawMd: md,
           });
         } catch {
           resolve(null);
@@ -332,6 +295,73 @@ function MdToHtmlContent() {
     URL.revokeObjectURL(url);
   }, [fullHtml, displayFileName]);
 
+  // ─── MD → 文字型 PDF（pdfmake） ───
+  const handleDownloadPdf = useCallback(async (md?: string, name?: string) => {
+    const source = md ?? markdown;
+    if (!source.trim()) return;
+    setConverting(true);
+    setError('');
+    try {
+      await markdownToPdf(source, `${name ?? displayFileName}.pdf`);
+    } catch {
+      setError('PDF 生成失败，请检查 Markdown 内容');
+    } finally {
+      setConverting(false);
+    }
+  }, [markdown, displayFileName]);
+
+  const handleBatchPdf = useCallback(async () => {
+    if (batchFiles.length === 0) return;
+    setConverting(true);
+    setError('');
+    let ok = 0;
+    for (const f of batchFiles) {
+      try {
+        await markdownToPdf(f.rawMd, `${f.name}.pdf`);
+        ok++;
+      } catch {
+        // 单个文件失败不影响后续
+      }
+    }
+    setConverting(false);
+    if (ok < batchFiles.length) {
+      setError(`${ok}/${batchFiles.length} 个文件转换成功，${batchFiles.length - ok} 个失败`);
+    }
+  }, [batchFiles]);
+
+  // ─── MD → 图片型 PDF（html2canvas + jsPDF，所见即所得、文字不可搜索） ───
+  const handleDownloadImagePdf = useCallback(async () => {
+    if (!fullHtml) return;
+    setConverting(true);
+    setError('');
+    try {
+      await htmlToImagePdf(fullHtml, `${displayFileName}.pdf`);
+    } catch {
+      setError('PDF 生成失败，请检查 Markdown 内容');
+    } finally {
+      setConverting(false);
+    }
+  }, [fullHtml, displayFileName]);
+
+  const handleBatchImagePdf = useCallback(async () => {
+    if (batchFiles.length === 0) return;
+    setConverting(true);
+    setError('');
+    let ok = 0;
+    for (const f of batchFiles) {
+      try {
+        await htmlToImagePdf(buildFullHtml(f.previewHtml, f.name), `${f.name}.pdf`);
+        ok++;
+      } catch {
+        // 单个文件失败不影响后续
+      }
+    }
+    setConverting(false);
+    if (ok < batchFiles.length) {
+      setError(`${ok}/${batchFiles.length} 个文件转换成功，${batchFiles.length - ok} 个失败`);
+    }
+  }, [batchFiles]);
+
   const handleClear = useCallback(() => {
     if (mode === 'batch') {
       setBatchFiles([]);
@@ -371,19 +401,6 @@ function MdToHtmlContent() {
     fileInputRef.current?.click();
   }, []);
 
-  const handleSingleDownload = useCallback((f: BatchMdFile) => {
-    const html = buildFullHtml(f.previewHtml, f.name);
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${f.name}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, []);
-
   const handleBatchDownload = useCallback(() => {
     if (batchFiles.length === 0) return;
     batchFiles.forEach((f, i) => {
@@ -414,7 +431,7 @@ function MdToHtmlContent() {
               : 'glass-card text-white/60 hover:text-white hover:border-white/30'
           }`}
         >
-          ✏️ 粘贴内容
+          ✏️ 粘贴 Markdown
         </button>
         <button
           onClick={() => handleModeChange('upload')}
@@ -513,45 +530,45 @@ function MdToHtmlContent() {
                       <span className="text-white/60 flex-shrink-0">📄</span>
                       <span className="flex-1 text-white text-sm truncate">{f.name}.md</span>
                       <span className="text-green-400 text-xs flex-shrink-0">✓</span>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleSingleDownload(f); }}
-                        className="text-white/40 hover:text-[#fb6400] text-xs p-1 flex-shrink-0"
-                        title="下载 HTML"
-                      >
-                        ⬇
-                      </button>
                     </div>
                   ))}
                 </div>
               </>
             )
           ) : (
-            // ── Paste / Upload modes ──
+            // ── Paste / Upload ──
             <>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-semibold text-white">
-                  {mode === 'upload' ? '📄 Markdown 文件' : '✏️ Markdown 源码'}
-                </h2>
-                <div className="flex items-center gap-3">
-                  {mode === 'upload' && hasContent && (
-                    <button
-                      onClick={handleReupload}
-                      className="text-xs text-white/40 hover:text-[#fb6400] transition-colors"
-                    >
-                      重新选择文件
-                    </button>
-                  )}
-                  {hasContent && (
-                    <button
-                      onClick={handleClear}
-                      className="text-xs text-white/40 hover:text-[#fb6400] transition-colors"
-                    >
-                      清空
-                    </button>
-                  )}
-                </div>
-              </div>
-              {mode === 'upload' && !hasContent ? (
+              {hasContent ? (
+                <>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-sm font-semibold text-white">
+                      {mode === 'upload' ? '📄 Markdown 文件' : '✏️ Markdown 源码'}
+                    </h2>
+                    <div className="flex items-center gap-3">
+                      {mode === 'upload' && (
+                        <button
+                          onClick={handleReupload}
+                          className="text-xs text-white/40 hover:text-[#fb6400] transition-colors"
+                        >
+                          重新选择
+                        </button>
+                      )}
+                      <button
+                        onClick={handleClear}
+                        className="text-xs text-white/40 hover:text-[#fb6400] transition-colors"
+                      >
+                        清空
+                      </button>
+                    </div>
+                  </div>
+                  <textarea
+                    value={markdown}
+                    onChange={(e) => setMarkdown(e.target.value)}
+                    placeholder="在此输入或粘贴 Markdown 代码..."
+                    className="flex-1 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#fb6400] transition-all resize-none font-mono leading-relaxed"
+                  />
+                </>
+              ) : mode === 'upload' ? (
                 <div
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
@@ -573,11 +590,7 @@ function MdToHtmlContent() {
                 <textarea
                   value={markdown}
                   onChange={(e) => setMarkdown(e.target.value)}
-                  placeholder={
-                    mode === 'paste'
-                      ? '在此输入或粘贴 Markdown 代码...'
-                      : '文件内容将显示在此处，可直接编辑...'
-                  }
+                  placeholder="在此输入或粘贴 Markdown 代码..."
                   className="flex-1 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#fb6400] transition-all resize-none font-mono leading-relaxed"
                 />
               )}
@@ -587,7 +600,7 @@ function MdToHtmlContent() {
 
         {/* RIGHT: Preview */}
         <div className="glass-card p-4 flex flex-col min-h-[400px] md:min-h-[500px]">
-          <h2 className="text-sm font-semibold text-white mb-3">👁️ 实时预览</h2>
+          <h2 className="text-sm font-semibold text-white mb-3">👁️ 预览</h2>
           {mode === 'batch' && currentBatchFile && (
             <p className="text-xs text-white/40 mb-1">当前：{currentBatchFile.name}.md</p>
           )}
@@ -600,11 +613,11 @@ function MdToHtmlContent() {
             />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-white/30 text-sm space-y-2">
-              <div className="text-2xl">📝</div>
+              <div className="text-2xl">📄</div>
               <p>
                 {mode === 'batch'
                   ? '在左侧选择一个文件进行预览'
-                  : '输入 Markdown 后将实时显示效果'}
+                  : '输入 Markdown 后将显示预览效果'}
               </p>
             </div>
           )}
@@ -616,9 +629,23 @@ function MdToHtmlContent() {
         <div className="flex flex-col sm:flex-row gap-3">
           <button
             onClick={handleBatchDownload}
-            className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white rounded-xl hover:shadow-lg hover:shadow-orange-500/30 transition-all text-sm font-medium flex items-center justify-center gap-2"
+            className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2"
           >
-            📦 批量下载（{batchFiles.length} 个 HTML 文件）
+            📦 批量下载 HTML
+          </button>
+          <button
+            onClick={handleBatchPdf}
+            disabled={converting}
+            className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white rounded-xl hover:shadow-lg hover:shadow-orange-500/30 transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {converting ? '⏳ 转换中…' : '📄 批量转 PDF（文字）'}
+          </button>
+          <button
+            onClick={handleBatchImagePdf}
+            disabled={converting}
+            className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {converting ? '⏳ 转换中…' : '🖼️ 批量转 PDF（图片）'}
           </button>
           {currentBatchFile && (
             <button
@@ -639,9 +666,23 @@ function MdToHtmlContent() {
           </button>
           <button
             onClick={handleDownload}
-            className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white rounded-xl hover:shadow-lg hover:shadow-orange-500/30 transition-all text-sm font-medium flex items-center justify-center gap-2"
+            className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2"
           >
             ⬇ 下载 HTML 文件
+          </button>
+          <button
+            onClick={() => handleDownloadPdf()}
+            disabled={converting}
+            className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white rounded-xl hover:shadow-lg hover:shadow-orange-500/30 transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {converting ? '⏳ 转换中…' : '📄 下载 PDF（文字）'}
+          </button>
+          <button
+            onClick={handleDownloadImagePdf}
+            disabled={converting}
+            className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {converting ? '⏳ 转换中…' : '🖼️ 下载 PDF（图片）'}
           </button>
         </div>
       )}
@@ -658,8 +699,9 @@ function MdToHtmlContent() {
 
 // ─── HTML → PDF ─────────────────────────────────
 function HtmlToPdfContent() {
-  const [mode, setMode] = useState<'upload' | 'batch'>('upload');
+  const [mode, setMode] = useState<'paste' | 'upload' | 'batch'>('upload');
   const [error, setError] = useState('');
+  const [mdCopied, setMdCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Single upload
@@ -671,7 +713,7 @@ function HtmlToPdfContent() {
   const [batchFiles, setBatchFiles] = useState<BatchHtmlFile[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const replaceModeRef = useRef(false);
-  const previewFrameRef = useRef<HTMLIFrameElement>(null);
+  const [converting, setConverting] = useState(false);
 
   const currentBatchFile = useMemo(() => {
     if (mode !== 'batch') return null;
@@ -762,144 +804,44 @@ function HtmlToPdfContent() {
     }
   }, []);
 
-  /** Create an invisible container inside the viewport so html2canvas can
- *  paint it without causing flicker or blank PDFs. */
-function createInvisibleContainer(html: string): HTMLDivElement {
-  const el = document.createElement('div');
-  el.innerHTML = html;
-  el.style.position = 'absolute';
-  el.style.left = '0';
-  el.style.top = '0';
-  el.style.width = '800px';
-  el.style.opacity = '0.01';
-  el.style.pointerEvents = 'none';
-  el.style.zIndex = '-9999';
-  return el;
-}
-
-/**
- * 收集「安全切割线」：块级元素区间合并后，相邻区间的缝隙中点即安全线（canvas 像素）。
- * 切点落在缝隙处可保证文字行、图片、表格行不被从中间切断。
- * 容器类标签（div/table/ul 等）若内含内容标签子孙则让位不收集，避免外层大容器吞掉所有缝隙。
- */
-function collectSafeLines(container: HTMLElement, domToCanvas: number): number[] {
-  const containerSel = 'div,section,article,aside,header,footer,main,form,fieldset,table,ul,ol,figure,blockquote';
-  const contentSel = 'h1,h2,h3,h4,h5,h6,p,li,tr,th,td,pre,img,hr,svg,figcaption,caption,legend';
-  const containerTop = container.getBoundingClientRect().top;
-  const ranges: Array<[number, number]> = [];
-
-  container.querySelectorAll(`${contentSel},${containerSel}`).forEach(node => {
-    const el = node as HTMLElement;
-    // 包着内容子元素的容器让位给子元素；纯叶子容器（如包单张图的 div）仍需收集
-    if (el.matches(containerSel) && el.querySelector(contentSel)) return;
-    const r = el.getBoundingClientRect();
-    if (r.height === 0) return; // display:none / 空元素
-    ranges.push([r.top - containerTop, r.bottom - containerTop]);
-  });
-
-  // 排序并合并重叠区间（子元素区间被父元素包含的直接丢弃）
-  ranges.sort((a, b) => a[0] - b[0]);
-  const merged: Array<[number, number]> = [];
-  for (const [top, bottom] of ranges) {
-    const last = merged[merged.length - 1];
-    if (last && top < last[1]) {
-      last[1] = Math.max(last[1], bottom);
-    } else {
-      merged.push([top, bottom]);
-    }
-  }
-
-  // 相邻区间缝隙中点 = 安全线，换算为 canvas 像素
-  const safeLines: number[] = [];
-  for (let i = 0; i + 1 < merged.length; i++) {
-    safeLines.push(((merged[i][1] + merged[i + 1][0]) / 2) * domToCanvas);
-  }
-  return safeLines;
-}
-
-// ── Convert HTML to PDF and download directly ──
-// html2pdf.js 在 Chromium 下渲染空白画布（0.14 库 bug），改用 html2canvas + jsPDF 手动合成
-// 分页用「智能安全切割线」：切点落在块级元素缝隙处，避免文字行/图片/表格行被从中间切断
-async function renderHtmlToPdf(html: string, filename: string): Promise<void> {
-  const container = createInvisibleContainer(html);
-  document.body.appendChild(container);
-
-  try {
-    const html2canvasMod = await import('html2canvas');
-    const html2canvas = html2canvasMod.default ?? html2canvasMod;
-    const { jsPDF } = await import('jspdf');
-
-    // opacity 0.01 会让画布以 1% alpha 绘制而近乎全白，渲染前临时还原
-    container.style.opacity = '1';
-
-    const canvas = await html2canvas(container, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      width: 800,
-      backgroundColor: '#ffffff',
-    });
-
-    const pdf = new jsPDF({ unit: 'in', format: 'a4', orientation: 'portrait' });
-    const contentWidth = 7.5; // A4 宽 8.5in - 左右边距各 0.5in
-    const pageContentH = 10; // A4 高 11in - 上下边距各 0.5in
-    const pxPerInch = canvas.width / contentWidth;
-    const sliceH = Math.floor(pageContentH * pxPerInch);
-    const minSlice = 400; // canvas px（≈200 DOM px），切点距页顶不足则回退硬切，避免极矮页
-
-    // 安全线 = 块级元素缝隙中点（canvas 坐标）
-    const safeLines = collectSafeLines(container, canvas.width / container.offsetWidth);
-
-    let pageTop = 0;
-    let pageIdx = 0;
-    while (pageTop < Math.max(canvas.height, 1)) {
-      if (pageIdx > 0) pdf.addPage();
-      // 本页硬边界 = 起点 + 一页内容高（最后一页切到 canvas 末尾）
-      const hardEnd = Math.min(pageTop + sliceH, canvas.height);
-      // 切点 = 页内 ≤ hardEnd 的最大安全线；距页顶不足 minSlice 或页内无安全线则回退硬切
-      let cut = hardEnd;
-      for (let i = safeLines.length - 1; i >= 0; i--) {
-        const line = safeLines[i];
-        if (line > pageTop && line <= hardEnd) {
-          if (line - pageTop >= minSlice) cut = line;
-          break;
-        }
-      }
-      const srcH = cut - pageTop;
-      const pageCanvas = document.createElement('canvas');
-      pageCanvas.width = canvas.width;
-      pageCanvas.height = srcH;
-      pageCanvas.getContext('2d')!.drawImage(
-        canvas, 0, pageTop, canvas.width, srcH,
-        0, 0, canvas.width, srcH,
-      );
-      pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.95), 'JPEG', 0.5, 0.5, contentWidth, srcH / pxPerInch);
-      pageTop = cut;
-      pageIdx++;
-    }
-
-    pdf.save(filename);
-  } finally {
-    document.body.removeChild(container);
-  }
-}
-
+  // ── Convert HTML to text-based PDF (turndown → md2pdf pipeline) ──
   const handleConvertToPdf = useCallback(async (htmlToConvert?: string) => {
     const html = htmlToConvert ?? currentHtml;
     if (!html.trim()) return;
 
+    setConverting(true);
     setError('');
 
     try {
-      await renderHtmlToPdf(html, `${currentName}.pdf`);
+      await htmlToPdf(html, `${currentName}.pdf`);
     } catch {
       setError('PDF 生成失败，请检查 HTML 内容是否正确');
+    } finally {
+      setConverting(false);
+    }
+  }, [currentHtml, currentName]);
+
+  // ── HTML → 图片型 PDF（html2canvas + jsPDF，所见即所得、文字不可搜索） ──
+  const handleConvertToImagePdf = useCallback(async (htmlToConvert?: string) => {
+    const html = htmlToConvert ?? currentHtml;
+    if (!html.trim()) return;
+
+    setConverting(true);
+    setError('');
+
+    try {
+      await htmlToImagePdf(html, `${currentName}.pdf`);
+    } catch {
+      setError('PDF 生成失败，请检查 HTML 内容是否正确');
+    } finally {
+      setConverting(false);
     }
   }, [currentHtml, currentName]);
 
   // ── Batch convert all files one by one ──
   const handleBatchConvert = useCallback(async () => {
     if (batchFiles.length === 0) return;
+    setConverting(true);
     setError('');
 
     let converted = 0;
@@ -908,13 +850,39 @@ async function renderHtmlToPdf(html: string, filename: string): Promise<void> {
       const f = batchFiles[i];
 
       try {
-        await renderHtmlToPdf(f.rawHtml, `${f.name}.pdf`);
+        await htmlToPdf(f.rawHtml, `${f.name}.pdf`);
         converted++;
       } catch {
-        // skip failed file
+        // 单个文件失败不影响后续
       }
     }
 
+    setConverting(false);
+    if (converted < batchFiles.length) {
+      setError(`${converted}/${batchFiles.length} 个文件转换成功，${batchFiles.length - converted} 个失败`);
+    }
+  }, [batchFiles]);
+
+  // ── Batch convert to image PDF (html2canvas + jsPDF) ──
+  const handleBatchImageConvert = useCallback(async () => {
+    if (batchFiles.length === 0) return;
+    setConverting(true);
+    setError('');
+
+    let converted = 0;
+
+    for (let i = 0; i < batchFiles.length; i++) {
+      const f = batchFiles[i];
+
+      try {
+        await htmlToImagePdf(f.rawHtml, `${f.name}.pdf`);
+        converted++;
+      } catch {
+        // 单个文件失败不影响后续
+      }
+    }
+
+    setConverting(false);
     if (converted < batchFiles.length) {
       setError(`${converted}/${batchFiles.length} 个文件转换成功，${batchFiles.length - converted} 个失败`);
     }
@@ -984,7 +952,7 @@ async function renderHtmlToPdf(html: string, filename: string): Promise<void> {
     setError('');
   }, [mode]);
 
-  const handleModeChange = useCallback((newMode: 'upload' | 'batch') => {
+  const handleModeChange = useCallback((newMode: 'paste' | 'upload' | 'batch') => {
     if (newMode === mode) return;
     if (newMode === 'batch') {
       setHtmlContent('');
@@ -997,10 +965,87 @@ async function renderHtmlToPdf(html: string, filename: string): Promise<void> {
     setError('');
   }, [mode]);
 
+  // HTML → Markdown（复用 getTurndown，与 PDF 转换同一份配置）
+  const htmlToMd = useCallback(async (html: string) => {
+    const td = await getTurndown();
+    const parsed = new DOMParser().parseFromString(html, 'text/html');
+    return td.turndown(parsed.body?.innerHTML ?? html);
+  }, []);
+
+  const handleCopyMd = useCallback(async () => {
+    if (!currentHtml.trim()) return;
+    try {
+      const md = await htmlToMd(currentHtml);
+      await navigator.clipboard.writeText(md);
+      setMdCopied(true);
+      setTimeout(() => setMdCopied(false), 2000);
+    } catch {
+      setError('复制失败，请检查浏览器权限');
+    }
+  }, [currentHtml, htmlToMd]);
+
+  const handleDownloadMd = useCallback(async () => {
+    if (!currentHtml.trim()) return;
+    try {
+      const md = await htmlToMd(currentHtml);
+      const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${currentName || 'document'}.md`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      setError('Markdown 转换失败');
+    }
+  }, [currentHtml, currentName, htmlToMd]);
+
+  const handleBatchMd = useCallback(async () => {
+    if (batchFiles.length === 0) return;
+    setConverting(true);
+    setError('');
+    let ok = 0;
+    for (let i = 0; i < batchFiles.length; i++) {
+      const f = batchFiles[i];
+      if (i > 0) await new Promise(r => setTimeout(r, 300)); // 间隔触发避免浏览器拦截
+      try {
+        const md = await htmlToMd(f.rawHtml);
+        const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${f.name}.md`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        ok++;
+      } catch {
+        // 单个文件失败不影响后续
+      }
+    }
+    setConverting(false);
+    if (ok < batchFiles.length) {
+      setError(`${ok}/${batchFiles.length} 个文件转换成功，${batchFiles.length - ok} 个失败`);
+    }
+  }, [batchFiles, htmlToMd]);
+
   return (
     <>
       {/* Mode Toggle */}
       <div className="flex gap-2">
+        <button
+          onClick={() => handleModeChange('paste')}
+          className={`py-2.5 px-5 rounded-xl text-sm font-medium transition-all ${
+            mode === 'paste'
+              ? 'bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white shadow-lg shadow-orange-500/20'
+              : 'glass-card text-white/60 hover:text-white hover:border-white/30'
+          }`}
+        >
+          ✏️ 粘贴 HTML
+        </button>
         <button
           onClick={() => handleModeChange('upload')}
           className={`py-2.5 px-5 rounded-xl text-sm font-medium transition-all ${
@@ -1102,19 +1147,23 @@ async function renderHtmlToPdf(html: string, filename: string): Promise<void> {
               </>
             )
           ) : (
-            // ── Single upload ──
+            // ── Paste / Upload ──
             <>
               {hasContent ? (
                 <>
                   <div className="flex items-center justify-between mb-3">
-                    <h2 className="text-sm font-semibold text-white">📄 HTML 文件</h2>
+                    <h2 className="text-sm font-semibold text-white">
+                      {mode === 'upload' ? '📄 HTML 文件' : '✏️ HTML 源码'}
+                    </h2>
                     <div className="flex items-center gap-3">
-                      <button
-                        onClick={handleReupload}
-                        className="text-xs text-white/40 hover:text-[#fb6400] transition-colors"
-                      >
-                        重新选择
-                      </button>
+                      {mode === 'upload' && (
+                        <button
+                          onClick={handleReupload}
+                          className="text-xs text-white/40 hover:text-[#fb6400] transition-colors"
+                        >
+                          重新选择
+                        </button>
+                      )}
                       <button
                         onClick={handleClear}
                         className="text-xs text-white/40 hover:text-[#fb6400] transition-colors"
@@ -1126,10 +1175,11 @@ async function renderHtmlToPdf(html: string, filename: string): Promise<void> {
                   <textarea
                     value={htmlContent}
                     onChange={(e) => setHtmlContent(e.target.value)}
+                    placeholder="在此输入或粘贴 HTML 代码..."
                     className="flex-1 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#fb6400] transition-all resize-none font-mono leading-relaxed"
                   />
                 </>
-              ) : (
+              ) : mode === 'upload' ? (
                 <div
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
@@ -1147,6 +1197,13 @@ async function renderHtmlToPdf(html: string, filename: string): Promise<void> {
                   </p>
                   <p className="text-white/30 text-xs mt-1">支持 .html、.htm 格式</p>
                 </div>
+              ) : (
+                <textarea
+                  value={htmlContent}
+                  onChange={(e) => setHtmlContent(e.target.value)}
+                  placeholder="在此输入或粘贴 HTML 代码..."
+                  className="flex-1 w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-[#fb6400] transition-all resize-none font-mono leading-relaxed"
+                />
               )}
             </>
           )}
@@ -1160,7 +1217,6 @@ async function renderHtmlToPdf(html: string, filename: string): Promise<void> {
           )}
           {previewSrcDoc ? (
             <iframe
-              ref={previewFrameRef}
               srcDoc={previewSrcDoc}
               className="flex-1 w-full border-0 rounded-lg bg-white"
               title="HTML 预览"
@@ -1184,14 +1240,30 @@ async function renderHtmlToPdf(html: string, filename: string): Promise<void> {
         <div className="flex flex-col sm:flex-row gap-3">
           <button
             onClick={handleBatchConvert}
-            className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white rounded-xl hover:shadow-lg hover:shadow-orange-500/30 transition-all text-sm font-medium flex items-center justify-center gap-2"
+            disabled={converting}
+            className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white rounded-xl hover:shadow-lg hover:shadow-orange-500/30 transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            📦 批量转 PDF（{batchFiles.length} 个文件）
+            {converting ? '⏳ 转换中…' : '📄 批量转 PDF（文字）'}
+          </button>
+          <button
+            onClick={handleBatchImageConvert}
+            disabled={converting}
+            className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {converting ? '⏳ 转换中…' : '🖼️ 批量转 PDF（图片）'}
+          </button>
+          <button
+            onClick={handleBatchMd}
+            disabled={converting}
+            className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {converting ? '⏳ 转换中…' : `📦 批量转 MD（${batchFiles.length} 个文件）`}
           </button>
           {currentBatchFile && (
             <button
               onClick={() => handleConvertToPdf()}
-              className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2"
+              disabled={converting}
+              className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               ⬇ 下载 {currentBatchFile.name}.pdf
             </button>
@@ -1201,9 +1273,29 @@ async function renderHtmlToPdf(html: string, filename: string): Promise<void> {
         <div className="flex flex-col sm:flex-row gap-3">
           <button
             onClick={() => handleConvertToPdf()}
-            className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white rounded-xl hover:shadow-lg hover:shadow-orange-500/30 transition-all text-sm font-medium flex items-center justify-center gap-2"
+            disabled={converting}
+            className="flex-1 py-3 bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white rounded-xl hover:shadow-lg hover:shadow-orange-500/30 transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            ⬇ 下载 PDF
+            {converting ? '⏳ 转换中…' : '📄 下载 PDF（文字）'}
+          </button>
+          <button
+            onClick={() => handleConvertToImagePdf()}
+            disabled={converting}
+            className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {converting ? '⏳ 转换中…' : '🖼️ 下载 PDF（图片）'}
+          </button>
+          <button
+            onClick={handleCopyMd}
+            className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2"
+          >
+            {mdCopied ? '✅ 已复制' : '📋 复制 Markdown'}
+          </button>
+          <button
+            onClick={handleDownloadMd}
+            className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2"
+          >
+            ⬇ 下载 Markdown
           </button>
         </div>
       )}

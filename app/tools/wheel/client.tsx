@@ -45,33 +45,16 @@ interface CustomPreset {
 
 export default function WheelPage() {
   useToolHistory('wheel');
-  const [customPresets, setCustomPresets] = useState<CustomPreset[]>(() => {
-    if (typeof window === 'undefined') return [];
-    try {
-      const saved = localStorage.getItem('wheel-custom-presets');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  // 初始值不读 localStorage（渲染期读取会导致 hydration 首帧不一致），在下方 effect 中恢复
+  const [customPresets, setCustomPresets] = useState<CustomPreset[]>([]);
 
-  const [items, setItems] = useState<WheelItem[]>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('wheel-current-items');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-        }
-      } catch {}
-    }
-    const defaultItems = presets['今天吃什么？'];
-    return defaultItems.map((text, i) => ({
+  const [items, setItems] = useState<WheelItem[]>(() =>
+    presets['今天吃什么？'].map((text, i) => ({
       id: `item-${i}`,
       text,
       color: gradients[i % gradients.length][0],
-    }));
-  });
+    }))
+  );
 
   const [rotation, setRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
@@ -82,14 +65,7 @@ export default function WheelPage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [activePreset, setActivePreset] = useState(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        return localStorage.getItem('wheel-active-preset') || '今天吃什么？';
-      } catch {}
-    }
-    return '今天吃什么？';
-  });
+  const [activePreset, setActivePreset] = useState('今天吃什么？');
   const [newItemText, setNewItemText] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
@@ -105,6 +81,25 @@ export default function WheelPage() {
         setHistory(JSON.parse(saved));
       } catch (e) {}
     }
+  }, []);
+
+  // 恢复上次使用的预设/自定义类别/当前选项（effect 中读取：惰性初始化读 localStorage 会导致 hydration 首帧不一致）
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('wheel-active-preset');
+      if (saved) setActivePreset(saved);
+    } catch {}
+    try {
+      const saved = localStorage.getItem('wheel-custom-presets');
+      if (saved) setCustomPresets(JSON.parse(saved));
+    } catch {}
+    try {
+      const saved = localStorage.getItem('wheel-current-items');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) setItems(parsed);
+      }
+    } catch {}
   }, []);
 
   // 保存历史记录

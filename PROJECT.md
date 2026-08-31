@@ -12,7 +12,7 @@
 - **技术栈**: Next.js 14 + React 18 + Tailwind CSS 3 + TypeScript
 - **项目路径**: `/home/huang/claude/vs/work/9943小工具大全`
 - **部署计划**: 本地开发 → Git → Vercel 发布
-- **当前工具数量**: 66 个（自动统计自 `lib/tools.ts`）
+- **当前工具数量**: 56 个（自动统计自 `lib/tools.ts`）
 
 ---
 
@@ -75,6 +75,8 @@
 │   │   └── route.ts         # 视频去水印解析 API（抖音/B站/西瓜）
 │   ├── api/github-mirrors/
 │   │   └── route.ts         # GitHub 镜像列表 API
+│   ├── api/pdf-to-md/
+│   │   └── route.ts         # PDF → Markdown AI 增强（DeepSeek 还原结构）
 │   ├── api/fast-download/
 │   │   ├── parse/route.ts   # 网盘链接解析（夸克/阿里/百度/115/天翼/迅雷）
 │   │   ├── probe/route.ts   # 下载链接探测（文件大小/Range/CORS支持）
@@ -95,7 +97,7 @@
 │       ├── image-crop/      # 图片裁剪
 │       ├── image-resize/    # 图片调整大小
 │       ├── image-rotate/    # 图片旋转/翻转
-│       ├── md-to-html/      # Markdown 转 HTML
+│       ├── md-to-html/      # 文档转换工具集（MD↔HTML、HTML→PDF、PDF→MD）
 │       ├── office-to-pdf/   # Office 转 PDF
 │       ├── online-compiler/ # 在线编译器导航
 │       ├── pdf-compress/    # PDF 压缩
@@ -112,6 +114,7 @@
 │       ├── tianjige/        # 天机阁（3D 家居收纳）
 │       ├── treesize/        # TreeSize 下载
 │       ├── unit-converter/  # 单位换算
+│       ├── valorant-sens/   # VALORANT 灵敏度生成器
 │       ├── video-unwatermark/ # 视频去水印
 │       ├── wheel/           # 大转盘
 │       └── word-count/      # 字数统计
@@ -138,10 +141,14 @@
 │   ├── storage.ts           # localStorage 封装
 │   ├── useToolHistory.ts    # 工具历史记录 hook
 │   ├── category-manager.ts  # 分类管理工具
+│   ├── md2pdf.ts            # Markdown → 文字型 PDF（pdfmake 排版）
+│   ├── pdf2md.ts            # PDF → Markdown（pdf.js 提取 + 启发式重建）
+│   ├── html-export.ts       # 导出 HTML 共享资源（内嵌 GitHub 风格 CSS + 组装）
 │   ├── consumables-db.ts    # 消耗品 IndexedDB
 │   ├── download-db.ts       # 下载进度 IndexedDB（断点续传）
 │   ├── simple-note-db.ts    # 简单记 IndexedDB
 │   └── tianjige-db.ts       # 天机阁 IndexedDB
+├── public/pdfjs/            # pdf.js worker（pdf.worker.min.mjs，本地化避免外部 CDN）
 ├── .env.local               # DeepSeek API 配置
 ├── tailwind.config.ts
 ├── postcss.config.js
@@ -162,7 +169,7 @@
 | `dev` | 开发工具 | 🔧 | 在线编译器导航 |
 | `life` | 生活工具 | 🎯 | BMI 计算器、单位换算、专业计算器、视频去水印、简单记、耗知通 |
 | `entertainment` | 娱乐工具 | 🎮 | 大转盘、二维码生成、随机数生成器、爆款开头生成器、毁灭地球的电磁炮 |
-| `website` | 网站工具 | 🌐 | Excalidraw, Carbon, JSON, CodeSandbox, Photopea, KMS, PDF24, S7资源库, FMHY, 便民查询网, 爱看机器人, Steam 下载, 图吧工具箱, Image Splitter, 柒夜导航, PhWalls, 纸由我, VirusTotal, Learn Git Branching, Watt Toolkit, AI Short, 云游君的厨房, 菜鸟教程, Human Benchmark, Everything 下载, TreeSize 下载 |
+| `website` | 网站工具 | 🌐 | Excalidraw, Carbon, JSON, CodeSandbox, Photopea, KMS, PDF24, S7资源库, FMHY, 便民查询网, 爱看机器人, Steam 下载, 图吧工具箱, Image Splitter, 柒夜导航, PhWalls, 纸由我, VirusTotal, Learn Git Branching, Watt Toolkit, AI Short, 云游君的厨房, 菜鸟教程, Human Benchmark, Everything 下载, TreeSize 下载, VALORANT 灵敏度生成器 |
 | `software` | 软件工具 | 💿 | AI智能桌面整理大师、智能弹幕 |
 
 ### 收藏和历史功能
@@ -334,12 +341,17 @@
 - **备份提醒**: localStorage 记录上次备份时间，超过 24 小时提醒用户
 - **UI**: 响应式布局，全屏编辑器弹窗，删除确认对话框，Toast 提示
 
-### 7.11 Markdown 转 HTML & HTML 转 PDF (md-to-html)
-该页面已扩展为**包含两个功能的文档工具集页**，左侧有功能切换侧边栏：
+### 7.11 文档转换工具集 (md-to-html)
+该页面是**包含三个转换功能的文档工具集页**，左侧有功能切换侧边栏，命名统一为「源 → 输出1/输出2」格式：MD → HTML/PDF / HTML → PDF/MD / PDF → MD/HTML：
 
-#### 功能一：MD → HTML（原有功能，未改动）
+> 页面组件：`client.tsx`（主组件 + tab 切换 + MD→HTML/HTML→PDF+MD）、`pdf-to-md.tsx`（PDF→MD）
+> 共享资源：`lib/html-export.ts`（EMBED_CSS 内嵌样式 + buildFullHtml 组装，供 MD→HTML 和 PDF→MD 的 .html 下载共用，避免循环依赖）、`lib/html-to-image-pdf.ts`（图片型 PDF：html2canvas + jsPDF 智能安全切割线分页，供两个转 PDF 功能的「图片形式」共用）
+
+> **转 PDF 均有两种形式**：①**文字形式**（默认主按钮，pdfmake 排版，文字可复制/可搜索，体积小）；②**图片形式**（html2canvas 整页截图 + jsPDF 分页合成，所见即所得、格式永不丢失，但文字不可搜索）
+
+#### 功能一：MD → HTML/PDF
 - **三种输入模式**:
-  - ✏️ **粘贴内容**: 直接输入 Markdown 代码，300ms 实时预览
+  - ✏️ **粘贴 Markdown**: 直接输入 Markdown 代码，300ms 实时预览
   - 📁 **上传文件**: 上传单个 .md/.markdown 文件（支持拖拽），上传后可重新选择替换
   - 📂 **批量上传**: 上传多个 .md 文件（文件选择器多选或拖拽），左侧文件列表点选切换预览
 - **实时预览**: 300ms debounce，左右分栏（桌面端）/ 上下堆叠（移动端），批量模式下右侧显示当前选中文件的预览
@@ -349,25 +361,59 @@
   - 复制完整 HTML 代码（含内嵌 GitHub 风格 CSS）
   - 下载单个 .html 文件
   - 📦 **批量下载**: 一键逐个下载所有 HTML 文件（300ms 间隔避免浏览器拦截），不打包 ZIP
+  - 📄 **下载 PDF（文字）**: Markdown 直接转为文字型 PDF（pdfmake 排版，文字可复制/可搜索），单个模式「📄 下载 PDF（文字）」按钮，批量模式「📄 批量转 PDF（文字）」按钮
+  - 🖼️ **下载 PDF（图片）**: 用内嵌 GitHub 风格 CSS 渲染为完整 HTML（`buildFullHtml`）后整页截图为图片型 PDF（`lib/html-to-image-pdf.ts` 的 `htmlToImagePdf`），所见即所得、格式永不丢失；单个「🖼️ 下载 PDF（图片）」+ 批量「🖼️ 批量转 PDF（图片）」
+- **MD → PDF 实现**（`lib/md2pdf.ts` + `lib/html-to-image-pdf.ts`）:
+  - 流程: `marked.lexer` 解析 tokens → 转换为 pdfmake 文档定义 → 运行时注入中文字体渲染，零弹窗直接下载
+  - **中文字体**: Noto Sans CJK SC 子集（GB2312 全字集 7542 字符 + ASCII，Regular/Bold 各约 1.8MB），存放在 `public/fonts/`，首次转换时 fetch 注入 pdfmake virtualfs（base64），之后走浏览器缓存
+  - **样式**: 仿 GitHub 风格（标题层级、代码块灰底、引用左边框、表格斑马纹），与 HTML 导出 CSS 一致
+  - **支持的语法**: 标题/段落/加粗/斜体/行内代码/链接/图片（data: 与 http(s)，相对路径或加载失败的图片降级为 `[图片: xxx]` 文本）/无序有序嵌套列表/任务列表（√/□ 前缀）/表格（表头灰底 + 斑马纹）/引用/代码块/分割线；原始 HTML 块跳过
+  - **渲染参数**: A4 页面，边距 40/48pt，正文 11pt 行高 1.6
+  - **依赖**: pdfmake 0.3（运行时动态导入避免 SSR 报错；0.3 版 API 用 `virtualfs.writeFileSync` + async `download()`），类型声明在项目根 `pdfmake.d.ts`（pdfmake 0.3 无内置类型）
 - **内嵌 CSS**: GitHub 风格排版样式，独立打开时也能正确渲染
 - 批量模式下支持：添加更多文件、重新选择替换、清除全部
 - 无代码语法高亮
 
-#### 功能二：HTML → PDF（新增功能）
-- **两种输入模式**:
+#### 功能二：HTML → PDF/MD
+- **三种输入模式**（与 MD → HTML 对称）:
+  - ✏️ **粘贴 HTML**: 直接输入 HTML 源码
   - 📁 **上传文件**: 上传单个 .html/.htm 文件，左侧显示源码片段预览
   - 📂 **批量上传**: 上传多个 .html 文件，左侧文件列表点选切换
-- **实现原理**: 使用 `html2canvas` 渲染 Canvas + `jsPDF.addImage` 手动合成 PDF（分页切片，A4 每页 10in 内容区），直接触发浏览器下载，无需调出打印对话框
-  - **注意**: 原方案用 `html2pdf.js` 库，其 0.14 版本在 Chromium 下渲染空白画布（库 bug），已弃用，改用 html2canvas + jsPDF 直接合成
-  - **分页优化（智能安全切割线）**: 切点不再按固定像素硬切，而是收集块级元素区间（表格按行、图片整块、段落整段），取元素缝隙中点作为安全线，切点 = 页内不超过硬边界（10in）的最大安全线；距页顶不足 400 canvas px（≈200 DOM px）或无安全线时回退硬切，避免极矮页与切断文字/图片/表格行
+- **实现原理**: 文字形式 = `turndown` 将 HTML 转 Markdown（仅提取 `<body>` 内容，避免 head 的 style/title 混入正文）→ 复用 MD→PDF 文字型管线（`lib/md2pdf.ts` 的 `htmlToPdf`）→ pdfmake 排版直接下载（pdftotext 验证可搜索）
+  - **适用场景**: 结构化 HTML（本工具 MD→HTML 导出的 GitHub 风格 HTML 等）；复杂 CSS 布局（flex/grid、绝对定位、嵌入 iframe）会降级为结构化文本
+  - **转换配置**: `codeBlockStyle: 'fenced'`（围栏式代码块）、`headingStyle: 'atx'`（# 标题）、自定义规则将 checkbox 转为 `[x]`/`[ ]` 任务列表
 - **预览**: 右侧 iframe 渲染完整 HTML 页面效果
+- **Markdown 输出**（并入本功能，与 MD → HTML 的「下载 PDF」对称）:
+  - 单个文件：「📋 复制 Markdown」+「⬇ 下载 Markdown」按钮（turndown 实时转换）
+  - 批量文件：「📦 批量转 MD」按钮（逐个下载 .md，300ms 间隔避免浏览器拦截）
+- **两种 PDF 形式**:
+  - **文字形式**（默认主按钮）: HTML 经 turndown → pdfmake 排版，文字可复制/可搜索，文件体积小（10MB 课件 → 约 300KB）；复杂 CSS 布局（flex/grid、绝对定位）会降级为结构化文本
+  - **图片形式**: `lib/html-to-image-pdf.ts` 的 `htmlToImagePdf` 直接对渲染后的 HTML 截图（html2canvas scale 2 + jsPDF，智能安全切割线分页：切点落在块级元素缝隙中点，避免文字行/图片/表格行被切断），所见即所得、格式永不丢失，但文字不可搜索
 - **操作**:
-  - 单个文件：「⬇ 下载 PDF」按钮
-  - 批量文件：「⬇ 下载 xxx.pdf」（单个）+「📦 批量转 PDF」（全部）
+  - 单个文件：「📄 下载 PDF（文字）」+「🖼️ 下载 PDF（图片）」+「📋 复制 Markdown」+「⬇ 下载 Markdown」按钮
+  - 批量文件：「📄 批量转 PDF（文字）」+「🖼️ 批量转 PDF（图片）」+「📦 批量转 MD」（全部）+「⬇ 下载 xxx.pdf」（单个）
 - **直接下载**: 点击按钮后浏览器直接弹出文件保存对话框，零弹窗、零打印对话框
-- **动态导入**: 使用 `await import('html2canvas')` + `await import('jspdf')` 运行时加载，避免 SSR 报错
-- **渲染参数**: 临时容器宽度 800px（近似 A4），`scale: 2` 保证清晰度
+- **动态导入**: `await import('turndown')` / `html2canvas` / `jspdf` + pdfmake 运行时加载，避免 SSR 报错
 - 批量模式下支持：添加更多、重新选择、清除全部
+
+#### 功能四：PDF → MD/HTML
+- **输入**: 上传单个 .pdf 文件（支持拖拽），仅限文字型 PDF
+- **两种重建方案**:
+  - **方案一：启发式重建（免费秒出，默认）**: `lib/pdf2md.ts` 用 pdf.js（`pdfjs-dist` v6）逐页提取文本 + 字号 + 字体名（`getOperatorList` 强制解析后从 `commonObjs` 取真实字体名）→ 按规则重建 Markdown
+  - **方案二：🤖 AI 增强（更准确）**: 把每页提取的纯文本发到 `/api/pdf-to-md`，DeepSeek 分块还原结构（每块 4000 字符，逐块拼接）
+- **启发式规则**（`linesToMarkdown`）:
+  - 字号中位数 = 正文基准；≥1.8× → `#`，≥1.5× → `##`，≥1.2× → `###`
+  - 行首 `-/*/•` → 无序列表，`\d+[.、)]` → 有序列表（连续列表项不插空行）
+  - 等宽字体（Courier/Mono/Consolas 等）连续行 → 代码块
+  - 加粗字体（Bold/Black 等）且非标题 → `**加粗**`
+  - 行距 > 1.8× 字号 → 分段；同段连续行空格连接；页间空一行
+  - 已知局限: 扫描版（图片型）PDF 无文字层无法转换；复杂表格/多栏排版还原质量一般（建议用 AI 增强）
+- **输出**: 左侧 Markdown 源码（可编辑）+ 右侧实时预览（marked 渲染）+
+  - 🤖 AI 增强（还原结构，复用 `.env.local` 的 DeepSeek 配置）
+  - 📋 复制 Markdown / ⬇ 下载 .md / ⬇ 下载 .html（复用 `lib/html-export.ts` 的 GitHub 风格 HTML）
+- **pdf.js worker 本地化**: worker 文件复制到 `public/pdfjs/pdf.worker.min.mjs`，`GlobalWorkerOptions.workerSrc` 指向本地（`application/javascript` MIME 验证通过，ESM worker 正常加载）
+- **依赖**: `pdfjs-dist` v6（客户端动态导入，独立 chunk ~428KB，首次使用才加载；Node 环境需用 legacy build，浏览器端用现代 build）
+- **API 路由**: `/api/pdf-to-md`（POST `{ pages: string[] }`，每页提取文本）— 速率限制每 IP 每分钟 10 次，页数上限 100，字符上限 200K
 
 ### 7.12 Human Benchmark (human-benchmark)
 - 网站工具，归类于「网站工具」分类
@@ -383,6 +429,14 @@
 - **双向同步**: 拖拽选区 ↔ 四个数字输入框（X/Y/宽/高）实时同步，实现精确裁剪
 - Canvas 裁剪输出，支持 PNG/JPG/WebP 下载
 - 移动端触摸操作支持
+
+### 7.14 VALORANT 灵敏度生成器 (valorant-sens)
+- 网站工具，归类于「网站工具」分类，跳转外部站点
+- 基于鼠标 DPI 与鼠标垫大小，生成专属 VALORANT（无畏契约）游戏内灵敏度
+- 快速瞄准测试（flick）：目标随机出现，统计命中数、平均反应时间、命中率、平均距离
+- 自动计算 eDPI，提供游戏内设置指引（灵敏度 + DPI 校准说明）
+- 支持一键复制灵敏度数值，VALORANT 风格 UI
+- 完全免费，浏览器直接运行，无需注册
 
 ---
 
@@ -453,8 +507,11 @@ ALIST_TOKEN=
 | xlsx | Excel 操作 |
 | marked | Markdown 解析（md-to-html 工具） |
 | dompurify | HTML 净化/XSS 防护（md-to-html 工具） |
-| html2canvas | HTML 渲染 Canvas（md-to-html 工具，运行时动态导入） |
-| jspdf | PDF 生成（md-to-html 工具，运行时动态导入） |
+| pdfmake | MD → 文字型 PDF 排版（md-to-html 工具，运行时动态导入） |
+| turndown | HTML → Markdown 转换（md-to-html 工具，运行时动态导入） |
+| html2canvas | HTML 整页截图（md-to-html 工具「图片形式」PDF，运行时动态导入） |
+| jspdf | 图片型 PDF 合成（md-to-html 工具「图片形式」PDF，运行时动态导入） |
+| pdfjs-dist | PDF 文本提取（md-to-html 的 PDF→MD 功能，运行时动态导入） |
 | react-image-crop | 交互式图片裁剪选区（image-crop 工具） |
 | alist | 网盘解析服务（外部部署，非 npm 包） |
 

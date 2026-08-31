@@ -206,13 +206,13 @@ export const tools: Tool[] = [
   },
   {
     id: 'md-to-html',
-    name: 'Markdown 转 HTML',
-    description: '将 Markdown 文件或代码转换为 HTML，支持实时预览',
+    name: 'Markdown 转 HTML/PDF',
+    description: 'Markdown 转 HTML/PDF、HTML 转 PDF/Markdown、PDF 转 Markdown，支持实时预览',
     icon: '📝',
     category: 'document',
     path: '/tools/md-to-html',
-    tags: ['markdown', 'html', 'md', '转换', '预览'],
-    keywords: ['md转html', 'markdown渲染', 'markdown预览', 'markdown转网页', '生成html', 'markdown导出'],
+    tags: ['markdown', 'html', 'pdf', 'md', '转换', '预览'],
+    keywords: ['md转html', 'md转pdf', 'markdown转pdf', 'markdown渲染', 'markdown预览', 'markdown转网页', '生成html', 'markdown导出', 'html转markdown', 'pdf转markdown'],
   },
   {
     id: 'wheel',
@@ -598,6 +598,17 @@ export const tools: Tool[] = [
     externalUrl: 'https://humanbenchmark.com/',
     tags: ['测试', '反应力', '记忆', '大脑', '认知', '练习', '脑力'],
     keywords: ['反应速度测试', '记忆力测试', '脑力训练', '认知测试', 'sequence memory', 'number memory', 'typing speed', 'chimp test'],
+  },
+  {
+    id: 'valorant-sens',
+    name: 'VALORANT 灵敏度生成器',
+    description: '基于鼠标 DPI 与瞄准测试，生成专属你的无畏契约灵敏度',
+    icon: '🔫',
+    category: 'website',
+    path: '/tools/site/valorant-sens',
+    externalUrl: 'https://c53f88f0d7d146348e6aeaade94c29ff.app.workbuddy.link',
+    tags: ['valorant', '灵敏度', '无畏契约', '游戏', '瞄准', 'edpi', '射击'],
+    keywords: ['无畏契约灵敏度', 'valorant灵敏度', 'edpi计算', '灵敏度生成', '瞄准测试', 'fps灵敏度', '灵敏度转换'],
   },
 ];
 

@@ -1,7 +1,7 @@
 'use client';
 import { useToolHistory } from '@/lib/useToolHistory';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
 import { Platform, ContentType, Hook, GenerateResponse, HistoryRecord } from '@/lib/types';
@@ -22,10 +22,14 @@ export default function HookGenerator() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [historyKey, setHistoryKey] = useState(0);
-  const [authenticated, setAuthenticated] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('hook-generator-auth') === 'true';
-  });
+  // 登录状态初始为 false，在 effect 中恢复（惰性初始化读 localStorage 会导致 hydration 首帧不一致）
+  const [authenticated, setAuthenticated] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('hook-generator-auth') === 'true') setAuthenticated(true);
+    } catch {}
+  }, []);
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
