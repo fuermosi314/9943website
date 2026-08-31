@@ -334,7 +334,10 @@
 - **备份提醒**: localStorage 记录上次备份时间，超过 24 小时提醒用户
 - **UI**: 响应式布局，全屏编辑器弹窗，删除确认对话框，Toast 提示
 
-### 7.11 Markdown 转 HTML (md-to-html)
+### 7.11 Markdown 转 HTML & HTML 转 PDF (md-to-html)
+该页面已扩展为**包含两个功能的文档工具集页**，左侧有功能切换侧边栏：
+
+#### 功能一：MD → HTML（原有功能，未改动）
 - **三种输入模式**:
   - ✏️ **粘贴内容**: 直接输入 Markdown 代码，300ms 实时预览
   - 📁 **上传文件**: 上传单个 .md/.markdown 文件（支持拖拽），上传后可重新选择替换
@@ -349,6 +352,22 @@
 - **内嵌 CSS**: GitHub 风格排版样式，独立打开时也能正确渲染
 - 批量模式下支持：添加更多文件、重新选择替换、清除全部
 - 无代码语法高亮
+
+#### 功能二：HTML → PDF（新增功能）
+- **两种输入模式**:
+  - 📁 **上传文件**: 上传单个 .html/.htm 文件，左侧显示源码片段预览
+  - 📂 **批量上传**: 上传多个 .html 文件，左侧文件列表点选切换
+- **实现原理**: 使用 `html2canvas` 渲染 Canvas + `jsPDF.addImage` 手动合成 PDF（分页切片，A4 每页 10in 内容区），直接触发浏览器下载，无需调出打印对话框
+  - **注意**: 原方案用 `html2pdf.js` 库，其 0.14 版本在 Chromium 下渲染空白画布（库 bug），已弃用，改用 html2canvas + jsPDF 直接合成
+  - **分页优化（智能安全切割线）**: 切点不再按固定像素硬切，而是收集块级元素区间（表格按行、图片整块、段落整段），取元素缝隙中点作为安全线，切点 = 页内不超过硬边界（10in）的最大安全线；距页顶不足 400 canvas px（≈200 DOM px）或无安全线时回退硬切，避免极矮页与切断文字/图片/表格行
+- **预览**: 右侧 iframe 渲染完整 HTML 页面效果
+- **操作**:
+  - 单个文件：「⬇ 下载 PDF」按钮
+  - 批量文件：「⬇ 下载 xxx.pdf」（单个）+「📦 批量转 PDF」（全部）
+- **直接下载**: 点击按钮后浏览器直接弹出文件保存对话框，零弹窗、零打印对话框
+- **动态导入**: 使用 `await import('html2canvas')` + `await import('jspdf')` 运行时加载，避免 SSR 报错
+- **渲染参数**: 临时容器宽度 800px（近似 A4），`scale: 2` 保证清晰度
+- 批量模式下支持：添加更多、重新选择、清除全部
 
 ### 7.12 Human Benchmark (human-benchmark)
 - 网站工具，归类于「网站工具」分类
@@ -434,6 +453,8 @@ ALIST_TOKEN=
 | xlsx | Excel 操作 |
 | marked | Markdown 解析（md-to-html 工具） |
 | dompurify | HTML 净化/XSS 防护（md-to-html 工具） |
+| html2canvas | HTML 渲染 Canvas（md-to-html 工具，运行时动态导入） |
+| jspdf | PDF 生成（md-to-html 工具，运行时动态导入） |
 | react-image-crop | 交互式图片裁剪选区（image-crop 工具） |
 | alist | 网盘解析服务（外部部署，非 npm 包） |
 
