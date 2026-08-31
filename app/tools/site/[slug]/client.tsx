@@ -171,6 +171,13 @@ const siteFeatures: Record<string, string[]> = {
     '所有测试结果可追踪历史，查看进步趋势',
     '完全免费，无需注册，浏览器直接运行',
   ],
+  'valorant-sens': [
+    '基于鼠标 DPI 与鼠标垫大小，生成专属游戏内灵敏度',
+    '快速瞄准测试，统计命中率与平均反应时间',
+    '自动计算 eDPI，并给出游戏内设置指引',
+    '一键复制灵敏度数值，粘贴即可完成配置',
+    '完全免费，浏览器直接运行，无需注册',
+  ],
 };
 
 export default function SiteDetailClient() {
