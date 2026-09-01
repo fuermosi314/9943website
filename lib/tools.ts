@@ -610,6 +610,17 @@ export const tools: Tool[] = [
     tags: ['valorant', '灵敏度', '无畏契约', '游戏', '瞄准', 'edpi', '射击'],
     keywords: ['无畏契约灵敏度', 'valorant灵敏度', 'edpi计算', '灵敏度生成', '瞄准测试', 'fps灵敏度', '灵敏度转换'],
   },
+  {
+    id: 'steamshare',
+    name: 'Steam 租号',
+    description: 'Steam 热门游戏账号租赁商城，快速取号在线续租',
+    icon: '/steamshare.png',
+    category: 'website',
+    path: '/tools/site/steamshare',
+    externalUrl: 'https://steamshare.cn/',
+    tags: ['steam', '租号', '游戏', '账号', '租赁'],
+    keywords: ['steam租号', '游戏账号租赁', '账号共享', '游戏出租', '租号玩', 'steam账号'],
+  },
 ];
 
 export function getToolsByCategory(categoryId: string): Tool[] {

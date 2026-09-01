@@ -12,7 +12,7 @@
 - **技术栈**: Next.js 14 + React 18 + Tailwind CSS 3 + TypeScript
 - **项目路径**: `/home/huang/claude/vs/work/9943小工具大全`
 - **部署计划**: 本地开发 → Git → Vercel 发布
-- **当前工具数量**: 56 个（自动统计自 `lib/tools.ts`）
+- **当前工具数量**: 67 个（自动统计自 `lib/tools.ts`）
 
 ---
 
@@ -169,7 +169,7 @@
 | `dev` | 开发工具 | 🔧 | 在线编译器导航 |
 | `life` | 生活工具 | 🎯 | BMI 计算器、单位换算、专业计算器、视频去水印、简单记、耗知通 |
 | `entertainment` | 娱乐工具 | 🎮 | 大转盘、二维码生成、随机数生成器、爆款开头生成器、毁灭地球的电磁炮 |
-| `website` | 网站工具 | 🌐 | Excalidraw, Carbon, JSON, CodeSandbox, Photopea, KMS, PDF24, S7资源库, FMHY, 便民查询网, 爱看机器人, Steam 下载, 图吧工具箱, Image Splitter, 柒夜导航, PhWalls, 纸由我, VirusTotal, Learn Git Branching, Watt Toolkit, AI Short, 云游君的厨房, 菜鸟教程, Human Benchmark, Everything 下载, TreeSize 下载, VALORANT 灵敏度生成器 |
+| `website` | 网站工具 | 🌐 | Excalidraw, Carbon, JSON, CodeSandbox, Photopea, KMS, PDF24, S7资源库, FMHY, 便民查询网, 爱看机器人, Steam 下载, 图吧工具箱, Image Splitter, 柒夜导航, PhWalls, 纸由我, VirusTotal, Learn Git Branching, Watt Toolkit, AI Short, 云游君的厨房, 菜鸟教程, Human Benchmark, Everything 下载, TreeSize 下载, VALORANT 灵敏度生成器, Steam 租号 |
 | `software` | 软件工具 | 💿 | AI智能桌面整理大师、智能弹幕 |
 
 ### 收藏和历史功能
@@ -345,9 +345,12 @@
 该页面是**包含三个转换功能的文档工具集页**，左侧有功能切换侧边栏，命名统一为「源 → 输出1/输出2」格式：MD → HTML/PDF / HTML → PDF/MD / PDF → MD/HTML：
 
 > 页面组件：`client.tsx`（主组件 + tab 切换 + MD→HTML/HTML→PDF+MD）、`pdf-to-md.tsx`（PDF→MD）
-> 共享资源：`lib/html-export.ts`（EMBED_CSS 内嵌样式 + buildFullHtml 组装，供 MD→HTML 和 PDF→MD 的 .html 下载共用，避免循环依赖）、`lib/html-to-image-pdf.ts`（图片型 PDF：html2canvas + jsPDF 智能安全切割线分页，供两个转 PDF 功能的「图片形式」共用）
+> 共享资源：`lib/html-export.ts`（EMBED_CSS 内嵌样式 + buildFullHtml 组装，供 MD→HTML 和 PDF→MD 的 .html 下载共用，避免循环依赖）、`lib/html-to-image-pdf.ts`（图片型 PDF：html2canvas + jsPDF 智能安全切割线分页，供两个转 PDF 功能的「图片形式」共用）、`lib/print-pdf.ts`（浏览器原生打印：离屏 iframe + `window.print()`，供两个转 PDF 功能的「打印」共用）
 
-> **转 PDF 均有两种形式**：①**文字形式**（默认主按钮，pdfmake 排版，文字可复制/可搜索，体积小）；②**图片形式**（html2canvas 整页截图 + jsPDF 分页合成，所见即所得、格式永不丢失，但文字不可搜索）
+> **转 PDF 均有三种形式**：
+> ①**文字形式**（默认主按钮，pdfmake 排版，文字可复制/可搜索，体积小）；
+> ②**图片形式**（html2canvas 整页截图 + jsPDF 分页合成，所见即所得、格式永不丢失，但文字不可搜索）；
+> ③**浏览器打印**（🖨️，系统打印对话框「另存为 PDF」，排版质量最高；缺点：需手动确认，批量时逐个确认，单文件转换时最推荐）
 
 #### 功能一：MD → HTML/PDF
 - **三种输入模式**:
@@ -363,6 +366,7 @@
   - 📦 **批量下载**: 一键逐个下载所有 HTML 文件（300ms 间隔避免浏览器拦截），不打包 ZIP
   - 📄 **下载 PDF（文字）**: Markdown 直接转为文字型 PDF（pdfmake 排版，文字可复制/可搜索），单个模式「📄 下载 PDF（文字）」按钮，批量模式「📄 批量转 PDF（文字）」按钮
   - 🖼️ **下载 PDF（图片）**: 用内嵌 GitHub 风格 CSS 渲染为完整 HTML（`buildFullHtml`）后整页截图为图片型 PDF（`lib/html-to-image-pdf.ts` 的 `htmlToImagePdf`），所见即所得、格式永不丢失；单个「🖼️ 下载 PDF（图片）」+ 批量「🖼️ 批量转 PDF（图片）」
+  - 🖨️ **打印 PDF（浏览器）**: 离屏 iframe + 系统打印对话框（`lib/print-pdf.ts`），排版质量最高；单文件转换最推荐；单个「🖨️ 打印 PDF」+ 批量「🖨️ 批量打印 PDF」（批量需逐个确认）
 - **MD → PDF 实现**（`lib/md2pdf.ts` + `lib/html-to-image-pdf.ts`）:
   - 流程: `marked.lexer` 解析 tokens → 转换为 pdfmake 文档定义 → 运行时注入中文字体渲染，零弹窗直接下载
   - **中文字体**: Noto Sans CJK SC 子集（GB2312 全字集 7542 字符 + ASCII，Regular/Bold 各约 1.8MB），存放在 `public/fonts/`，首次转换时 fetch 注入 pdfmake virtualfs（base64），之后走浏览器缓存
@@ -386,12 +390,13 @@
 - **Markdown 输出**（并入本功能，与 MD → HTML 的「下载 PDF」对称）:
   - 单个文件：「📋 复制 Markdown」+「⬇ 下载 Markdown」按钮（turndown 实时转换）
   - 批量文件：「📦 批量转 MD」按钮（逐个下载 .md，300ms 间隔避免浏览器拦截）
-- **两种 PDF 形式**:
+- **三种 PDF 形式**:
   - **文字形式**（默认主按钮）: HTML 经 turndown → pdfmake 排版，文字可复制/可搜索，文件体积小（10MB 课件 → 约 300KB）；复杂 CSS 布局（flex/grid、绝对定位）会降级为结构化文本
   - **图片形式**: `lib/html-to-image-pdf.ts` 的 `htmlToImagePdf` 直接对渲染后的 HTML 截图（html2canvas scale 2 + jsPDF，智能安全切割线分页：切点落在块级元素缝隙中点，避免文字行/图片/表格行被切断），所见即所得、格式永不丢失，但文字不可搜索
+  - **浏览器打印**（🖨️ 打印 PDF）: `lib/print-pdf.ts` 写入离屏 iframe（sandbox="allow-modals"，置于视口外而非 display:none）后 `contentWindow.print()`，系统打印对话框选「另存为 PDF」；排版质量最高（浏览器引擎渲染）；需手动确认，批量逐个确认
 - **操作**:
-  - 单个文件：「📄 下载 PDF（文字）」+「🖼️ 下载 PDF（图片）」+「📋 复制 Markdown」+「⬇ 下载 Markdown」按钮
-  - 批量文件：「📄 批量转 PDF（文字）」+「🖼️ 批量转 PDF（图片）」+「📦 批量转 MD」（全部）+「⬇ 下载 xxx.pdf」（单个）
+  - 单个文件：「📄 下载 PDF（文字）」+「🖼️ 下载 PDF（图片）」+「🖨️ 打印 PDF」+「📋 复制 Markdown」+「⬇ 下载 Markdown」按钮
+  - 批量文件：「📄 批量转 PDF（文字）」+「🖼️ 批量转 PDF（图片）」+「🖨️ 批量打印 PDF」+「📦 批量转 MD」（全部）+「⬇ 下载 xxx.pdf」（单个）
 - **直接下载**: 点击按钮后浏览器直接弹出文件保存对话框，零弹窗、零打印对话框
 - **动态导入**: `await import('turndown')` / `html2canvas` / `jspdf` + pdfmake 运行时加载，避免 SSR 报错
 - 批量模式下支持：添加更多、重新选择、清除全部
@@ -437,6 +442,13 @@
 - 自动计算 eDPI，提供游戏内设置指引（灵敏度 + DPI 校准说明）
 - 支持一键复制灵敏度数值，VALORANT 风格 UI
 - 完全免费，浏览器直接运行，无需注册
+
+### 7.15 Steam 租号 (steamshare)
+- 网站工具，归类于「网站工具」分类，跳转外部站点
+- Steam 热门游戏账号租赁商城（https://steamshare.cn/）
+- 热门大作即租即玩，下单秒取号，登录验证简单快捷
+- 支持在线续租，游玩不断档；兑换码兑换时长
+- 账号共享安全可靠，全程客服支持
 
 ---
 

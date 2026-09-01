@@ -178,6 +178,13 @@ const siteFeatures: Record<string, string[]> = {
     '一键复制灵敏度数值，粘贴即可完成配置',
     '完全免费，浏览器直接运行，无需注册',
   ],
+  steamshare: [
+    'Steam 热门游戏账号租赁，热门大作即租即玩',
+    '下单秒取号，登录验证简单快捷',
+    '支持在线续租，游玩不断档',
+    '兑换码兑换时长，价格透明',
+    '账号共享安全可靠，全程客服支持',
+  ],
 };
 
 export default function SiteDetailClient() {
