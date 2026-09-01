@@ -6,6 +6,7 @@ import DOMPurify from 'dompurify';
 import { markdownToPdf, htmlToPdf, getTurndown } from '@/lib/md2pdf';
 import { EMBED_CSS, buildFullHtml } from '@/lib/html-export';
 import { htmlToImagePdf } from '@/lib/html-to-image-pdf';
+import { printHtmlToPdf } from '@/lib/print-pdf';
 import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
 import { useToolHistory } from '@/lib/useToolHistory';
@@ -362,6 +363,29 @@ function MdToHtmlContent() {
     }
   }, [batchFiles]);
 
+  // ─── MD → 浏览器原生打印 PDF（质量最高；需手动在打印框确认「另存为 PDF」，批量需逐个确认） ───
+  const handlePrintPdf = useCallback(async () => {
+    if (!fullHtml) return;
+    setError('');
+    try {
+      await printHtmlToPdf(fullHtml);
+    } catch {
+      setError('打印失败，请检查浏览器是否允许打印');
+    }
+  }, [fullHtml]);
+
+  const handleBatchPrintPdf = useCallback(async () => {
+    if (batchFiles.length === 0) return;
+    setError('');
+    for (const f of batchFiles) {
+      try {
+        await printHtmlToPdf(buildFullHtml(f.previewHtml, f.name));
+      } catch {
+        // 单个文件失败不影响后续
+      }
+    }
+  }, [batchFiles]);
+
   const handleClear = useCallback(() => {
     if (mode === 'batch') {
       setBatchFiles([]);
@@ -626,7 +650,7 @@ function MdToHtmlContent() {
 
       {/* Action Bar */}
       {mode === 'batch' && batchFiles.length > 0 ? (
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col sm:flex-row flex-wrap gap-3">
           <button
             onClick={handleBatchDownload}
             className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2"
@@ -647,6 +671,12 @@ function MdToHtmlContent() {
           >
             {converting ? '⏳ 转换中…' : '🖼️ 批量转 PDF（图片）'}
           </button>
+          <button
+            onClick={handleBatchPrintPdf}
+            className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2"
+          >
+            🖨️ 批量打印 PDF
+          </button>
           {currentBatchFile && (
             <button
               onClick={handleDownload}
@@ -657,7 +687,7 @@ function MdToHtmlContent() {
           )}
         </div>
       ) : hasContent && (
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col sm:flex-row flex-wrap gap-3">
           <button
             onClick={handleCopyHtml}
             className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2"
@@ -683,6 +713,12 @@ function MdToHtmlContent() {
             className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {converting ? '⏳ 转换中…' : '🖼️ 下载 PDF（图片）'}
+          </button>
+          <button
+            onClick={handlePrintPdf}
+            className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2"
+          >
+            🖨️ 打印 PDF
           </button>
         </div>
       )}
@@ -885,6 +921,29 @@ function HtmlToPdfContent() {
     setConverting(false);
     if (converted < batchFiles.length) {
       setError(`${converted}/${batchFiles.length} 个文件转换成功，${batchFiles.length - converted} 个失败`);
+    }
+  }, [batchFiles]);
+
+  // ── HTML → 浏览器原生打印 PDF（质量最高；需手动在打印框确认「另存为 PDF」，批量需逐个确认） ──
+  const handlePrintPdf = useCallback(async () => {
+    if (!currentHtml.trim()) return;
+    setError('');
+    try {
+      await printHtmlToPdf(currentHtml);
+    } catch {
+      setError('打印失败，请检查浏览器是否允许打印');
+    }
+  }, [currentHtml]);
+
+  const handleBatchPrintPdf = useCallback(async () => {
+    if (batchFiles.length === 0) return;
+    setError('');
+    for (const f of batchFiles) {
+      try {
+        await printHtmlToPdf(f.rawHtml);
+      } catch {
+        // 单个文件失败不影响后续
+      }
     }
   }, [batchFiles]);
 
@@ -1237,7 +1296,7 @@ function HtmlToPdfContent() {
 
       {/* Action Bar */}
       {mode === 'batch' && batchFiles.length > 0 ? (
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col sm:flex-row flex-wrap gap-3">
           <button
             onClick={handleBatchConvert}
             disabled={converting}
@@ -1251,6 +1310,12 @@ function HtmlToPdfContent() {
             className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {converting ? '⏳ 转换中…' : '🖼️ 批量转 PDF（图片）'}
+          </button>
+          <button
+            onClick={handleBatchPrintPdf}
+            className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2"
+          >
+            🖨️ 批量打印 PDF
           </button>
           <button
             onClick={handleBatchMd}
@@ -1270,7 +1335,7 @@ function HtmlToPdfContent() {
           )}
         </div>
       ) : hasContent && (
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col sm:flex-row flex-wrap gap-3">
           <button
             onClick={() => handleConvertToPdf()}
             disabled={converting}
@@ -1284,6 +1349,12 @@ function HtmlToPdfContent() {
             className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {converting ? '⏳ 转换中…' : '🖼️ 下载 PDF（图片）'}
+          </button>
+          <button
+            onClick={handlePrintPdf}
+            className="flex-1 py-3 bg-white/10 text-white/80 rounded-xl hover:bg-white/20 transition-all text-sm font-medium flex items-center justify-center gap-2"
+          >
+            🖨️ 打印 PDF
           </button>
           <button
             onClick={handleCopyMd}
