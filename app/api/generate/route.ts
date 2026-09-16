@@ -147,6 +147,10 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         model,
         max_tokens: 2048,
+        // 百炼上的 deepseek-v4.1-flash 是推理模型，不关掉思考会先生成一整段
+        // reasoning token 再出正文：既慢（实测 6.97s → 2.16s），又会挤占
+        // max_tokens 导致正文被截断。详见 api/chat/route.ts 同名参数的注释。
+        enable_thinking: false,
         messages: [{ role: 'user', content: prompt }],
       }),
       signal: AbortSignal.timeout(25000),

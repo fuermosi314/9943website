@@ -55,6 +55,11 @@ async function callDeepSeek(chunk: string, totalChunks: number, index: number): 
       model,
       max_tokens: 4096,
       temperature: 0.2,
+      // 这个路由是**按 4000 字符分块、逐块串行调用**的，每个分块都单独烧一次思考：
+      // 百炼上的 deepseek-v4.1-flash 不关思考会先生成一大段 reasoning token 再出正文，
+      // 于是整份 PDF 的耗时被成倍放大、还有正文被 max_tokens 挤掉的风险。
+      // 详见 api/chat/route.ts 同名参数的注释。
+      enable_thinking: false,
       messages: [{ role: 'user', content: buildPrompt(chunk, totalChunks, index) }],
     }),
     signal: AbortSignal.timeout(60000),

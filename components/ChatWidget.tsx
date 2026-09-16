@@ -30,6 +30,9 @@ export default function ChatWidget() {
   // 每次发送递增；「清空」会让它 +1，从而作废进行中的请求，
   // 避免迟到的回复把已经清空的会话又整段还原回来
   const requestIdRef = useRef(0);
+  // 进行中那条流的 AbortController。「清空」或发新消息时掐掉它 —— 光靠 requestIdRef
+  // 只能丢弃结果，请求本身还在跑，上游模型照常生成完并计费
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (open && atBottomRef.current) {
@@ -56,6 +59,8 @@ export default function ChatWidget() {
   };
 
   const clear = () => {
+    abortRef.current?.abort(); // 真中止上游，别让它白跑完还计费
+    abortRef.current = null;
     requestIdRef.current++; // 作废进行中的请求
     setMessages([GREETING]);
     setError(null);
@@ -66,33 +71,101 @@ export default function ChatWidget() {
     const text = input.trim();
     if (!text || loading) return;
 
+    // 上一条还没收完就发新的：先掐掉旧的，免得两条流交叉往同一处写
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     const myId = ++requestIdRef.current;
     const withUser: Message[] = [...messages, { role: 'user', content: text }];
-    setMessages(withUser);
+    // 先占一个空的助手气泡，收到多少填多少 —— 这样字是一个个出来的
+    setMessages([...withUser, { role: 'assistant', content: '' }]);
     setInput('');
     setError(null);
     setLoading(true);
+
+    // 往最后那个助手气泡上追加。直接按下标改，不依赖闭包里可能已过期的 messages
+    const append = (chunk: string) => {
+      if (myId !== requestIdRef.current) return; // 已被清空或新请求取代
+      setMessages(prev => {
+        const last = prev[prev.length - 1];
+        if (!last || last.role !== 'assistant') return prev;
+        return [...prev.slice(0, -1), { ...last, content: last.content + chunk }];
+      });
+    };
 
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: withUser.slice(1) }),
+        signal: controller.signal,
       });
-      if (myId !== requestIdRef.current) return; // 已被清空或新请求取代，丢弃
-      const data = await res.json().catch(() => null);
+      if (myId !== requestIdRef.current) return;
 
+      // 校验和限流都发生在流开始之前，所以这里的失败仍然是普通 JSON
       if (!res.ok) {
+        const data = await res.json().catch(() => null);
         setError(data?.error || '客服暂时联系不上，请稍后再试');
-      } else if (data?.reply) {
-        setMessages([...withUser, { role: 'assistant', content: data.reply }]);
-      } else {
-        setError('客服没有返回内容，请再问一次');
+        return;
       }
-    } catch {
-      if (myId === requestIdRef.current) setError('网络异常，请稍后再试');
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('无法读取响应流');
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let received = '';
+      let finished = false;
+      let failure: string | null = null;
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (myId !== requestIdRef.current) {
+          reader.cancel().catch(() => {});
+          return;
+        }
+        buffer += decoder.decode(value, { stream: true });
+
+        // 事件之间用空行分隔；最后一段可能被 TCP 切在半路，留到下一轮再拼
+        const events = buffer.split('\n\n');
+        buffer = events.pop() ?? '';
+
+        for (const ev of events) {
+          const line = ev.split('\n').find(l => l.startsWith('data:'));
+          if (!line) continue;
+          let payload: { t?: string; e?: string; done?: boolean };
+          try {
+            payload = JSON.parse(line.slice(5).trim());
+          } catch {
+            continue;
+          }
+          if (payload.t) {
+            received += payload.t;
+            append(payload.t);
+          } else if (payload.e) {
+            failure = payload.e;
+          } else if (payload.done) {
+            finished = true;
+          }
+        }
+      }
+
+      if (myId !== requestIdRef.current) return;
+      if (failure) setError(failure);
+      else if (!received) setError('客服没有返回内容，请再问一次');
+      else if (!finished) setError('回答好像没说完，请再问一次'); // 流被中途掐断
+    } catch (err) {
+      if (myId !== requestIdRef.current) return;
+      // 「清空」或新请求主动掐掉的不算网络故障，不弹错误
+      if (err instanceof Error && err.name === 'AbortError') return;
+      setError('网络异常，请稍后再试');
     } finally {
-      if (myId === requestIdRef.current) setLoading(false);
+      if (myId === requestIdRef.current) {
+        setLoading(false);
+        abortRef.current = null;
+      }
     }
   };
 
@@ -184,7 +257,8 @@ export default function ChatWidget() {
           </div>
         ))}
 
-        {loading && (
+        {/* 三个点只在「还没收到第一个字」时显示；一旦开始出字就换成正文本身 */}
+        {loading && messages[messages.length - 1]?.content === '' && (
           <div className="flex justify-start">
             <div className="bg-white/[0.07] rounded-2xl rounded-tl-sm px-4 py-3 flex gap-1">
               {[0, 1, 2].map(i => (

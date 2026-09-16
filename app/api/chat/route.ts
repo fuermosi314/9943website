@@ -244,6 +244,107 @@ function parseMessages(raw: unknown): ChatMessage[] | null {
   return parsed;
 }
 
+// ── 流式输出 ────────────────────────────────────────────────────
+// 上游是 OpenAI 兼容的 SSE，这里把 delta.content 解析出来后**重新封装成本站自己的
+// 事件**再推给前端。不透传原始流：那样上游格式会泄漏到客户端，将来换服务商还得改前端。
+//
+// 每个 data: 行都是一个 JSON，只有三种：
+//   {"t":"增量文本"}   追加到当前回复
+//   {"e":"错误文案"}   中途出错，流随后结束
+//   {"done":true}      正常结束
+//
+// 为什么用 SSE 而不是纯文本流：本站挂在 Cloudflare 后面，Cloudflare 对
+// text/event-stream 明确不做缓冲和压缩；换成 text/plain 有可能被压缩而攒够一批才发，
+// 流式就白做了。
+const UPSTREAM_TIMEOUT_MS = 25_000; // < vercel.json 的 maxDuration(30s)，留 5 秒余量
+
+/** 把上游的 OpenAI SSE 转成本站的事件流；abortUpstream 用于在客户端断开时中止上游 */
+function toClientStream(
+  upstream: ReadableStream<Uint8Array>,
+  abortUpstream: AbortController,
+  isClientGone: () => boolean,
+  timedOut: () => boolean,
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  const reader = upstream.getReader();
+  const sse = (payload: unknown) => encoder.encode(`data: ${JSON.stringify(payload)}\n\n`);
+  let buffer = '';
+
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+
+          if (done) {
+            // 上游正常收尾（它发完 data: [DONE] 就会关流）
+            controller.enqueue(sse({ done: true }));
+            controller.close();
+            return;
+          }
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // SSE 事件之间用空行分隔。最后一段可能被 TCP 切在半路，留到下一轮再拼
+          const events = buffer.split('\n\n');
+          buffer = events.pop() ?? '';
+
+          let text = '';
+          for (const event of events) {
+            for (const line of event.split('\n')) {
+              if (!line.startsWith('data:')) continue; // 忽略 event:/id:/注释行
+              const payload = line.slice(5).trim();
+              if (!payload || payload === '[DONE]') continue; // [DONE] 交给上面的 done 分支收尾
+              let chunk: { choices?: { delta?: { content?: string } }[] };
+              try {
+                chunk = JSON.parse(payload);
+              } catch {
+                continue; // 半个 JSON 之类，跳过
+              }
+              // enable_thinking:false 时不会有 reasoning 字段；真有也只取 content，
+              // 免得把思考过程当正文吐给访客
+              const piece = chunk.choices?.[0]?.delta?.content;
+              if (piece) text += piece;
+            }
+          }
+
+          if (text) {
+            controller.enqueue(sse({ t: text }));
+            return; // 交还控制权，让这一段先到前端
+          }
+          // 这一段只有心跳或空 delta，继续往下读
+        }
+      } catch (err) {
+        // 流已经开始，HTTP 状态码早就发出去了，只能用事件告诉前端
+        // 客户端自己断开的不算故障，也不该往一个已经没人听的流里写东西
+        if (isClientGone()) {
+          controller.close();
+          return;
+        }
+        const timeout = timedOut();
+        if (!timeout) {
+          console.error('[chat] 流式读取中断', err instanceof Error ? err.message : err);
+        }
+        try {
+          controller.enqueue(
+            sse({ e: timeout ? '客服响应超时，请再问一次' : '网络异常，请稍后再试' }),
+          );
+        } catch {
+          /* 控制器已关闭 */
+        }
+        controller.close();
+      }
+    },
+
+    cancel() {
+      // 客户端断开（关页面 / 点清空 / 切网络）—— 立刻中止上游，别让它白跑完还计费
+      abortUpstream.abort();
+      reader.cancel().catch(() => {});
+    },
+  });
+}
+
 export async function POST(request: NextRequest) {
   const ip = clientIp(request);
   // 优先用跨实例共享的 Redis 计数；它不可用时 checkSharedRateLimit 返回 null，
@@ -295,8 +396,15 @@ export async function POST(request: NextRequest) {
   // 走 Redis 就记在共享计数器上；Redis 中途挂了就退回本地计数。
   if (!(await consumeSharedDaily())) consumeDaily();
 
+  // 超时用独立信号，是为了能区分「上游超时」和「客户端先走了」——两者收尾方式不同
+  const timeoutSignal = AbortSignal.timeout(UPSTREAM_TIMEOUT_MS);
+  let didTimeout = false;
+  timeoutSignal.addEventListener('abort', () => { didTimeout = true; });
+  const abortUpstream = new AbortController();
+
+  let upstream: Response;
   try {
-    const res = await fetch(`${baseURL}/chat/completions`, {
+    upstream = await fetch(`${baseURL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -307,40 +415,59 @@ export async function POST(request: NextRequest) {
         messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
         temperature: 0.3, // 客服要稳，不要发挥
         max_tokens: 600,
+        // ️ 不要删这一行。百炼上的 deepseek-v4.1-flash 是**推理模型**：不关掉思考，
+        // 它会先生成一整段 reasoning token 才开始吐正文，且思考长度不可预测
+        // （实测同一问题在 188~463 之间浮动）。两个后果：
+        // 1. 慢 —— 实测 6.97s → 2.16s
+        // 2. 可能被截断 —— max_tokens 是**含思考的**，思考吃掉大半后正文就不够了
+        // 客服是照着资料答问，不需要思考链。
+        enable_thinking: false,
+        // 开了流式之后，用户 ~1 秒就能看到第一个字，而不是等整段生成完
+        stream: true,
       }),
-      // 25s < vercel.json 里配的 maxDuration(30s)：留 5 秒余量，好让这里返回
-      // 友好的超时提示，而不是被平台直接掐断成无信息的 504。
-      // 同时接上 request.signal —— 用户关掉页面/断开时立刻中止上游调用，
-      // 否则 DeepSeek 会把这次生成跑完，白花钱。
-      signal: AbortSignal.any([request.signal, AbortSignal.timeout(25000)]),
+      // request.signal：客户端断开时立刻中止上游
+      // abortUpstream：客户端 cancel 了这个流（关页面/点清空）时中止
+      // timeoutSignal：25s 硬超时，留 5 秒给 maxDuration(30s)，好让前端收到友好提示
+      signal: AbortSignal.any([request.signal, abortUpstream.signal, timeoutSignal]),
     });
-
-    if (!res.ok) {
-      // 对外一律用同一句话：这是公开免登录接口，不把「Key 无效」「上游返回了几几几」
-      // 这类服务端配置状态告诉未认证的调用方。细节只留在服务端日志里。
-      console.error('[chat] DeepSeek 返回异常', res.status, (await res.text()).slice(0, 300));
-      return NextResponse.json({ error: '客服暂时不可用，请稍后再试' }, { status: 502 });
-    }
-
-    const data = await res.json();
-    const reply: string = data?.choices?.[0]?.message?.content?.trim() || '';
-    if (!reply) {
-      return NextResponse.json({ error: '客服没有返回内容，请再问一次' }, { status: 502 });
-    }
-
-    return NextResponse.json({ reply });
   } catch (err: unknown) {
-    const isTimeout = err instanceof Error && err.name === 'TimeoutError';
-    // 超时/网络异常是最可能的生产故障，必须留痕，否则线上出问题无从查起。
-    // 客户端主动断开（用户关页面）不算故障，不打日志避免噪音。
-    if (isTimeout) {
+    // 流还没开始就失败了 —— 这里仍能返回正常的 HTTP 错误，前端走原来的 JSON 分支
+    if (request.signal.aborted || abortUpstream.signal.aborted) {
+      return NextResponse.json({ error: '网络异常，请稍后再试' }, { status: 502 });
+    }
+    if (didTimeout) {
       console.error('[chat] 上游调用超时（25s）');
-    } else if (!(err instanceof Error && err.name === 'AbortError')) {
+    } else {
       console.error('[chat] 上游调用失败', err instanceof Error ? err.message : err);
     }
     return NextResponse.json(
-      { error: isTimeout ? '客服响应超时，请再问一次' : '网络异常，请稍后再试' },
+      { error: didTimeout ? '客服响应超时，请再问一次' : '网络异常，请稍后再试' },
       { status: 502 }
     );
   }
+
+  if (!upstream.ok) {
+    // 对外一律用同一句话：这是公开免登录接口，不把「Key 无效」「上游返回了几几几」
+    // 这类服务端配置状态告诉未认证的调用方。细节只留在服务端日志里。
+    console.error('[chat] DeepSeek 返回异常', upstream.status, (await upstream.text()).slice(0, 300));
+    return NextResponse.json({ error: '客服暂时不可用，请稍后再试' }, { status: 502 });
+  }
+
+  if (!upstream.body) {
+    console.error('[chat] 上游没有返回响应流');
+    return NextResponse.json({ error: '客服暂时不可用，请稍后再试' }, { status: 502 });
+  }
+
+  return new Response(
+    toClientStream(upstream.body, abortUpstream, () => request.signal.aborted, () => didTimeout),
+    {
+      headers: {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        // no-transform 让中间层别压缩/改写响应体；X-Accel-Buffering 是给 nginx 系反代的
+        // 保险（本站前面是 Cloudflare，它认 text/event-stream 本身就不缓冲）
+        'Cache-Control': 'no-cache, no-transform',
+        'X-Accel-Buffering': 'no',
+      },
+    },
+  );
 }

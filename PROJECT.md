@@ -724,6 +724,29 @@ lang: 'zh-CN'
     - **边缘层限流（Vercel Firewall）不可用**：实测报 `IP Bypass is unavailable...
       Pro and Enterprise plans include it (402)` —— 免费档没有此功能
     - 新增调用外部服务的路由时，记得在 `vercel.json` 加 `maxDuration`，并确认是否需要共享限流
+  - **流式输出（SSE）**：客服回复是**边生成边显示**的，不再等整段生成完才一次性返回。
+    协议是本站自己定的 `text/event-stream`，每个 `data:` 行都是一个 JSON：
+    `{"t":"增量文本"}` / `{"e":"错误文案"}` / `{"done":true}`
+    - **为什么用 SSE 而不是纯文本流**：本站挂在 Cloudflare 后面，Cloudflare 对
+      `text/event-stream` 明确不缓冲、不压缩；换成 `text/plain` 可能被压缩而攒够一批才发，
+      流式就白做了
+    - **不透传上游的 SSE**：服务端解析出 `delta.content` 后重新封装成本站事件再推给前端，
+      否则上游格式会泄漏到客户端，将来换服务商还得改前端
+    - **错误边界**：校验与限流都在流开始**之前**，所以 429 / 400 / 500 / 502 仍然是普通 JSON，
+      前端只在 `!res.ok` 时读 JSON；流已经开始之后的错误只能走 `{"e":...}` 事件
+    - **中途掐断**：客户端 `cancel`（关页面 / 点清空）会 abort 上游 fetch，别让它白跑完还计费；
+      超时用独立的 `AbortSignal.timeout(25s)`，这样收尾时能区分「上游超时」和「客户端先走了」
+    - **客户端**：`components/ChatWidget.tsx` 用 `res.body.getReader()` + `TextDecoder` 解析，
+      按 `\n\n` 切事件（最后一段可能被 TCP 切在半路，要留到下一轮再拼）；
+      助手气泡先占位、收到多少填多少，「三个点」只在还没收到第一个字时显示
+    - **顺带修掉的老问题**：改造前「清空」只用 `requestIdRef` 丢弃迟到结果，
+      fetch 本身没被 abort，**上游照常生成完并计费**（路由里 `request.signal` 只在连接真断时触发）
+  - **⚠️ 三个路由都必须传 `enable_thinking: false`**：百炼上的 `deepseek-v4.1-flash`
+    是**推理模型**，不关掉思考它会先生成一整段 reasoning token 才开始吐正文。
+    实测同一问题思考量在 188~463 之间浮动，两个后果：①慢（实测 6.97s → 2.16s）
+    ②**`max_tokens` 是含思考的**，思考吃掉大半后正文就不够了、会被截断。
+    三处都要传：`api/chat`、`api/generate`、`api/pdf-to-md`
+    （最后一个是按 4000 字符分块**串行**调用的，每块烧一次思考，受影响最大）
   - **入参校验**：最多取最近 20 条消息、**用户消息 ≤1000 字 / 助手消息 ≤4000 字**、总长 ≤12000 字、
     角色仅允许 user/assistant、最后一条必须是 user。
     助手消息上限更高的原因：客户端会原样回传历史，若对助手回复也卡 1000 字，
