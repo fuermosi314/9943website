@@ -4,6 +4,7 @@ import { useToolHistory } from '@/lib/useToolHistory';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
+import { useFileUpload } from '@/lib/useFileUpload';
 
 export default function ImageRotate() {
   useToolHistory('image-rotate');
@@ -15,11 +16,12 @@ export default function ImageRotate() {
   const [flipV, setFlipV] = useState(false);
   const [customAngle, setCustomAngle] = useState('');
   const [result, setResult] = useState<string>('');
-  const [isDragging, setIsDragging] = useState(false);
+  const [error, setError] = useState('');
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processFile = (selectedFile: File) => {
+    setError('');
     setFile(selectedFile);
     setResult('');
     setRotation(0);
@@ -43,24 +45,11 @@ export default function ImageRotate() {
     if (selectedFile) processFile(selectedFile);
   };
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile && droppedFile.type.startsWith('image/')) {
-      processFile(droppedFile);
-    }
-  }, []);
+  const { isDragging, dropProps } = useFileUpload({
+    onFiles: (files) => processFile(files[0]),
+    accept: 'image/*',
+    onReject: setError,
+  });
 
   const updatePreview = useCallback(() => {
     if (!preview || !canvasRef.current) return;
@@ -109,7 +98,8 @@ export default function ImageRotate() {
     if (!result || !file) return;
     const link = document.createElement('a');
     link.href = result;
-    link.download = `rotated_${file.name}`;
+    // 输出恒为 PNG，文件名必须跟着走，不能沿用原扩展名
+    link.download = `rotated_${file.name.replace(/\.[^.]+$/, '')}.png`;
     link.click();
   };
 
@@ -145,9 +135,7 @@ export default function ImageRotate() {
               isDragging ? 'border-[#fb6400] bg-[#fb6400]/10' : 'hover:border-white/20'
             }`}
             onClick={() => fileInputRef.current?.click()}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
+            {...dropProps}
           >
             <input
               ref={fileInputRef}
@@ -182,11 +170,13 @@ export default function ImageRotate() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
-                <p className="text-white/70 font-medium mb-1">点击或拖拽上传图片</p>
-                <p className="text-sm text-white/40">支持 JPG、PNG、WebP 格式</p>
+                <p className="text-white/70 font-medium mb-1">点击选择 · 拖拽到此处 · 或按 Ctrl+V 粘贴</p>
+                <p className="text-sm text-white/40">支持各种常见图片格式，输出为 PNG</p>
               </div>
             )}
           </div>
+
+          {error && <p className="text-center text-sm text-red-400 mt-3">{error}</p>}
 
           {/* Controls */}
           {file && (

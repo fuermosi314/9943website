@@ -5,13 +5,13 @@ import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { extractPdf, linesToMarkdown, type PdfPage } from '@/lib/pdf2md';
 import { EMBED_CSS, buildFullHtml } from '@/lib/html-export';
+import { useFileUpload } from '@/lib/useFileUpload';
 
 // PDF → Markdown：pdf.js 提取文本 → 启发式重建（免费秒出），
 // 「🤖 AI 增强」按钮可选调用 DeepSeek 还原结构（质量更好）
 
 export default function PdfToMdContent() {
   const [fileName, setFileName] = useState('');
-  const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState('');
   const [extracting, setExtracting] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
@@ -147,25 +147,11 @@ export default function PdfToMdContent() {
     fileInputRef.current?.click();
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      const file = e.dataTransfer.files[0];
-      if (file) processFile(file);
-    },
-    [processFile],
-  );
+  const { isDragging, dropProps } = useFileUpload({
+    onFiles: (files) => processFile(files[0]),
+    accept: '.pdf,application/pdf',
+    onReject: setError,
+  });
 
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -188,10 +174,8 @@ export default function PdfToMdContent() {
       />
       {!hasContent && !extracting ? (
         <div
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
           onClick={handleReupload}
+          {...dropProps}
           className={`glass-card p-4 border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all min-h-[400px] md:min-h-[500px] ${
             isDragging
               ? 'border-[#fb6400] bg-[#fb6400]/10'
@@ -200,7 +184,7 @@ export default function PdfToMdContent() {
         >
           <div className="text-3xl mb-2">📑</div>
           <p className="text-white/50 text-sm">
-            {isDragging ? '释放文件到这里' : '点击选择 .pdf 文件或拖拽到此处'}
+            {isDragging ? '释放文件到这里' : '点击选择 .pdf 文件，或拖拽，或按 Ctrl+V 粘贴'}
           </p>
           <p className="text-white/30 text-xs mt-1">
             支持文字型 PDF；扫描版（图片型）PDF 无法提取文字

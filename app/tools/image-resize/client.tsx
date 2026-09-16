@@ -1,9 +1,10 @@
 'use client';
 import { useToolHistory } from '@/lib/useToolHistory';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef } from 'react';
 import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
+import { useFileUpload } from '@/lib/useFileUpload';
 
 export default function ImageResize() {
   useToolHistory('image-resize');
@@ -14,10 +15,11 @@ export default function ImageResize() {
   const [newHeight, setNewHeight] = useState<number>(0);
   const [lockRatio, setLockRatio] = useState(true);
   const [resized, setResized] = useState<string>('');
-  const [isDragging, setIsDragging] = useState(false);
+  const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processFile = (selectedFile: File) => {
+    setError('');
     setFile(selectedFile);
     setResized('');
     const reader = new FileReader();
@@ -41,24 +43,11 @@ export default function ImageResize() {
     }
   };
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile && droppedFile.type.startsWith('image/')) {
-      processFile(droppedFile);
-    }
-  }, []);
+  const { isDragging, dropProps } = useFileUpload({
+    onFiles: (files) => processFile(files[0]),
+    accept: 'image/*',
+    onReject: setError,
+  });
 
   const handleWidthChange = (value: string) => {
     const w = parseInt(value) || 0;
@@ -101,7 +90,8 @@ export default function ImageResize() {
 
     const link = document.createElement('a');
     link.href = resized;
-    link.download = `resized_${file.name}`;
+    // 输出恒为 PNG，文件名必须跟着走，不能沿用原扩展名
+    link.download = `resized_${file.name.replace(/\.[^.]+$/, '')}.png`;
     link.click();
   };
 
@@ -128,9 +118,7 @@ export default function ImageResize() {
                 : 'hover:border-white/20'
             }`}
             onClick={() => fileInputRef.current?.click()}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
+            {...dropProps}
           >
             <input
               ref={fileInputRef}
@@ -158,11 +146,13 @@ export default function ImageResize() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
-                <p className="text-white/70 font-medium mb-1">点击或拖拽上传图片</p>
-                <p className="text-sm text-white/40">支持 JPG、PNG、WebP 格式</p>
+                <p className="text-white/70 font-medium mb-1">点击选择 · 拖拽到此处 · 或按 Ctrl+V 粘贴</p>
+                <p className="text-sm text-white/40">支持各种常见图片格式，输出为 PNG</p>
               </div>
             )}
           </div>
+
+          {error && <p className="text-center text-sm text-red-400 mt-3">{error}</p>}
 
           {/* Resize Settings */}
           {file && (

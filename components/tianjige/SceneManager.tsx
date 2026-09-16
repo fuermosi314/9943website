@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { Scene } from '@/lib/tianjige-db';
+import { useFileUpload } from '@/lib/useFileUpload';
 
 interface SceneManagerProps {
   show: boolean;
@@ -53,6 +54,27 @@ export default function SceneManager({
   const [showHelp, setShowHelp] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 拖入或粘贴的 .json 直接进导入模式选择，复用原有流程
+  const { isDragging, dropProps } = useFileUpload({
+    enabled: show,
+    onFiles: (files) => {
+      setPendingImportFile(files[0]);
+      setShowImportMode(true);
+    },
+    accept: '.json',
+    textHandler: (text) => {
+      try {
+        JSON.parse(text);
+      } catch {
+        return false;
+      }
+      setPendingImportFile(new File([text], 'pasted.json', { type: 'application/json' }));
+      setShowImportMode(true);
+      return true;
+    },
+    onReject: (msg) => showFeedback('error', msg),
+  });
 
   if (!show) return null;
 
@@ -188,9 +210,15 @@ export default function SceneManager({
               <span>📤</span> 导出全部数据
             </button>
             <button onClick={() => fileInputRef.current?.click()}
-              className="w-full py-3 bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-xl font-medium transition-colors flex items-center justify-center gap-2">
-              <span>📥</span> 导入数据
+              {...dropProps}
+              className={`w-full py-3 border rounded-xl font-medium transition-colors flex items-center justify-center gap-2 ${
+                isDragging
+                  ? 'bg-[#fb6400]/20 border-[#fb6400] text-[#fb6400]'
+                  : 'bg-white/10 hover:bg-white/20 border-white/10 text-white'
+              }`}>
+              <span>📥</span> {isDragging ? '释放以导入' : '导入数据'}
             </button>
+            <p className="text-white/30 text-xs text-center">可拖拽文件到此，或按 Ctrl+V 粘贴</p>
             <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleFileSelect} />
           </div>
 

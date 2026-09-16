@@ -27,12 +27,12 @@ export const tools: Tool[] = [
   {
     id: 'image-compress',
     name: '图片压缩',
-    description: '压缩图片大小，支持 JPG、PNG、WebP',
+    description: '压缩图片体积，各种常见图片都能压，可输出 WebP 或 JPG，一次处理一张',
     icon: '📷',
     category: 'image',
     path: '/tools/image-compress',
     tags: ['图片', '压缩', 'image', 'compress'],
-    keywords: ['减小图片', '缩小图片', '图片变小', '图片瘦身', '批量压缩', '降低画质', 'kb', 'mb'],
+    keywords: ['减小图片', '缩小图片', '图片变小', '图片瘦身', '降低画质', 'kb', 'mb'],
   },
   {
     id: 'qrcode',
@@ -47,7 +47,7 @@ export const tools: Tool[] = [
   {
     id: 'word-count',
     name: '字数统计',
-    description: '统计文本字数、字符数、行数',
+    description: '统计文本的字符数、单词数、行数和段落数，粘贴即出结果',
     icon: '📝',
     category: 'document',
     path: '/tools/word-count',
@@ -107,7 +107,7 @@ export const tools: Tool[] = [
   {
     id: 'image-convert',
     name: '图片格式转换',
-    description: 'JPG/PNG/WebP/BMP 格式互转',
+    description: 'JPG、PNG、WebP 三种格式互转，输出格式可选',
     icon: '🔄',
     category: 'image',
     path: '/tools/image-convert',
@@ -117,7 +117,7 @@ export const tools: Tool[] = [
   {
     id: 'image-crop',
     name: '图片裁剪',
-    description: '自定义区域裁剪图片',
+    description: '拖拽框选裁剪图片，自由/1:1/4:3/16:9/9:16 五种比例，导出 PNG/JPG/WebP',
     icon: '✂️',
     category: 'image',
     path: '/tools/image-crop',
@@ -127,7 +127,7 @@ export const tools: Tool[] = [
   {
     id: 'image-resize',
     name: '图片调整大小',
-    description: '按比例或像素调整图片尺寸',
+    description: '按比例或指定像素调整图片尺寸，可放大也可缩小',
     icon: '📐',
     category: 'image',
     path: '/tools/image-resize',
@@ -137,7 +137,7 @@ export const tools: Tool[] = [
   {
     id: 'image-rotate',
     name: '图片旋转/翻转',
-    description: '旋转角度、水平/垂直翻转',
+    description: '按 0-360 度旋转图片，或做水平/垂直镜像翻转',
     icon: '🔃',
     category: 'image',
     path: '/tools/image-rotate',
@@ -157,12 +157,12 @@ export const tools: Tool[] = [
   {
     id: 'pdf-to-office',
     name: 'PDF 转 Office',
-    description: 'PDF 转 Word/Excel/PPT',
+    description: '导出 Word/Excel/PPT 的页数框架，不提取 PDF 正文',
     icon: '📄',
     category: 'document',
     path: '/tools/pdf-to-office',
     tags: ['pdf', 'word', 'excel', 'ppt', '转换'],
-    keywords: ['pdf转word', 'pdf转excel', 'pdf转ppt', 'pdf转文档', 'pdf编辑', 'pdf修改'],
+    keywords: ['pdf转word', 'pdf转excel', 'pdf转ppt', 'pdf转文档'],
   },
   {
     id: 'office-to-pdf',
@@ -197,7 +197,7 @@ export const tools: Tool[] = [
   {
     id: 'pdf-compress',
     name: 'PDF 压缩',
-    description: '减小 PDF 文件大小',
+    description: '减小 PDF 文件体积，纯浏览器本地处理，不上传文件',
     icon: '📦',
     category: 'document',
     path: '/tools/pdf-compress',
@@ -237,7 +237,7 @@ export const tools: Tool[] = [
   {
     id: 'earth-cannon',
     name: '毁灭地球的电磁炮',
-    description: '太空汪星人的电磁炮小游戏',
+    description: '全屏 Canvas 小游戏，点击或蓄力发射电磁炮，打开即玩',
     icon: '🔫',
     category: 'entertainment',
     path: '/tools/earth-cannon',
@@ -267,7 +267,7 @@ export const tools: Tool[] = [
   {
     id: 'tianjige',
     name: '天机阁',
-    description: '天机阁，一览无余',
+    description: '3D 家居收纳工具，在立体房间家具里记录物品的位置、数量和价格，数据只存本机浏览器',
     icon: '🏠',
     category: 'life',
     path: '/tools/tianjige',
@@ -277,7 +277,7 @@ export const tools: Tool[] = [
   {
     id: 'consumables',
     name: '耗知通',
-    description: '记录你的消耗品，清楚库存',
+    description: '记录日用/食品/电子等消耗品的数量、价格和保质期，可导出备份',
     icon: '📦',
     category: 'life',
     path: '/tools/consumables',
@@ -371,7 +371,7 @@ export const tools: Tool[] = [
   {
     id: 'excalidraw',
     name: 'Excalidraw',
-    description: '手绘风格在线白板画图工具',
+    description: '手绘风格在线白板，画流程图/思维导图/架构图，支持多人协作',
     icon: '✏️',
     category: 'website',
     path: '/tools/site/excalidraw',
@@ -481,7 +481,7 @@ export const tools: Tool[] = [
   {
     id: 'aikanbot',
     name: '爱看机器人',
-    description: '全网免费影视资源搜索引擎',
+    description: '全网免费影视资源搜索引擎，搜片名即可，无需注册',
     icon: '🎬',
     category: 'website',
     path: '/tools/site/aikanbot',
@@ -503,7 +503,7 @@ export const tools: Tool[] = [
   {
     id: 'qinight',
     name: '柒夜导航',
-    description: '黑科技网站资源导航集合',
+    description: '黑科技实用网站导航，分工具/设计/学习/娱乐等类目，人工筛选',
     icon: '🧭',
     category: 'website',
     path: '/tools/site/qinight',
@@ -514,7 +514,7 @@ export const tools: Tool[] = [
   {
     id: 'phwalls',
     name: 'PhWalls',
-    description: '高质量手机壁纸免费下载',
+    description: '海量手机壁纸免费下载，支持多种分辨率，无需注册',
     icon: '🖼️',
     category: 'website',
     path: '/tools/site/phwalls',

@@ -4,6 +4,7 @@ import { useToolHistory } from '@/lib/useToolHistory';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
+import { useFileUpload } from '@/lib/useFileUpload';
 import {
   type DiaryEntry, type Mood, type PhotoRef,
   addEntry, updateEntry, deleteEntry,
@@ -240,6 +241,17 @@ function PhotoGrid({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // 粘贴由外层编辑弹窗的 onPaste 处理，这里只补拖拽；enabled: false 避免重复接管
+  const { isDragging, dropProps } = useFileUpload({
+    enabled: false,
+    onFiles: (files) => {
+      const dt = new DataTransfer();
+      files.forEach(f => dt.items.add(f));
+      onAdd(dt.files);
+    },
+    accept: 'image/*',
+  });
+
   return (
     <div>
       <div className="flex flex-wrap gap-2">
@@ -256,7 +268,12 @@ function PhotoGrid({
         ))}
         <button
           onClick={() => inputRef.current?.click()}
-          className="w-20 h-20 rounded-lg border-2 border-dashed border-white/20 flex items-center justify-center text-white/30 hover:border-[#fb6400] hover:text-[#fb6400] transition-all text-2xl"
+          {...dropProps}
+          className={`w-20 h-20 rounded-lg border-2 border-dashed flex items-center justify-center transition-all text-2xl ${
+            isDragging
+              ? 'border-[#fb6400] bg-[#fb6400]/10 text-[#fb6400]'
+              : 'border-white/20 text-white/30 hover:border-[#fb6400] hover:text-[#fb6400]'
+          }`}
         >
           +
         </button>
@@ -438,7 +455,7 @@ function EntryEditor({
         <div>
           <label className="text-white/40 text-xs mb-1 block">照片</label>
           <PhotoGrid photos={photos} onAdd={handleAddPhotos} onRemove={handleRemovePhoto} />
-          <p className="text-white/25 text-[10px] mt-1.5">💡 在输入框中可直接 Ctrl+V 粘贴图片</p>
+          <p className="text-white/25 text-[10px] mt-1.5">💡 在输入框中可直接 Ctrl+V 粘贴图片，也可把图片拖到「+」上</p>
         </div>
       </div>
 
@@ -637,10 +654,7 @@ export default function SimpleNotePage() {
     }
   }, []);
 
-  const handleImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const importFromFile = useCallback(async (file: File) => {
     setImporting(true);
     try {
       const text = await file.text();
@@ -668,9 +682,32 @@ export default function SimpleNotePage() {
       alert('导入失败：' + (err as Error).message);
     } finally {
       setImporting(false);
-      e.target.value = '';
     }
   }, [loadEntries, loadDatesWithEntries]);
+
+  const handleImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await importFromFile(file);
+    e.target.value = '';
+  }, [importFromFile]);
+
+  // 备份文件可直接拖入 / 粘贴；日记编辑弹窗自带图片粘贴，所以弹窗打开时不接管
+  const { isDragging, dropProps } = useFileUpload({
+    enabled: !showEditor,
+    onFiles: (files) => importFromFile(files[0]),
+    accept: '.json',
+    textHandler: (text) => {
+      try {
+        JSON.parse(text);
+      } catch {
+        return false;
+      }
+      importFromFile(new File([text], 'pasted.json', { type: 'application/json' }));
+      return true;
+    },
+    onReject: (msg) => alert(msg),
+  });
 
   return (
     <div className="min-h-screen relative z-10">
@@ -715,11 +752,15 @@ export default function SimpleNotePage() {
                 </svg>
                 备份数据
               </button>
-              <label className={`w-full py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/70 text-sm hover:bg-white/10 hover:border-[#fb6400]/30 transition-all flex items-center justify-center gap-2 cursor-pointer ${importing ? 'opacity-50 pointer-events-none' : ''}`}>
+              <label
+                {...dropProps}
+                className={`w-full py-2.5 rounded-xl bg-white/5 border text-white/70 text-sm hover:bg-white/10 transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  isDragging ? 'border-[#fb6400] bg-[#fb6400]/10' : 'border-white/10 hover:border-[#fb6400]/30'
+                } ${importing ? 'opacity-50 pointer-events-none' : ''}`}>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                 </svg>
-                {importing ? '导入中...' : '恢复数据'}
+                {importing ? '导入中...' : isDragging ? '释放以导入' : '恢复数据'}
                 <input
                   type="file"
                   accept=".json"
@@ -728,6 +769,7 @@ export default function SimpleNotePage() {
                   disabled={importing}
                 />
               </label>
+              <p className="text-white/30 text-xs text-center">可拖拽备份文件到此，或按 Ctrl+V 粘贴</p>
               <button
                 onClick={() => setShowHelp(true)}
                 className="w-full py-2 rounded-xl text-white/40 text-xs hover:text-white/60 transition-all flex items-center justify-center gap-1"
@@ -786,11 +828,15 @@ export default function SimpleNotePage() {
                   </svg>
                   备份
                 </button>
-                <label className={`flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/70 text-sm hover:bg-white/10 transition-all flex items-center justify-center gap-2 cursor-pointer ${importing ? 'opacity-50 pointer-events-none' : ''}`}>
+                <label
+                  {...dropProps}
+                  className={`flex-1 py-2.5 rounded-xl bg-white/5 border text-white/70 text-sm hover:bg-white/10 transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    isDragging ? 'border-[#fb6400] bg-[#fb6400]/10' : 'border-white/10'
+                  } ${importing ? 'opacity-50 pointer-events-none' : ''}`}>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                   </svg>
-                  {importing ? '导入中...' : '恢复'}
+                  {importing ? '导入中...' : isDragging ? '释放以导入' : '恢复'}
                   <input
                     type="file"
                     accept=".json"

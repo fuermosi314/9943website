@@ -4,6 +4,7 @@ import { useToolHistory } from '@/lib/useToolHistory';
 import { useState, useRef, useCallback } from 'react';
 import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
+import { useFileUpload } from '@/lib/useFileUpload';
 
 interface ExtractedIcon {
   width: number;
@@ -479,7 +480,6 @@ export default function IconExtractPage() {
   const [icons, setIcons] = useState<ExtractedIcon[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [isDragging, setIsDragging] = useState(false);
   const [lnkTarget, setLnkTarget] = useState<{ filePath: string; fileName: string; iconIndex: number } | null>(null);
   const [copied, setCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -523,13 +523,11 @@ export default function IconExtractPage() {
     if (f) processFile(f);
   };
 
-  const handleDragOver = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); }, []);
-  const handleDragLeave = useCallback((e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); }, []);
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault(); setIsDragging(false);
-    const f = e.dataTransfer.files[0];
-    if (f) processFile(f);
-  }, [processFile]);
+  const { isDragging, dropProps } = useFileUpload({
+    onFiles: (files) => processFile(files[0]),
+    accept: '.exe,.dll,.ico,.cpl,.scr,.lnk,.ocx,.sys,.drv,.url',
+    onReject: setError,
+  });
 
   const handleDownload = (icon: ExtractedIcon) => {
     const a = document.createElement('a');
@@ -562,9 +560,7 @@ export default function IconExtractPage() {
         <div
           className={`glass-card p-8 mb-6 animate-fade-in cursor-pointer transition-all ${isDragging ? 'border-[#fb6400] bg-[#fb6400]/10' : ''}`}
           onClick={() => fileInputRef.current?.click()}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
+          {...dropProps}
         >
           <input
             ref={fileInputRef}
@@ -576,7 +572,7 @@ export default function IconExtractPage() {
           <div className="text-center">
             <div className="text-4xl mb-3">{file ? '✅' : '📁'}</div>
             <h2 className="text-lg font-semibold text-white mb-2">
-              {file ? file.name : '点击或拖拽上传文件'}
+              {file ? file.name : '点击选择 · 拖拽 · 或按 Ctrl+V 粘贴'}
             </h2>
             <p className="text-white/40 text-sm">
               {file

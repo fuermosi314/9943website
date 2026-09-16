@@ -1,10 +1,11 @@
 'use client';
 import { useToolHistory } from '@/lib/useToolHistory';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef } from 'react';
 import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
 import { PDFDocument } from 'pdf-lib';
+import { useFileUpload, matchAccept } from '@/lib/useFileUpload';
 
 interface PdfFile {
   id: string;
@@ -17,7 +18,6 @@ interface PdfFile {
 export default function PdfMerge() {
   useToolHistory('pdf-merge');
   const [files, setFiles] = useState<PdfFile[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
   const [isMerging, setIsMerging] = useState(false);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [error, setError] = useState('');
@@ -37,7 +37,7 @@ export default function PdfMerge() {
     const newFiles: PdfFile[] = [];
 
     for (const file of Array.from(selectedFiles)) {
-      if (file.type === 'application/pdf') {
+      if (matchAccept(file, '.pdf')) {
         const pageCount = await getPdfPageCount(file);
         newFiles.push({
           id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -58,21 +58,11 @@ export default function PdfMerge() {
     }
   };
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    processFiles(e.dataTransfer.files);
-  }, []);
+  const { isDragging, dropProps } = useFileUpload({
+    onFiles: (files) => processFiles(files),
+    accept: '.pdf',
+    onReject: setError,
+  });
 
   const removeFile = (id: string) => {
     setFiles((prev) => prev.filter((f) => f.id !== id));
@@ -166,9 +156,7 @@ export default function PdfMerge() {
                 : 'hover:border-white/20'
             }`}
             onClick={() => fileInputRef.current?.click()}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
+            {...dropProps}
           >
             <input
               ref={fileInputRef}
@@ -185,7 +173,7 @@ export default function PdfMerge() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
               </div>
-              <p className="text-white/70 font-medium mb-1">点击或拖拽上传 PDF 文件</p>
+              <p className="text-white/70 font-medium mb-1">点击选择 · 拖拽到此处 · 或按 Ctrl+V 粘贴</p>
               <p className="text-sm text-white/40">支持同时上传多个 PDF 文件</p>
             </div>
           </div>

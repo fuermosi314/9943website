@@ -1,9 +1,10 @@
 'use client';
 import { useToolHistory } from '@/lib/useToolHistory';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
+import { useFileUpload } from '@/lib/useFileUpload';
 
 type Format = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/bmp';
 
@@ -14,17 +15,44 @@ const FORMAT_OPTIONS: { label: string; value: Format; ext: string }[] = [
   { label: 'BMP', value: 'image/bmp', ext: 'bmp' },
 ];
 
+/** canvas 遇到不支持编码的格式会静默退回 PNG，所以每个格式都要实测一次 */
+function supportsFormat(mime: Format): boolean {
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 1;
+    return canvas.toDataURL(mime).startsWith(`data:${mime}`);
+  } catch {
+    return false;
+  }
+}
+
+/** 从 dataURL 的真实 MIME 推扩展名，不假定所选格式一定生效（BMP 就会退回 PNG） */
+function extFromDataUrl(dataUrl: string): string {
+  if (dataUrl.startsWith('data:image/webp')) return 'webp';
+  if (dataUrl.startsWith('data:image/jpeg')) return 'jpg';
+  if (dataUrl.startsWith('data:image/bmp')) return 'bmp';
+  return 'png';
+}
+
 export default function ImageConvert() {
   useToolHistory('image-convert');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string>('');
   const [targetFormat, setTargetFormat] = useState<Format>('image/png');
   const [quality, setQuality] = useState(90);
-  const [isDragging, setIsDragging] = useState(false);
   const [isConverting, setIsConverting] = useState(false);
+  const [error, setError] = useState('');
+  const [availableFormats, setAvailableFormats] = useState(FORMAT_OPTIONS);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // BMP 这类格式浏览器普遍不具备编码能力，实测后把不可用的选项摘掉。
+  // 否则用户选了 BMP，拿到的是内容是 PNG、后缀却写着 .bmp 的文件
+  useEffect(() => {
+    setAvailableFormats(FORMAT_OPTIONS.filter((o) => supportsFormat(o.value)));
+  }, []);
+
   const processFile = (selectedFile: File) => {
+    setError('');
     setFile(selectedFile);
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -38,24 +66,11 @@ export default function ImageConvert() {
     if (selectedFile) processFile(selectedFile);
   };
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile && droppedFile.type.startsWith('image/')) {
-      processFile(droppedFile);
-    }
-  }, []);
+  const { isDragging, dropProps } = useFileUpload({
+    onFiles: (files) => processFile(files[0]),
+    accept: 'image/*',
+    onReject: setError,
+  });
 
   const showQualitySlider = targetFormat === 'image/jpeg' || targetFormat === 'image/webp';
 
@@ -86,7 +101,7 @@ export default function ImageConvert() {
       const exportQuality = showQualitySlider ? quality / 100 : undefined;
       const dataUrl = canvas.toDataURL(targetFormat, exportQuality);
 
-      const ext = FORMAT_OPTIONS.find((f) => f.value === targetFormat)?.ext ?? 'png';
+      const ext = extFromDataUrl(dataUrl);
       const baseName = file?.name.replace(/\.[^.]+$/, '') ?? 'image';
 
       const link = document.createElement('a');
@@ -134,9 +149,7 @@ export default function ImageConvert() {
               isDragging ? 'border-[#fb6400] bg-[#fb6400]/10' : 'hover:border-white/20'
             }`}
             onClick={() => fileInputRef.current?.click()}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
+            {...dropProps}
           >
             <input
               ref={fileInputRef}
@@ -166,18 +179,20 @@ export default function ImageConvert() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
                 </div>
-                <p className="text-white/70 font-medium mb-1">点击或拖拽上传图片</p>
+                <p className="text-white/70 font-medium mb-1">点击选择 · 拖拽到此处 · 或按 Ctrl+V 粘贴</p>
                 <p className="text-sm text-white/40">支持 JPG、PNG、WebP、BMP 等常见图片格式</p>
               </div>
             )}
           </div>
 
+          {error && <p className="text-center text-sm text-red-400 mt-3">{error}</p>}
+
           {/* Format Selection */}
           {file && (
             <div className="mt-6 glass-card p-6 animate-slide-up">
               <h3 className="text-sm font-medium text-white/70 mb-4">目标格式</h3>
-              <div className="grid grid-cols-4 gap-3">
-                {FORMAT_OPTIONS.map((opt) => (
+              <div className={`grid gap-3 ${availableFormats.length >= 4 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+                {availableFormats.map((opt) => (
                   <button
                     key={opt.value}
                     onClick={() => setTargetFormat(opt.value)}

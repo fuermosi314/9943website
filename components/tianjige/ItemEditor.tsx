@@ -3,6 +3,7 @@
 import { Item, PhotoRef } from '@/lib/tianjige-db';
 import CategorySelector from '@/components/CategorySelector';
 import DatePicker from '@/components/DatePicker';
+import { useFileUpload } from '@/lib/useFileUpload';
 
 interface ItemForm {
   name: string;
@@ -32,6 +33,13 @@ export default function ItemEditor({
   show, editingItem, itemForm, onClose, onSave, onDelete,
   setItemForm, onPaste, onPhotoUpload, onRemovePhoto,
 }: ItemEditorProps) {
+  // 粘贴由父级的 onPaste 处理，这里只取拖拽；enabled: false 避免重复接管粘贴
+  const { isDragging, dropProps } = useFileUpload({
+    enabled: false,
+    onFiles: (files) => onPhotoUpload(files[0]),
+    accept: 'image/*',
+  });
+
   if (!show) return null;
 
   return (
@@ -91,7 +99,7 @@ export default function ItemEditor({
           {/* Photos */}
           <div>
             <label className="text-white/70 text-sm mb-1 block">照片</label>
-            <p className="text-white/40 text-xs mb-2">电脑端可直接 Ctrl+V 粘贴图片，或点击下方按钮添加</p>
+            <p className="text-white/40 text-xs mb-2">可直接 Ctrl+V 粘贴图片，或点击、拖拽到下方方块</p>
             <div className="flex flex-wrap gap-2 mb-2">
               {itemForm.photos.map(photo => (
                 <div key={photo.id} className="relative w-16 h-16 rounded-lg overflow-hidden group">
@@ -100,7 +108,11 @@ export default function ItemEditor({
                     className="absolute top-0 right-0 w-5 h-5 bg-red-500/80 text-white text-xs rounded-bl-lg flex items-center justify-center opacity-70 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">&times;</button>
                 </div>
               ))}
-              <label className="w-16 h-16 rounded-lg border-2 border-dashed border-white/20 flex items-center justify-center cursor-pointer hover:border-[#fb6400]/50 transition-colors">
+              <label
+                {...dropProps}
+                className={`w-16 h-16 rounded-lg border-2 border-dashed flex items-center justify-center cursor-pointer transition-colors ${
+                  isDragging ? 'border-[#fb6400] bg-[#fb6400]/10' : 'border-white/20 hover:border-[#fb6400]/50'
+                }`}>
                 <span className="text-xl">📷</span>
                 <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
                   const file = e.target.files?.[0];

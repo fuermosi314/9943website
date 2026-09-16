@@ -1,11 +1,12 @@
 'use client';
 import { useToolHistory } from '@/lib/useToolHistory';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef } from 'react';
 import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
 import { PDFDocument } from 'pdf-lib';
 import JSZip from 'jszip';
+import { useFileUpload, matchAccept } from '@/lib/useFileUpload';
 
 type SplitMode = 'each' | 'range' | 'count';
 
@@ -15,7 +16,6 @@ export default function PdfSplit() {
   const [fileName, setFileName] = useState('');
   const [fileSize, setFileSize] = useState(0);
   const [pageCount, setPageCount] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
   const [isSplitting, setIsSplitting] = useState(false);
   const [splitMode, setSplitMode] = useState<SplitMode>('each');
   const [rangeInput, setRangeInput] = useState('');
@@ -34,7 +34,8 @@ export default function PdfSplit() {
   };
 
   const processFile = async (selectedFile: File) => {
-    if (selectedFile.type !== 'application/pdf') return;
+    if (!matchAccept(selectedFile, '.pdf')) return;
+    setError('');
     const count = await getPdfInfo(selectedFile);
     setFile(selectedFile);
     setFileName(selectedFile.name);
@@ -50,23 +51,11 @@ export default function PdfSplit() {
     }
   };
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files[0]) {
-      processFile(e.dataTransfer.files[0]);
-    }
-  }, []);
+  const { isDragging, dropProps } = useFileUpload({
+    onFiles: (files) => processFile(files[0]),
+    accept: '.pdf',
+    onReject: setError,
+  });
 
   const removeFile = () => {
     setFile(null);
@@ -212,9 +201,7 @@ export default function PdfSplit() {
               isDragging ? 'border-[#fb6400] bg-[#fb6400]/10' : 'hover:border-white/20'
             }`}
             onClick={() => fileInputRef.current?.click()}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
+            {...dropProps}
           >
             <input
               ref={fileInputRef}
@@ -230,7 +217,7 @@ export default function PdfSplit() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
               </div>
-              <p className="text-white/70 font-medium mb-1">点击或拖拽上传 PDF 文件</p>
+              <p className="text-white/70 font-medium mb-1">点击选择 · 拖拽到此处 · 或按 Ctrl+V 粘贴</p>
               <p className="text-sm text-white/40">支持单个 PDF 文件</p>
             </div>
           </div>

@@ -10,6 +10,7 @@ import { printHtmlToPdf } from '@/lib/print-pdf';
 import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
 import { useToolHistory } from '@/lib/useToolHistory';
+import { useFileUpload } from '@/lib/useFileUpload';
 import PdfToMdContent from './pdf-to-md';
 
 type ToolTab = 'md-to-html' | 'html-to-pdf' | 'pdf-to-md';
@@ -107,7 +108,6 @@ function MdToHtmlContent() {
   const [mode, setMode] = useState<MdMode>('upload');
   const [markdown, setMarkdown] = useState('');
   const [fileName, setFileName] = useState('document');
-  const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -233,30 +233,17 @@ function MdToHtmlContent() {
   }, []);
 
   // --- Handlers ---
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
+  const { isDragging, dropProps } = useFileUpload({
+    onFiles: (files) => {
       if (mode === 'batch') {
-        const files = Array.from(e.dataTransfer.files);
-        if (files.length > 0) processBatchFiles(files);
-      } else {
-        const file = e.dataTransfer.files[0];
-        if (file) processFile(file);
+        processBatchFiles(files);
+      } else if (files[0]) {
+        processFile(files[0]);
       }
     },
-    [mode, processFile, processBatchFiles],
-  );
+    accept: '.md,.markdown,text/markdown,text/plain',
+    onReject: setError,
+  });
 
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -497,9 +484,7 @@ function MdToHtmlContent() {
             // ── Batch mode ──
             batchFiles.length === 0 ? (
               <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
+                {...dropProps}
                 onClick={handleReupload}
                 className={`flex-1 border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all ${
                   isDragging
@@ -509,7 +494,7 @@ function MdToHtmlContent() {
               >
                 <div className="text-3xl mb-2">📂</div>
                 <p className="text-white/50 text-sm">
-                  {isDragging ? '释放文件到这里' : '点击选择多个 .md 文件或拖拽到此处'}
+                  {isDragging ? '释放文件到这里' : '点击选择多个 .md 文件，或拖拽，或按 Ctrl+V 粘贴'}
                 </p>
                 <p className="text-white/30 text-xs mt-1">支持批量上传，可同时处理多个文件</p>
               </div>
@@ -594,9 +579,7 @@ function MdToHtmlContent() {
                 </>
               ) : mode === 'upload' ? (
                 <div
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
+                  {...dropProps}
                   onClick={handleReupload}
                   className={`flex-1 border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all ${
                     isDragging
@@ -606,7 +589,7 @@ function MdToHtmlContent() {
                 >
                   <div className="text-3xl mb-2">📄</div>
                   <p className="text-white/50 text-sm">
-                    {isDragging ? '释放文件到这里' : '点击选择 .md 文件或拖拽到此处'}
+                    {isDragging ? '释放文件到这里' : '点击选择 .md 文件，或拖拽，或按 Ctrl+V 粘贴'}
                   </p>
                   <p className="text-white/30 text-xs mt-1">支持 .md、.markdown 格式</p>
                 </div>
@@ -743,7 +726,6 @@ function HtmlToPdfContent() {
   // Single upload
   const [htmlContent, setHtmlContent] = useState('');
   const [htmlFileName, setHtmlFileName] = useState('document');
-  const [isDragging, setIsDragging] = useState(false);
 
   // Batch
   const [batchFiles, setBatchFiles] = useState<BatchHtmlFile[]>([]);
@@ -948,30 +930,17 @@ function HtmlToPdfContent() {
   }, [batchFiles]);
 
   // Drag/drop handlers
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
+  const { isDragging, dropProps } = useFileUpload({
+    onFiles: (files) => {
       if (mode === 'batch') {
-        const files = Array.from(e.dataTransfer.files);
-        if (files.length > 0) processBatchFiles(files);
-      } else {
-        const file = e.dataTransfer.files[0];
-        if (file) processFile(file);
+        processBatchFiles(files);
+      } else if (files[0]) {
+        processFile(files[0]);
       }
     },
-    [mode, processFile, processBatchFiles],
-  );
+    accept: '.html,.htm,text/html',
+    onReject: setError,
+  });
 
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1143,9 +1112,7 @@ function HtmlToPdfContent() {
           {mode === 'batch' ? (
             batchFiles.length === 0 ? (
               <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
+                {...dropProps}
                 onClick={handleReupload}
                 className={`flex-1 border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all ${
                   isDragging
@@ -1155,7 +1122,7 @@ function HtmlToPdfContent() {
               >
                 <div className="text-3xl mb-2">📂</div>
                 <p className="text-white/50 text-sm">
-                  {isDragging ? '释放文件到这里' : '点击选择多个 .html 文件或拖拽到此处'}
+                  {isDragging ? '释放文件到这里' : '点击选择多个 .html 文件，或拖拽，或按 Ctrl+V 粘贴'}
                 </p>
                 <p className="text-white/30 text-xs mt-1">支持批量上传，可同时处理多个文件</p>
               </div>
@@ -1240,9 +1207,7 @@ function HtmlToPdfContent() {
                 </>
               ) : mode === 'upload' ? (
                 <div
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
+                  {...dropProps}
                   onClick={handleReupload}
                   className={`flex-1 border-2 border-dashed rounded-xl flex flex-col items-center justify-center cursor-pointer transition-all ${
                     isDragging
@@ -1252,7 +1217,7 @@ function HtmlToPdfContent() {
                 >
                   <div className="text-3xl mb-2">📄</div>
                   <p className="text-white/50 text-sm">
-                    {isDragging ? '释放文件到这里' : '点击选择 .html 文件或拖拽到此处'}
+                    {isDragging ? '释放文件到这里' : '点击选择 .html 文件，或拖拽，或按 Ctrl+V 粘贴'}
                   </p>
                   <p className="text-white/30 text-xs mt-1">支持 .html、.htm 格式</p>
                 </div>

@@ -11,6 +11,7 @@ import {
   exportAllData, importAllData, replaceAllData, calculateStats
 } from '@/lib/consumables-db';
 import { getCategories, getCategoryIcons, CategoryItem } from '@/lib/category-manager';
+import { useFileUpload, setInputFiles } from '@/lib/useFileUpload';
 
 type SortField = 'name' | 'quantity' | 'price' | 'storageDate';
 type SortDir = 'asc' | 'desc';
@@ -158,6 +159,22 @@ export default function ConsumablesPage() {
     setToast(msg);
     setTimeout(() => setToast(null), 2000);
   }
+
+  // 选中 / 拖入 / 粘贴的 JSON 都塞回原来的 file input，导入按钮逻辑保持不变
+  const { isDragging, dropProps } = useFileUpload({
+    enabled: showImportModal,
+    onFiles: (files) => setInputFiles(fileInputRef.current, files),
+    accept: '.json',
+    textHandler: (text) => {
+      try {
+        JSON.parse(text);
+      } catch {
+        return false;
+      }
+      return setInputFiles(fileInputRef.current, [new File([text], 'pasted.json', { type: 'application/json' })]);
+    },
+    onReject: showToast,
+  });
 
   function handleEdit(item: Consumable) {
     setEditingItem(item);
@@ -346,9 +363,15 @@ export default function ConsumablesPage() {
       {/* 导入弹窗 */}
       {showImportModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowImportModal(false)}>
-          <div className="glass-card rounded-2xl p-6 max-w-sm mx-4" onClick={e => e.stopPropagation()}>
+          <div
+            className={`glass-card rounded-2xl p-6 max-w-sm mx-4 transition-all ${isDragging ? 'border-[#fb6400] bg-[#fb6400]/10' : ''}`}
+            onClick={e => e.stopPropagation()}
+            {...dropProps}
+          >
             <h3 className="text-white font-bold mb-2">导入数据</h3>
-            <p className="text-white/60 text-sm mb-4">选择备份的 JSON 文件</p>
+            <p className="text-white/60 text-sm mb-4">
+              {isDragging ? '释放文件到这里' : '选择备份的 JSON 文件 · 拖拽到此处 · 或按 Ctrl+V 粘贴'}
+            </p>
             <input ref={fileInputRef} type="file" accept=".json" className="mb-4 text-sm text-white/70 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-[#fb6400] file:text-white file:text-sm" />
             <div className="flex gap-2 justify-end">
               <button onClick={() => setShowImportModal(false)} className="px-4 py-2 rounded-lg bg-white/10 text-white/80 text-sm">取消</button>

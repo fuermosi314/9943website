@@ -5,6 +5,7 @@ import ReactCrop, { type PixelCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
+import { useFileUpload } from '@/lib/useFileUpload';
 
 // ---------------------------------------------------------------------------
 // Types & Constants
@@ -81,7 +82,7 @@ export default function ImageCrop() {
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [cropped, setCropped] = useState('');
   const [contentType, setContentType] = useState('');
-  const [isDragging, setIsDragging] = useState(false);
+  const [error, setError] = useState('');
 
   // --- crop state ---
   const [naturalCrop, setNaturalCrop] = useState<NaturalCrop>({ x: 0, y: 0, width: 0, height: 0 });
@@ -117,6 +118,7 @@ export default function ImageCrop() {
   // File upload
   // ===================================================================
   const processFile = useCallback((f: File) => {
+    setError('');
     setFile(f);
     setCropped('');
     setScale(1);
@@ -135,6 +137,12 @@ export default function ImageCrop() {
     };
     r.readAsDataURL(f);
   }, []);
+
+  const { isDragging, dropProps } = useFileUpload({
+    onFiles: (files) => processFile(files[0]),
+    accept: 'image/*',
+    onReject: setError,
+  });
 
   // ===================================================================
   // Image loaded — fires once (initial) + on every scale change (DOM resize)
@@ -454,13 +462,7 @@ export default function ImageCrop() {
             <div
               className={`glass-card p-8 cursor-pointer transition-all duration-300 ${isDragging ? 'border-[#fb6400] bg-[#fb6400]/10' : 'hover:border-white/20'}`}
               onClick={() => fileInputRef.current?.click()}
-              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-              onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
-              onDrop={(e) => {
-                e.preventDefault(); setIsDragging(false);
-                const f = e.dataTransfer.files[0];
-                if (f?.type.startsWith('image/')) processFile(f);
-              }}
+              {...dropProps}
             >
               <input ref={fileInputRef} type="file" accept="image/*" onChange={(e) => {
                 const f = e.target.files?.[0]; if (f) processFile(f);
@@ -477,11 +479,13 @@ export default function ImageCrop() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                   </div>
-                  <p className="text-white/70 font-medium mb-1">点击或拖拽上传图片</p>
+                  <p className="text-white/70 font-medium mb-1">点击选择 · 拖拽到此处 · 或按 Ctrl+V 粘贴</p>
                   <p className="text-sm text-white/40">支持 JPG、PNG、WebP 格式</p>
                 </div>
               )}
             </div>
+
+            {error && <p className="text-center text-sm text-red-400 mt-3">{error}</p>}
 
             {/* ② Controls */}
             {file && (

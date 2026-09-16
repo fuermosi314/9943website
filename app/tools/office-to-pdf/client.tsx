@@ -1,10 +1,11 @@
 'use client';
 import { useToolHistory } from '@/lib/useToolHistory';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef } from 'react';
 import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { useFileUpload } from '@/lib/useFileUpload';
 
 type OfficeType = 'docx' | 'xlsx' | 'pptx';
 
@@ -69,7 +70,6 @@ export default function OfficeToPdf() {
   useToolHistory('office-to-pdf');
   const [file, setFile] = useState<File | null>(null);
   const [fileInfo, setFileInfo] = useState<FileInfo | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState<{ url: string; name: string } | null>(null);
   const [error, setError] = useState('');
@@ -95,23 +95,6 @@ export default function OfficeToPdf() {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) processFile(selectedFile);
   };
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile) processFile(droppedFile);
-  }, []);
 
   const handleConvert = async () => {
     if (!file || !fileInfo) return;
@@ -247,6 +230,12 @@ export default function OfficeToPdf() {
 
   const acceptStr = Object.values(ACCEPT_MAP).join(',');
 
+  const { isDragging, dropProps } = useFileUpload({
+    onFiles: (files) => processFile(files[0]),
+    accept: acceptStr,
+    onReject: setError,
+  });
+
   return (
     <div className="min-h-screen relative z-10">
       {/* Header */}
@@ -267,9 +256,7 @@ export default function OfficeToPdf() {
           <div className="glass-card p-6 animate-slide-up">
             <h2 className="text-base font-semibold text-white mb-4">上传 Office 文件</h2>
             <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
+              {...dropProps}
               onClick={() => fileInputRef.current?.click()}
               className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all ${
                 isDragging
@@ -286,7 +273,7 @@ export default function OfficeToPdf() {
               />
               <div className="text-4xl mb-3">📑</div>
               <p className="text-white/60 text-sm">
-                {isDragging ? '释放文件到这里' : '拖拽 Office 文件到这里，或点击选择文件'}
+                {isDragging ? '释放文件到这里' : '拖拽 Office 文件到此，或点击选择文件，或按 Ctrl+V 粘贴'}
               </p>
               <p className="text-white/30 text-xs mt-2">支持 .docx、.xlsx、.pptx 格式</p>
             </div>
