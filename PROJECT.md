@@ -1,6 +1,11 @@
 # 9943小工具大全 — 项目设计文档
 
 > 每次开发本项目相关内容时，先阅读此文档。
+>
+> **权威性声明**：本文件是**唯一权威**的现行设计文档，描述的是代码**当前**的行为。
+> `docs/superpowers/specs/` 与 `docs/superpowers/plans/` 下的文件是各工具**规划阶段的历史快照**
+> （文件名带日期），只记录当时的设计意图，**不代表现状**，也不随代码更新。
+> 两者冲突时，一律以**代码**为准，其次以本文件为准 —— 历史快照不参与裁决。
 
 ---
 
@@ -12,7 +17,7 @@
 - **技术栈**: Next.js 14 + React 18 + Tailwind CSS 3 + TypeScript
 - **项目路径**: `/home/huang/claude/vs/work/9943小工具大全`
 - **部署计划**: 本地开发 → Git → Vercel 发布
-- **当前工具数量**: 67 个（自动统计自 `lib/tools.ts`）
+- **当前工具数量**: 57 个（自动统计自 `lib/tools.ts`）
 
 ---
 
@@ -69,8 +74,11 @@
 │   ├── globals.css          # 全局样式、动画、变量
 │   ├── layout.tsx           # 根布局
 │   ├── page.tsx             # 首页（工具网格 + 分类导航）
+│   ├── feedback/page.tsx    # 意见反馈页（顶栏 Logo 链接入口）
 │   ├── api/generate/
 │   │   └── route.ts         # DeepSeek API 调用（爆款开头生成器）
+│   ├── api/chat/
+│   │   └── route.ts         # AI 客服（注入 tools.ts + faq.ts，公开免登录接口）
 │   ├── api/video-parse/
 │   │   └── route.ts         # 视频去水印解析 API（抖音/B站/西瓜）
 │   ├── api/github-mirrors/
@@ -81,7 +89,8 @@
 │   │   ├── parse/route.ts   # 网盘链接解析（夸克/阿里/百度/115/天翼/迅雷）
 │   │   ├── probe/route.ts   # 下载链接探测（文件大小/Range/CORS支持）
 │   │   ├── download/route.ts # 分片下载代理
-│   │   └── aria2-release/route.ts # aria2 最新版本信息
+│   │   ├── aria2-release/route.ts # aria2 最新版本信息
+│   │   └── idm-release/route.ts # IDM 最新版本信息（抓官网 exe 链接）
 │   └── tools/
 │       ├── bmi/             # BMI 计算器
 │       ├── calculator/      # 专业计算器
@@ -114,12 +123,12 @@
 │       ├── tianjige/        # 天机阁（3D 家居收纳）
 │       ├── treesize/        # TreeSize 下载
 │       ├── unit-converter/  # 单位换算
-│       ├── valorant-sens/   # VALORANT 灵敏度生成器
 │       ├── video-unwatermark/ # 视频去水印
 │       ├── wheel/           # 大转盘
 │       └── word-count/      # 字数统计
 ├── components/
 │   ├── Header.tsx           # 顶栏：Logo + 搜索框 + 在线状态
+│   ├── ChatWidget.tsx       # 全站右下角 AI 客服气泡（z-40，展开时 z-[95]）
 │   ├── CategoryNav.tsx      # 分类导航栏（sticky）
 │   ├── ToolCard.tsx         # 工具卡片组件
 │   ├── BackButton.tsx       # 统一返回按钮（回分类页）
@@ -136,6 +145,7 @@
 │   └── tianjige/            # [天机阁] 3D 相关组件
 ├── lib/
 │   ├── tools.ts             # 工具数据定义 + 分类 + 搜索
+│   ├── faq.ts               # 客服问答知识库（116 条，供 AI 客服的 system prompt 使用）
 │   ├── types.ts             # TypeScript 类型
 │   ├── prompts.ts           # DeepSeek 提示词模板
 │   ├── storage.ts           # localStorage 封装
@@ -144,6 +154,8 @@
 │   ├── md2pdf.ts            # Markdown → 文字型 PDF（pdfmake 排版）
 │   ├── pdf2md.ts            # PDF → Markdown（pdf.js 提取 + 启发式重建）
 │   ├── html-export.ts       # 导出 HTML 共享资源（内嵌 GitHub 风格 CSS + 组装）
+│   ├── html-to-image-pdf.ts # 图片型 PDF（html2canvas + jsPDF 分页）
+│   ├── print-pdf.ts         # 浏览器原生打印（离屏 iframe + window.print）
 │   ├── consumables-db.ts    # 消耗品 IndexedDB
 │   ├── download-db.ts       # 下载进度 IndexedDB（断点续传）
 │   ├── simple-note-db.ts    # 简单记 IndexedDB
@@ -167,9 +179,9 @@
 | `image` | 图片工具 | 🖼️ | 图片压缩、格式转换、裁剪、缩放、旋转、图标提取 |
 | `document` | 文档工具 | 📄 | PDF 系列 + 字数统计（原"文本工具"已合并至此） |
 | `dev` | 开发工具 | 🔧 | 在线编译器导航 |
-| `life` | 生活工具 | 🎯 | BMI 计算器、单位换算、专业计算器、视频去水印、简单记、耗知通 |
+| `life` | 生活工具 | 🎯 | BMI 计算器、单位换算、专业计算器、视频去水印、简单记、耗知通、高速下载、天机阁 |
 | `entertainment` | 娱乐工具 | 🎮 | 大转盘、二维码生成、随机数生成器、爆款开头生成器、毁灭地球的电磁炮 |
-| `website` | 网站工具 | 🌐 | Excalidraw, Carbon, JSON, CodeSandbox, Photopea, KMS, PDF24, S7资源库, FMHY, 便民查询网, 爱看机器人, Steam 下载, 图吧工具箱, Image Splitter, 柒夜导航, PhWalls, 纸由我, VirusTotal, Learn Git Branching, Watt Toolkit, AI Short, 云游君的厨房, 菜鸟教程, Human Benchmark, Everything 下载, TreeSize 下载, VALORANT 灵敏度生成器, Steam 租号 |
+| `website` | 网站工具 | 🌐 | Excalidraw, Carbon, JSON 格式化, CodeSandbox, Photopea, KMS 激活, PDF24 Tools, S7 资源库, FMHY, 便民查询网, 爱看机器人, Steam 下载, 图吧工具箱, Image Splitter, 柒夜导航, PhWalls, 纸由我 PaperMe, VirusTotal, Learn Git Branching, Watt Toolkit, AI Short, 云游君的厨房, 菜鸟教程, Human Benchmark, Everything 下载, TreeSize 下载, VALORANT 灵敏度生成器, Steam 租号 |
 | `software` | 软件工具 | 💿 | AI智能桌面整理大师、智能弹幕 |
 
 ### 收藏和历史功能
@@ -194,11 +206,11 @@
 ### 5.2 Header 组件
 - 固定顶部 (`fixed top-0`)，滚动后加深背景 + 毛玻璃效果
 - 左侧：Logo（橙色渐变方块 + "9" + "9943小工具大全"）
-- 中间：搜索框（圆角，实时搜索，支持按名称/描述/标签匹配）
+- 中间：搜索框（圆角，实时搜索，支持按名称/描述/标签/功能关键词 `keywords` 匹配，支持空格拆分多关键词）
 - 右侧：绿色脉冲点 + "在线"文字（预留在线人数功能，暂未实现）
 
 ### 5.3 CategoryNav 组件
-- `sticky top-14`，固定在 Header 下方
+- `sticky top-16`，固定在 Header 下方
 - 水平滚动，选中态为橙色渐变胶囊
 - 使用 URL 参数 `?category=xxx` 保持状态
 
@@ -234,7 +246,9 @@
 ## 7. 特殊工具实现细节
 
 ### 7.1 大转盘 (wheel)
-- 预设模板：今天吃什么、谁请客、真心话大冒险、做什么运动、看什么电影、自定义
+- 预设模板（5 个）：今天吃什么？、谁请客？、真心话大冒险、做什么运动？、看什么电影？
+- 自定义类别：在右侧「选项列表」配置后点「+ 保存当前为自定义类别」，保存的类别出现在「我的类别」区域
+  - 注意：`presets` 里另有一个 `自定义` 空键，但渲染按钮时被 `filter(name => name !== '自定义')` 过滤掉，**页面上不存在「自定义」预设按钮**
 - 渐变色板：8 组颜色
 - **SVG 绘制**（`useRef<SVGSVGElement>`），非 Canvas
 - 音效功能：AudioContext 生成，支持开关（`soundEnabled` 状态）
@@ -256,6 +270,7 @@
 ### 7.3 专业计算器 (calculator)
 - 四种模式：标准 / 科学 / 程序员 / 日期
 - 程序员模式自带进制转换功能（替代了原来的独立进制转换工具）
+- 日期模式：日期差计算器（起始日期 + 结束日期 → 总天数、年/月/日、总周数、总小时、总分钟）
 
 ### 7.4 视频去水印 (video-unwatermark)
 - 混合模式：服务端解析 + 第三方工具 Fallback
@@ -306,6 +321,7 @@
 - 5 种心情表情：开心/兴奋/普通/难过/生气
 - 日历侧栏 + 列表布局，响应式（桌面端分栏，移动端切换）
 - 全屏编辑器：日期、心情、文字、照片
+- 数据备份/恢复：一键导出全部数据为 JSON（含 entries + 照片 base64），导入为合并模式（按 id 去重、只添加新条目）
 - localStorage 键名：无（使用 IndexedDB）
 
 ### 7.8 高速下载 (fast-download)
@@ -320,6 +336,8 @@
 - **解析后端**: 使用 alist 开源项目作为网盘解析服务（需自行部署）
 - **API 路由**: `/api/fast-download/parse` — 网盘链接解析为直链
 - **API 路由**: `/api/fast-download/aria2-release` — 获取 aria2 最新版本信息
+- **API 路由**: `/api/fast-download/idm-release` — 获取 IDM 最新版本与下载链接（抓官网 exe 链接）
+- **IDM 通道**: 支持调用本机 IDM 下载（`idm://` 协议），并提供 IDM 安装包的 8 线程分片下载
 - **环境变量**: `ALIST_URL`（alist 服务地址）、`ALIST_TOKEN`（可选认证令牌）
 - 百度网盘、115网盘支持提取码输入
 - 未配置 alist 时网盘解析不可用，直链下载不受影响
@@ -328,8 +346,8 @@
 - 3D 家居收纳工具，使用 Three.js 渲染房间和家具，一览无余
 - **数据存储**: IndexedDB（`lib/tianjige-db.ts`）
 - **核心组件**: `components/tianjige/Scene3D.tsx`
-- **功能**: 预设场景（客厅/卧室/厨房等）、自定义场景管理、家具添加/移动、家具编辑（右键/长按打开，支持重命名、改色、移动位置、旋转、缩放、删除）、物品记录（名称/分类/数量/价格/照片）、场景数据导入/导出
-- **场景管理**: 底部工具栏"管理场景"按钮打开场景管理弹窗，支持新建/删除自定义场景、JSON 导出/导入（merge 模式）
+- **功能**: 预设场景（客厅/卧室/厨房等）、自定义场景管理、家具添加/移动、家具编辑（**两处入口**：① 选中家具后，在物品面板点「✏️ 编辑家具」按钮；② 直接在 3D 场景中操作 —— 触屏**长按家具 500ms**，桌面**右键点击家具**。支持重命名、改色、移动位置、旋转、缩放、删除）、物品记录（名称/分类/数量/价格/照片）、场景数据导入/导出
+- **场景管理**: 底部工具栏"管理场景"按钮打开场景管理弹窗，支持新建/复制/删除场景（**预设场景也可删除**，代码未做区分）、JSON 导出/导入（导入时弹窗让用户二选一：「合并模式」只添加新场景，或「⚠️ 替换模式」清空后整体替换）
 
 ### 7.10 耗知通 (consumables)
 - 消耗品管理工具，记录和追踪日常消耗品库存
@@ -393,7 +411,7 @@
 - **三种 PDF 形式**:
   - **文字形式**（默认主按钮）: HTML 经 turndown → pdfmake 排版，文字可复制/可搜索，文件体积小（10MB 课件 → 约 300KB）；复杂 CSS 布局（flex/grid、绝对定位）会降级为结构化文本
   - **图片形式**: `lib/html-to-image-pdf.ts` 的 `htmlToImagePdf` 直接对渲染后的 HTML 截图（html2canvas scale 2 + jsPDF，智能安全切割线分页：切点落在块级元素缝隙中点，避免文字行/图片/表格行被切断），所见即所得、格式永不丢失，但文字不可搜索
-  - **浏览器打印**（🖨️ 打印 PDF）: `lib/print-pdf.ts` 写入离屏 iframe（sandbox="allow-modals"，置于视口外而非 display:none）后 `contentWindow.print()`，系统打印对话框选「另存为 PDF」；排版质量最高（浏览器引擎渲染）；需手动确认，批量逐个确认
+  - **浏览器打印**（🖨️ 打印 PDF）: `lib/print-pdf.ts` 写入离屏 iframe（sandbox="allow-modals allow-same-origin"，置于视口外而非 display:none）后 `contentWindow.print()`，系统打印对话框选「另存为 PDF」；排版质量最高（浏览器引擎渲染）；需手动确认，批量逐个确认
 - **操作**:
   - 单个文件：「📄 下载 PDF（文字）」+「🖼️ 下载 PDF（图片）」+「🖨️ 打印 PDF」+「📋 复制 Markdown」+「⬇ 下载 Markdown」按钮
   - 批量文件：「📄 批量转 PDF（文字）」+「🖼️ 批量转 PDF（图片）」+「🖨️ 批量打印 PDF」+「📦 批量转 MD」（全部）+「⬇ 下载 xxx.pdf」（单个）
@@ -450,6 +468,20 @@
 - 支持在线续租，游玩不断档；兑换码兑换时长
 - 账号共享安全可靠，全程客服支持
 
+### 7.16 AI智能桌面整理大师 (desktop-cleaner)
+- 软件工具分类，Windows 桌面程序（非网页工具）
+- 从 GitHub `fuermosi314/apps` 的 latest release 自动获取版本号（请求失败时兜底 v2.0.0）
+- 规格标注：Windows 64位 · 97MB
+- 「⚡ 高速下载」按钮跳转 `/tools/fast-download?url=<release 地址>`，不在本站直接托管安装包
+
+### 7.17 智能弹幕 (smart-danmu)
+- 软件工具分类，Windows 桌面弹幕助手（非网页工具）
+- 从 GitHub `fuermosi314/apps` 的 latest release 自动获取版本号（请求失败时兜底 v2.0.1）
+  - 注意：与 desktop-cleaner 读的是**同一个仓库**，所以两个页面正常显示同一个版本号
+- 规格标注：Windows 64位 · 75MB
+- 「⚡ 高速下载」按钮跳转 `/tools/fast-download?url=<release 地址>`
+- 基于开源项目 DanmuAI
+
 ---
 
 ## 8. 数据持久化
@@ -462,7 +494,7 @@
 | `wheel-custom-presets` | wheel 页面 | 自定义转盘类别 | 无 |
 | `wheel-current-items` | wheel 页面 | 当前转盘选项 | 无 |
 | `wheel-active-preset` | wheel 页面 | 当前预设名 | 无 |
-| `wheel-history` | wheel 页面 | 转盘结果历史 | 无 |
+| `wheel-history` | wheel 页面 | 转盘结果历史 | 50 条 |
 | `hook-generator-auth` | hook-generator 页面 | 密码验证状态 | 无 |
 | `ai-hook-lab-history` | storage.ts | 爆款开头生成历史 | 50 条 |
 | `ai-hook-lab-favorites` | storage.ts | 收藏的生成结果 | 无 |
@@ -472,6 +504,8 @@
 | `fast-dl-aria2-port` | fast-download 页面 | aria2 端口 | 无 |
 | `fast-dl-aria2-secret` | fast-download 页面 | aria2 密钥 | 无 |
 | `fast-dl-aria2-path-hint` | fast-download 页面 | aria2 搜索路径提示 | 无 |
+| `tianjige-guide-seen` | tianjige 页面 | 首次使用引导已读标记 | 无 |
+| `tianjige-last-backup` | tianjige 页面 | 上次导出备份的时间戳（超 24 小时提醒备份） | 无 |
 
 > 注意：`lib/storage.ts` 的键名仍保留 `ai-hook-lab-` 前缀（从 Ai Hook Lab 迁移而来）
 
@@ -490,18 +524,31 @@
 ```env
 # .env.local
 DEEPSEEK_API_KEY=sk-xxx
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1  # 阿里云百炼 OpenAI 兼容模式
+DEEPSEEK_MODEL=deepseek-v4.1-flash
 
 # 网盘解析服务（alist）
 ALIST_URL=https://alist.example.com
 ALIST_TOKEN=
+
+# AI 客服的共享限流（Upstash for Redis，由 Vercel 集成自动注入）
+KV_REST_API_URL=https://xxx.upstash.io
+KV_REST_API_TOKEN=xxx
 ```
 
-- DeepSeek API 调用仅在服务端 (`/api/generate/route.ts`)
+- **AI 服务商：阿里云百炼（Bailian）**，走它的 **OpenAI 兼容模式**端点
+  `https://dashscope.aliyuncs.com/compatible-mode/v1`，模型 `deepseek-v4.1-flash`。
+  **注意**：`bailian.console.aliyun.com` 是控制台网页（返回 HTML），**不是 API 地址**，别配错。
+  变量名仍沿用 `DEEPSEEK_*`（历史原因），实际指向的是百炼
+- API 调用仅在服务端 (`/api/generate/route.ts`、`/api/chat/route.ts`、`/api/pdf-to-md/route.ts`)
 - 网盘解析通过 alist 开源项目实现 (`/api/fast-download/parse/route.ts`)
+- 共享限流通过 Upstash 的 REST 接口实现，**不引入 npm 依赖**（原生 `fetch`）
 - 使用原生 `fetch()`，无第三方 AI SDK
 - API Key 不发送到客户端
+- **Vercel 端的环境变量**：`vercel env ls` 查看；`KV_REST_API_*` 由集成自动注入到
+  Production / Preview / Development 三套环境。本地开发用 `vercel env pull` 拉取
+- **换服务商时别漏了**：`DEEPSEEK_MODEL` 的**代码兜底值**也写着模型名
+  （三处 route 里的 `process.env.DEEPSEEK_MODEL || '…'`），环境变量缺失时会用到它
 
 ---
 
@@ -547,7 +594,7 @@ lang: 'zh-CN'
 2. 在 `app/tools/` 下创建对应页面
 3. 工具页面的返回按钮必须回到正确分类（通过 URL 参数 `?category=xxx`）
 4. 工具页面的顶部导航栏、背景效果要与网站整体风格一致
-5. 网站工具需同时添加到 `lib/tools.ts`（含 `externalUrl`）和 `app/tools/site/[slug]/page.tsx` 的 `siteFeatures`
+5. 网站工具需同时添加到 `lib/tools.ts`（含 `externalUrl`）和 `app/tools/site/[slug]/client.tsx` 的 `siteFeatures`
 6. 所有工具卡片框的尺寸必须一致
 7. **每次增删工具后，必须更新本文档**（工具数量、架构图、分类表、数据持久化表等所有相关内容）
 8. **每次修改代码后，检查本文档是否有过时内容**，如有则同步更新
@@ -566,12 +613,81 @@ lang: 'zh-CN'
 ## 13. 待办 / 后续规划
 - [x] **修复全部工具页面的返回导航**（已用 BackButton 组件替代 router.back()）
 - [x] **密码安全修复**（已改为 SHA-256 哈希验证，密码不再明文出现）
-- [x] **API 速率限制**（已添加每 IP 每分钟 5 次限制 + topic 100 字符上限）
+- [x] **API 速率限制**（已添加每 IP 每分钟 5 次限制 + topic 长度限制：前端输入框 50 字符，服务端 100 字符兜底）
 - [x] **PDF 工具 alert() 替换**（已改为 React state 内联错误提示）
 - [x] **计算器进制标签汉化**（BIN/OCT/DEC/HEX 已改为中文）
 - [x] **计算器手机端优化**（按钮高度、响应式布局已修复）
 - [x] **Office-to-PDF 中文支持**（自动加载 LXGW WenKai 字体，失败时降级为 ASCII）
 - [x] **分类切换动画逻辑**（sessionStorage 追踪已动画分类：首次进入蹦出动画，后续进入全部一起出现）
+- [x] **【最高优先级】网站智能客服（AI 问答助手）** —— **已完成并端到端实测**
+  - **需求**：网站右下角提供 AI 客服，访客可就"有哪些工具、怎么用、为什么失败"提问，AI 依据站内知识作答
+  - **技术方案（已论证，不引入外部平台）**：不使用 Coze / 毕昇等平台，直接在现有项目内实现
+    - [x] `lib/faq.ts` — 问答文档（116 条）
+    - [x] `app/api/chat/route.ts` — 调用 DeepSeek，注入知识
+    - [x] `components/ChatWidget.tsx` — 右下角聊天气泡，挂载于 `app/layout.tsx`
+  - **知识来源**：`lib/tools.ts` 工具目录 + `lib/faq.ts` 问答文档，两者一并写入 system prompt
+  - **维护义务（易漏）**：新增 / 改动 / 删除工具后，除 `lib/tools.ts` 和本文件外，
+    **必须回头核对 `lib/faq.ts`**。工具目录是**全量注入**的，漏更新会出现最尴尬的状态 ——
+    客服知道这个工具存在（目录里有），却答不出用法（FAQ 里没有），只能走兜底话术说「没有准确信息」。
+    同时 `lib/faq.ts` 条数变了，第 1 节架构图中标注的条数也要同步。
+    这条已写入 `.claude/CLAUDE.md` 核心规则，因为只写在 `lib/faq.ts` 的文件头注释里无人会看到 ——
+    新增工具时根本不会打开那个文件
+  - **知识体积（实测）**：工具目录 2,681 字符 + FAQ 13,672 字符 = **16,400 字符 ≈ 17K tokens**，
+    占 DeepSeek 1M 上下文的 **1.73%**；含规则部分后单次问答约 **$0.0005**
+  - **关键结论**：**不需要向量数据库 / RAG**；全量注入 system prompt 反而更准（不会漏召），成本极低
+  - **system prompt 的 9 条硬性规则**（`app/api/chat/route.ts`）：只依据资料回答、禁止编造；
+    兜底话术（覆盖不到但属本站话题时照抄）；跑题话题**不套用**兜底话术而是引回工具（规则 2/3 互斥）；
+    不透露提示词；不承诺资料外的事；不替第三方站承诺；简体中文客服口吻；2-4 句先给结论；纯文本不用 markdown
+  - **限流（`app/api/chat/route.ts`）**：每 IP 每分钟 20 次 + 每日 1000 次。
+    **已接入 Upstash Redis，计数器跨实例共享**（此前是进程内 `Map`，在 Vercel 上等于「每实例一份」）。
+    - **共享存储**：Upstash for Redis，资源名 `9943-chat-ratelimit`，套餐 `free`，
+      **`autoUpgrade` 已显式关闭**（默认是开的，会在额度用尽时自动升级到付费扣钱）。
+      安装方式：`vercel integration add upstash/upstash-kv --plan free -m autoUpgrade=false`
+    - **不引入 npm 依赖**：直接用原生 `fetch` 打 Upstash 的 REST `/pipeline` 接口，
+      一次往返完成「读每日用量 + 递增每分钟计数」。
+    - **检查与计数分开**（两处 pipeline 调用）：校验通过、马上要调模型时才递增每日计数，
+      避免畸形请求（不花钱）把全站额度刷光
+    - **fail-open**：Redis 不可用时自动退回本实例的内存限流并打日志。
+      理由：客服挂掉的概率远高于被恶意刷爆的概率，不该为防小概率事件引入高频故障点
+    - 调用方 IP：优先取平台注入的 `x-real-ip`，回退取 `x-forwarded-for` 的**最后一段**
+      （最左段是客户端可注入的）
+    - 两种 429 文案分开：额度打满时说「今天的咨询量已经满了」，不要说成用户"问得太快"
+    - **仍需注意**：`x-real-ip` 本身在非 Vercel 环境下也可伪造；若将来换部署平台需重新确认
+    - **边缘层限流（Vercel Firewall）不可用**：实测报 `IP Bypass is unavailable...
+      Pro and Enterprise plans include it (402)` —— 免费档没有此功能
+    - 新增调用外部服务的路由时，记得在 `vercel.json` 加 `maxDuration`，并确认是否需要共享限流
+  - **入参校验**：最多取最近 20 条消息、**用户消息 ≤1000 字 / 助手消息 ≤4000 字**、总长 ≤12000 字、
+    角色仅允许 user/assistant、最后一条必须是 user。
+    助手消息上限更高的原因：客户端会原样回传历史，若对助手回复也卡 1000 字，
+    某次回复一旦超过 1000 字，这个会话之后每次请求都会被判 400，**永久卡死**
+  - **UI 要点**：气泡 `z-40`（低于站内浮层），面板展开时 `z-[95]`
+    （低于三处 `z-[100]` 全屏遮罩＝模态态优先，高于工具侧栏 60 / 编辑弹窗 70 / 确认框 80）；
+    **`bottom-6 right-6` 这个位置由全局客服气泡占用** —— 页面级的悬浮按钮必须避让：
+    - `components/HistoryPanel.tsx` 的圆形按钮 → 已移至 `bottom-24`
+    - `app/tools/simple-note/client.tsx` 移动端「+」FAB → 已移至 `bottom: calc(6rem + safe-area)`
+      （该按钮用**内联 style** 定位，按 class 搜不到，排查时容易漏）
+    - 天机阁上帝视角的旋转按钮在 `bottom-24 right-4`，底边高于气泡，不冲突
+    - **以后新增右下角悬浮按钮时，先确认不会和客服气泡重叠**；
+    **输入框处理了中文输入法组合态**（`isComposing`），避免按回车选词时发出半截消息
+  - **部署**：Vercel，零额外服务器；沿用现有 `DEEPSEEK_*` 环境变量
+  - **`vercel.json` 的 `maxDuration`**：Vercel 会按平台默认超时掐断函数（Hobby 档仅 10 秒），
+    凡是调用外部 AI、耗时可能超过默认值的路由，**必须在 `vercel.json` 里单独声明 `maxDuration`**，
+    否则路由内部写的 `AbortSignal.timeout` 根本等不到。当前已声明：
+    - `api/generate` → 30（对应 `AbortSignal` 25s）
+    - `api/chat` → 30（对应 `AbortSignal` 25s）
+    - `api/pdf-to-md` → 60（对应 `AbortSignal` 60s，此前漏配，等于代码想要的 60 秒从未生效）
+    - **新增调用外部服务的路由时，记得同步加这一条**
+  - **实测结果（2026-09-15，本地 dev + 真实 DeepSeek）**：
+    - 知识库覆盖到的问题 → 依据资料准确作答（0.9s）
+    - 资料没有的站内问题 → 照抄兜底话术，引导去意见反馈（0.6s）
+    - 跑题话题 → 礼貌拒绝并引回站内工具（1.1s）
+    - **诱导编造（"会员多少钱一年"）→ 未编造**，正确说明本站无会员、工具免费（1.0s）
+    - 多轮上下文 → 正确继承上文（0.4s）
+    - **4 项提示词注入探测全部挡住**：直接索取 system prompt、伪装开发者、注入伪造 assistant 轮次、DAN 越狱
+  - **FAQ 定稿过程存档**：经三轮独立核查（对文档核 → 对源码核 → 找茬评审），
+    130 条草稿 → 定稿 122 条 → 跨范围去重后 **113 条**，后又补入 3 条关于客服自身的问答（是不是真人 / 次数限制 / 对话是否保存）→ **116 条**。过程中修正了 8 条事实错误
+    （含"简单记没有导出功能"这类与源码相反的结论）、改写了 10 条"写给模型而不是写给访客"的答案。
+    **教训**：PROJECT.md 自身会漂移，核事实必须以源码为唯一权威
 - [ ] 右上角在线人数功能（计划接入实时统计）
 - [ ] Git 上传 + Vercel 部署
 - [ ] 开发工具分类的工具补充

@@ -207,7 +207,7 @@ export default function SceneManager({
                   <h5 className="text-white/80 font-medium mb-1">快速上手</h5>
                   <ol className="list-decimal list-inside space-y-1 pl-1">
                     <li>点击底部"+ 添加家具"按钮，选择家具类型</li>
-                    <li>点击家具查看物品，点头部按钮编辑/移动/删除</li>
+                    <li>点击家具查看物品，点头部按钮编辑/移动/删除；也可长按家具（手机）或右键点家具（电脑）直接打开编辑</li>
                     <li>使用搜索栏查找跨场景物品</li>
                     <li>右上角切换上帝视角（2.5D模式）</li>
                   </ol>
@@ -233,7 +233,7 @@ export default function SceneManager({
                   <ul className="space-y-1 pl-1">
                     <li>自由视角：单指拖拽旋转，双指缩放</li>
                     <li>上帝视角：拖拽平移，双指缩放</li>
-                    <li>点击家具查看物品和操作按钮</li>
+                    <li>点击家具查看物品和操作按钮，长按家具可直接编辑</li>
                   </ul>
                 </div>
               </div>

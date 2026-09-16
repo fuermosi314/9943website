@@ -815,7 +815,9 @@ export default function SimpleNotePage() {
         <button
           onClick={() => { setEditingEntry(null); setShowEditor(true); }}
           className="md:hidden fixed z-30 w-14 h-14 rounded-full bg-gradient-to-r from-[#fb6400] to-[#ff8c00] text-white text-2xl flex items-center justify-center shadow-lg shadow-orange-500/30 hover:scale-110 active:scale-95 transition-all"
-          style={{ bottom: 'calc(1.5rem + env(safe-area-inset-bottom, 0px))', right: 'calc(1.5rem + env(safe-area-inset-right, 0px))' }}
+          // bottom 用 6rem 而非 1.5rem：让开右下角的全局客服气泡（bottom-6 right-6，z-40）。
+          // 本按钮是 z-30，若仍放在 1.5rem 会被气泡整个盖住，手机上无法新建条目。
+          style={{ bottom: 'calc(6rem + env(safe-area-inset-bottom, 0px))', right: 'calc(1.5rem + env(safe-area-inset-right, 0px))' }}
         >
           +
         </button>

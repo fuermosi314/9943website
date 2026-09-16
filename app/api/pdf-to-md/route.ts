@@ -43,7 +43,7 @@ async function callDeepSeek(chunk: string, totalChunks: number, index: number): 
   const apiKey = process.env.DEEPSEEK_API_KEY;
   const rawBase = process.env.DEEPSEEK_BASE_URL;
   const baseURL = rawBase && /^https?:\/\//i.test(rawBase) ? rawBase : 'https://api.deepseek.com';
-  const model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+  const model = process.env.DEEPSEEK_MODEL || 'deepseek-v4.1-flash';
 
   const res = await fetch(`${baseURL}/chat/completions`, {
     method: 'POST',

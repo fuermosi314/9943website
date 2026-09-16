@@ -80,6 +80,7 @@ export default function Scene3D() {
         onContextMenu={(e) => e.preventDefault()}
         onPointerUp={state.handlePointerUp}
         onPointerLeave={state.handlePointerLeave}
+        onPointerCancel={state.handlePointerLeave}
       />
 
       {/* Top bar: search + camera toggle + fullscreen + scene switcher */}
@@ -147,7 +148,7 @@ export default function Scene3D() {
       {/* Mobile hint - above bottom toolbar */}
       {isTouchDevice && !state.isMovingFurniture && (
         <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10 text-white/30 text-xs text-center pointer-events-none bg-black/30 px-3 py-1 rounded-full">
-          {state.cameraMode === 'topdown' ? '拖动屏幕平移视角 · 双指缩放' : '点击家具查看物品和编辑'}
+          {state.cameraMode === 'topdown' ? '拖动屏幕平移视角 · 双指缩放' : '点击家具看物品 · 长按家具可编辑'}
         </div>
       )}
 

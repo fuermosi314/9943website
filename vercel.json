@@ -2,6 +2,12 @@
   "functions": {
     "app/api/generate/route.ts": {
       "maxDuration": 30
+    },
+    "app/api/chat/route.ts": {
+      "maxDuration": 30
+    },
+    "app/api/pdf-to-md/route.ts": {
+      "maxDuration": 60
     }
   }
 }

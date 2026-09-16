@@ -72,6 +72,12 @@ export function useTianjigeState() {
   const pinchStartDist = useRef<number>(0);
   const pinchStartHeight = useRef<number>(0);
   const isPinching = useRef(false);
+  // 长按家具（触屏）打开编辑器的计时器
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
+  // 本次按下是否为主键（左键/触摸）。右键抬起时不能当成一次点击，
+  // 但右键/中键在上帝视角下仍要参与平移，所以不能直接在 pointerdown 里 return
+  const primaryButtonDown = useRef(true);
 
   // ── Undo / Redo refs ──────────────────────────────────────────────
   const historyRef = useRef<Scene[][]>([]);
@@ -303,6 +309,7 @@ export function useTianjigeState() {
       window.removeEventListener('resize', onResize);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
       cancelAnimationFrame(animFrameRef.current);
       controls.dispose();
       renderer.dispose();
@@ -536,32 +543,6 @@ export function useTianjigeState() {
     }
   }, []);
 
-  // ── Raycast helper ──────────────────────────────────────────────
-  const raycastFurniture = useCallback((clientX: number, clientY: number): Furniture | null => {
-    const container = containerRef.current;
-    const camera = cameraRef.current;
-    const scene = sceneRef.current;
-    if (!container || !camera || !scene) return null;
-
-    const rect = container.getBoundingClientRect();
-    pointer.current.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-    pointer.current.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-    raycaster.current.setFromCamera(pointer.current, camera);
-
-    const intersects = raycaster.current.intersectObjects(furnitureMeshesRef.current, true);
-
-    if (intersects.length > 0) {
-      let target = intersects[0].object as THREE.Object3D;
-      while (target && !target.userData?.furnitureId) target = target.parent!;
-      if (target?.userData?.furnitureId) {
-        const fid = target.userData.furnitureId as string;
-        const activeScene = scenes.find(s => s.id === activeSceneId);
-        return activeScene?.furniture.find(f => f.id === fid) || null;
-      }
-    }
-    return null;
-  }, [scenes, activeSceneId]);
-
   // ── Remove highlight helper ─────────────────────────────────────
   const removeHighlight = useCallback(() => {
     if (highlightTimeoutRef.current) {
@@ -594,41 +575,46 @@ export function useTianjigeState() {
     highlightedRef.current = target;
   }, []);
 
-  // ── Click handler ───────────────────────────────────────────────
-  const handleClick = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+  // ── Raycast: 屏幕坐标命中的家具 ─────────────────────────────────
+  const pickFurnitureAt = useCallback((clientX: number, clientY: number) => {
     const container = containerRef.current;
     const camera = cameraRef.current;
-    const scene = sceneRef.current;
-    if (!container || !camera || !scene) return;
+    if (!container || !camera || !sceneRef.current) return null;
 
     const rect = container.getBoundingClientRect();
-    pointer.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    pointer.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    pointer.current.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.current.y = -((clientY - rect.top) / rect.height) * 2 + 1;
     raycaster.current.setFromCamera(pointer.current, camera);
 
     const intersects = raycaster.current.intersectObjects(furnitureMeshesRef.current, true);
+    if (intersects.length === 0) return null;
+
+    let object = intersects[0].object as THREE.Object3D;
+    while (object && !object.userData?.furnitureId) object = object.parent!;
+    const fid = object?.userData?.furnitureId as string | undefined;
+    if (!fid) return null;
+
+    const activeScene = scenes.find(s => s.id === activeSceneId);
+    const furniture = activeScene?.furniture.find(f => f.id === fid);
+    return furniture ? { furniture, object } : null;
+  }, [scenes, activeSceneId]);
+
+  // ── Click handler ───────────────────────────────────────────────
+  const handleClick = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const hit = pickFurnitureAt(event.clientX, event.clientY);
 
     removeHighlight();
 
-    if (intersects.length > 0) {
-      let target = intersects[0].object as THREE.Object3D;
-      while (target && !target.userData?.furnitureId) target = target.parent!;
-      if (target?.userData?.furnitureId) {
-        const fid = target.userData.furnitureId as string;
-        const activeScene = scenes.find(s => s.id === activeSceneId);
-        const furniture = activeScene?.furniture.find(f => f.id === fid);
-        if (furniture) {
-          setSelectedFurniture(furniture);
-          setShowItemPanel(true);
-          addHighlight(target);
-        }
-      }
+    if (hit) {
+      setSelectedFurniture(hit.furniture);
+      setShowItemPanel(true);
+      addHighlight(hit.object);
     } else if (showItemPanel) {
       // Clicked empty space while panel is open → close panel
       setShowItemPanel(false);
       setSelectedFurniture(null);
     }
-  }, [scenes, activeSceneId, showItemPanel, removeHighlight, addHighlight]);
+  }, [pickFurnitureAt, showItemPanel, removeHighlight, addHighlight]);
 
   // ── Camera focus helper ──────────────────────────────────────────
   const focusOnPosition = useCallback((x: number, z: number) => {
@@ -1138,10 +1124,35 @@ export function useTianjigeState() {
     if (isPinching.current) return;
     if (showFurniturePicker || showFurnitureEditor || showItemEditor || showSceneManager || showStats) return;
 
+    // 右键/中键照常走完下面的流程 —— 上帝视角下 OrbitControls 被禁用，
+    // 平移完全依赖本函数写入的 pointerDownPos/previousPointerPos。
+    // 只是抬起时不能算作一次点击：右键单击改在 handlePointerUp 里处理
+    primaryButtonDown.current = e.button === 0;
+
     pointerDownPos.current = { x: e.clientX, y: e.clientY };
     previousPointerPos.current = { x: e.clientX, y: e.clientY };
     pointerMoved.current = false;
     draggingFurniture.current = null;
+    longPressFired.current = false;
+
+    // 长按家具（触屏）→ 直接打开家具编辑
+    if (e.pointerType === 'touch' && !isMovingFurniture) {
+      const { clientX, clientY } = e;
+      // 先清掉上一根手指可能留下的计时器：直接赋值会让旧计时器变成无法取消的孤儿，
+      // 第二根手指落下时 isPinching 尚未置位（touchstart 在 pointerdown 之后），会走到这里
+      if (longPressTimer.current) clearTimeout(longPressTimer.current);
+      longPressTimer.current = setTimeout(() => {
+        longPressTimer.current = null;
+        if (pointerMoved.current || isPinching.current || draggingFurniture.current) return;
+        const hit = pickFurnitureAt(clientX, clientY);
+        if (hit) {
+          longPressFired.current = true;
+          // 与 app/page.tsx 的长按手势保持一致，给一次触觉确认
+          if (navigator.vibrate) navigator.vibrate(50);
+          openFurnitureEditor(hit.furniture);
+        }
+      }, 500);
+    }
 
     // Move mode: check if clicking on the moving furniture to start drag
     if (isMovingFurniture && movingFurnitureRef.current) {
@@ -1181,7 +1192,7 @@ export function useTianjigeState() {
         // If not clicking on furniture, let controls handle the pointer for camera movement
       }
     }
-  }, [isMovingFurniture, showFurniturePicker, showFurnitureEditor, showItemEditor, showSceneManager, showStats]);
+  }, [isMovingFurniture, pickFurnitureAt, openFurnitureEditor, showFurniturePicker, showFurnitureEditor, showItemEditor, showSceneManager, showStats]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (isPinching.current) return;
@@ -1191,6 +1202,8 @@ export function useTianjigeState() {
       const dy = e.clientY - pointerDownPos.current.y;
       if (Math.sqrt(dx * dx + dy * dy) > 12) {
         pointerMoved.current = true;
+        // 手指移动即取消长按
+        if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
       }
     }
 
@@ -1276,21 +1289,35 @@ export function useTianjigeState() {
   const handlePointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (showFurniturePicker || showFurnitureEditor || showItemEditor || showSceneManager || showStats) return;
 
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+    const wasLongPress = longPressFired.current;
+    longPressFired.current = false;
+
     if (draggingFurniture.current) {
       commitDragPosition();
       // Re-enable controls after furniture drag (only in orbit mode — topdown keeps controls disabled)
       if (controlsRef.current && isMovingFurniture && cameraModeRef.current !== 'topdown') controlsRef.current.enabled = true;
-    } else if (!pointerMoved.current && !isMovingFurniture) {
-      handleClick(e);
+    } else if (!wasLongPress && !pointerMoved.current && !isMovingFurniture && pointerDownPos.current) {
+      if (primaryButtonDown.current) {
+        handleClick(e);
+      } else {
+        // 右键单击家具（未拖动）→ 直接打开编辑。
+        // 判断放在 pointerup 而不是 contextmenu：各平台派发 contextmenu 的时机不同
+        // （Linux 在按下、Windows/macOS 在抬起），只有抬起时才分得清「点击」和「右键拖拽平移」
+        const hit = pickFurnitureAt(e.clientX, e.clientY);
+        if (hit) openFurnitureEditor(hit.furniture);
+      }
     }
 
     pointerDownPos.current = null;
     previousPointerPos.current = null;
     pointerMoved.current = false;
-  }, [isMovingFurniture, handleClick, commitDragPosition, showFurniturePicker, showFurnitureEditor, showItemEditor, showSceneManager, showStats]);
+  }, [isMovingFurniture, handleClick, commitDragPosition, pickFurnitureAt, openFurnitureEditor, showFurniturePicker, showFurnitureEditor, showItemEditor, showSceneManager, showStats]);
 
   const handlePointerLeave = useCallback(() => {
     if (showFurniturePicker || showFurnitureEditor || showItemEditor || showSceneManager || showStats) return;
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+    longPressFired.current = false;
     if (draggingFurniture.current) {
       commitDragPosition();
     }
@@ -1330,6 +1357,11 @@ export function useTianjigeState() {
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length >= 2) {
         isPinching.current = true;
+        // 双指落下即取消长按，避免捏合缩放时误开编辑弹窗
+        if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
+        // 同时把这次手势标记为「非点击」：捏合期间 handlePointerMove 会因 isPinching 提前返回，
+        // pointerMoved 永远保持 false，两指抬起时会各自被 handlePointerUp 当成一次点击
+        pointerMoved.current = true;
         if (cameraModeRef.current === 'topdown') {
           pinchStartDist.current = getTouchDist(e.touches);
           pinchStartHeight.current = cameraRef.current?.position.y ?? 10;

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Noto_Sans_SC } from 'next/font/google';
+import ChatWidget from '@/components/ChatWidget';
 import './globals.css';
 
 const notoSansSC = Noto_Sans_SC({
@@ -29,7 +30,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN" className="scroll-smooth">
-      <body className={`${notoSansSC.className} antialiased`}>{children}</body>
+      <body className={`${notoSansSC.className} antialiased`}>
+        {children}
+        {/* 全站在线客服，右下角气泡 */}
+        <ChatWidget />
+      </body>
     </html>
   );
 }
