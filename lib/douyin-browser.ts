@@ -17,10 +17,15 @@ const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 const DETAIL_PATH = '/aweme/v1/web/aweme/detail/';
-// 等待 detail 响应的上限。
-// 实测：热实例约 10~14s；**冷启动首次调用**要把 chromium.br 解压到 /tmp（约 50MB），
-// 会明显更慢，实测出现过 25s 仍超时的情况，所以留到 40s。
-const DETAIL_TIMEOUT_MS = 40_000;
+// 单次尝试等待 detail 响应的上限
+const DETAIL_TIMEOUT_MS = 30_000;
+
+// 最多尝试几次。
+// 冷启动（实例刚起来、chromium 刚解压完）时，页面经常没能正常初始化：
+// 表现为 detail 直接返回 **403**（secsdk 签名没生成出来），
+// 或者页面被重定向到精选页（`/jingxuan?modal_id=...`）导致目标视频根本没被请求。
+// 这两种情况重试一次基本都能成功 —— 实测「第一次 403 超时失败，立刻重试 13s 成功」。
+const MAX_ATTEMPTS = 3;
 
 // 缓存：aweme_id → 无水印直链所需的 uri。
 // 不过期 —— 因为 aweme/v1/play 生成的直链是永久的（不带 token），
@@ -192,40 +197,63 @@ async function fetchDetailInBrowser(awemeId: string): Promise<Record<string, unk
     const cookieList = parseCookies(cookieHeader);
     await page.setCookie(...cookieList);
 
-    // 诊断用：记录 detail 接口被调用了几次、返回多大
+    const videoUrl = `https://www.douyin.com/video/${awemeId}`;
+    // 诊断用：累计所有尝试里 detail 接口的返回情况
     const seen: { status: number; size: number }[] = [];
 
-    // 事件驱动等待：detail 响应一到就结束，不做固定 sleep
-    let timedOut = false;
-    const detailPromise = new Promise<Record<string, unknown> | null>((resolve) => {
+    // 一次尝试：导航到视频页，事件驱动等 detail 响应
+    const attempt = async (): Promise<Record<string, unknown> | null> => {
+      let done = false;
+      let settle: (v: Record<string, unknown> | null) => void = () => {};
+      const finished = new Promise<Record<string, unknown> | null>((r) => { settle = r; });
       const timer = setTimeout(() => {
-        timedOut = true;
-        resolve(null);
+        if (!done) { done = true; settle(null); }
       }, DETAIL_TIMEOUT_MS);
-      page.on('response', async (r) => {
-        if (!r.url().includes(DETAIL_PATH)) return;
+
+      const onResponse = async (r: {
+        url: () => string;
+        status: () => number;
+        text: () => Promise<string>;
+      }) => {
+        if (done || !r.url().includes(DETAIL_PATH)) return;
         try {
           const body = await r.text();
           seen.push({ status: r.status(), size: body.length });
-          // 未登录时返回 200 空 body，据此判定失败
-          if (body.length < 1000) return;
+          // 403 = secsdk 签名没生成出来（页面尚未就绪）。
+          // 立刻结束这次尝试去重试，不要傻等到超时 —— 冷启动实测就是这么废掉 40 秒的。
+          if (r.status() >= 400) { done = true; clearTimeout(timer); settle(null); return; }
+          // 未登录时返回 200 空 body，同样快速失败
+          if (body.length < 1000) { done = true; clearTimeout(timer); settle(null); return; }
           const parsed = JSON.parse(body) as { aweme_detail?: Record<string, unknown> };
-          if (parsed.aweme_detail) {
-            clearTimeout(timer);
-            resolve(parsed.aweme_detail);
-          }
+          if (parsed.aweme_detail) { done = true; clearTimeout(timer); settle(parsed.aweme_detail); }
         } catch {
           // 忽略单次解析失败，继续等其他响应
         }
-      });
-    });
+      };
 
-    await page.goto(`https://www.douyin.com/video/${awemeId}`, {
-      waitUntil: 'domcontentloaded',
-      timeout: 30_000,
-    });
+      page.on('response', onResponse);
+      try {
+        await page.goto(videoUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+      } catch {
+        // 导航超时也交给下面的 finished 兜底
+      }
+      const result = await finished;
+      page.off('response', onResponse);
+      return result;
+    };
 
-    const result = await detailPromise;
+    let result: Record<string, unknown> | null = null;
+    let attemptsUsed = 0;
+    for (let i = 0; i < MAX_ATTEMPTS && !result; i++) {
+      attemptsUsed++;
+      result = await attempt();
+    }
+
+    // 只有真发生重试才记一行 —— 用于观察冷启动的实际频率。
+    // 若这行在日志里出现得很频繁，说明实例过冷是常态，该考虑保活方案了。
+    if (result && attemptsUsed > 1) {
+      console.error('[douyin] 重试后成功', JSON.stringify({ awemeId, attemptsUsed, detailCalls: seen }));
+    }
 
     if (!result) {
       // 失败的诊断信息：不打印 cookie 内容本身
@@ -235,9 +263,9 @@ async function fetchDetailInBrowser(awemeId: string): Promise<Record<string, unk
           awemeId,
           cookieLen: cookieHeader.length,
           cookieCount: cookieList.length,
+          attempts: MAX_ATTEMPTS,
           detailCalls: seen,
-          timedOut,
-          url: page.url().slice(0, 80),
+          finalUrl: page.url().slice(0, 80),
         }),
       );
     }

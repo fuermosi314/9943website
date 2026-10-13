@@ -10,7 +10,7 @@
       "maxDuration": 60
     },
     "app/api/video-parse/route.ts": {
-      "maxDuration": 120
+      "maxDuration": 180
     }
   }
 }
