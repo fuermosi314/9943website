@@ -14,7 +14,6 @@ const nextConfig = {
     // Next 15 才移到顶层 —— 升级时记得搬。
     outputFileTracingIncludes: {
       '/api/video-parse': ['./node_modules/@sparticuz/chromium/bin/**/*'],
-      '/api/video-parse/route': ['./node_modules/@sparticuz/chromium/bin/**/*'],
     },
   },
 

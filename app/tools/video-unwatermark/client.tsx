@@ -24,7 +24,6 @@ interface ParseResult {
 const PLATFORM_NAMES: Record<string, string> = {
   douyin: '抖音',
   bilibili: 'B站',
-  xigua: '西瓜视频',
   kuaishou: '快手',
   tiktok: 'TikTok',
   unknown: '未知平台',
@@ -164,7 +163,7 @@ export default function VideoUnwatermarkPage() {
         {/* 输入区域 */}
         <div className="glass-card p-6 mb-6 animate-fade-in">
           <h2 className="text-base font-semibold text-white mb-1">粘贴视频链接</h2>
-          <p className="text-sm text-white/40 mb-4">支持抖音、TikTok、B站、西瓜视频等平台的分享链接</p>
+          <p className="text-sm text-white/40 mb-4">支持抖音、TikTok、B站等平台的分享链接</p>
 
           <div className="flex gap-2">
             <div className="flex-1 relative">
@@ -450,7 +449,7 @@ export default function VideoUnwatermarkPage() {
             <li>• 打开抖音/TikTok/B站等APP，点击分享按钮，复制视频链接</li>
             <li>• 粘贴链接到上方输入框，点击解析</li>
             <li>• 解析成功后点击下载按钮保存无水印视频</li>
-            <li>• 目前支持：抖音、TikTok、B站、西瓜视频（服务端解析）</li>
+            <li>• 目前支持：抖音、TikTok、B站（服务端解析）</li>
             <li>• TikTok API 额度用完时自动切换浏览器直连模式，请确保代理已开启</li>
             <li>• 快手会自动推荐第三方工具</li>
             <li>• 请尊重原创作者版权，仅供个人学习参考使用</li>

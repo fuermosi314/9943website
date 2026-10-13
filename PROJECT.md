@@ -80,7 +80,7 @@
 │   ├── api/chat/
 │   │   └── route.ts         # AI 客服（注入 tools.ts + faq.ts，公开免登录接口）
 │   ├── api/video-parse/
-│   │   └── route.ts         # 视频去水印解析 API（抖音/B站/TikTok/西瓜）
+│   │   └── route.ts         # 视频去水印解析 API（抖音/B站/TikTok）
 │   ├── api/github-mirrors/
 │   │   └── route.ts         # GitHub 镜像列表 API
 │   ├── api/pdf-to-md/
@@ -162,7 +162,8 @@
 │   ├── download-db.ts       # 下载进度 IndexedDB（断点续传）
 │   ├── simple-note-db.ts    # 简单记 IndexedDB
 │   ├── tianjige-db.ts       # 天机阁 IndexedDB
-│   └── douyin-browser.ts    # 抖音解析（无头 Chromium + 登录 cookie + Upstash 缓存，见 7.4）
+│   ├── douyin-browser.ts    # 抖音解析（无头 Chromium + 登录 cookie + Upstash 缓存，见 7.4）
+│   └── upstash.ts           # Upstash REST 极简封装（缓存 + 跨实例限流，fail-open）
 ├── public/pdfjs/            # pdf.js worker（pdf.worker.min.mjs，本地化避免外部 CDN）
 ├── .env.local               # DeepSeek API 配置
 ├── tailwind.config.ts
@@ -307,9 +308,13 @@ const { isDragging, dropProps } = useFileUpload({
 
 ### 7.4 视频去水印 (video-unwatermark)
 - 混合模式：服务端解析 + 第三方工具 Fallback
-- **服务端解析**: 抖音、TikTok、B站、西瓜视频（通过各平台 API/页面数据直接解析）
+- **服务端解析**: 抖音、TikTok、B站（通过各平台 API/页面数据直接解析）
+- **已移除**: 西瓜视频（2026-10-13，使用率低且原实现走页面抓取、早已失效），相关代码/文案/FAQ 已一并删除
 - **Fallback**: 快手等不支持的平台跳转第三方工具
-- API 路由: `/api/video-parse`，支持 IP 速率限制（每 IP 每分钟 10 次）
+- API 路由: `/api/video-parse`，IP 速率限制每 IP 每分钟 10 次
+  - **走 Upstash 跨实例共享计数**（`lib/upstash.ts` 的 `checkSharedRateLimit`）。
+    原先是进程内 Map，Serverless 下每个实例各记一份、冷启动即清零，等于没有限流。
+    因为现在每次未命中缓存都要开 Chromium，抗滥用比之前重要得多。
 - **抖音解析流程**（2026-10 重写，原实现已完全失效）:
   ```
   分享链接 → aweme_id → 查缓存(Upstash) → 未命中则开无头 Chromium

@@ -13,6 +13,8 @@
 //   与 IP 无关（中国大陆 IP 与美国数据中心 IP 实测表现一致）。
 //   详见 PROJECT.md §7.4。
 
+import { redisPipeline } from './upstash';
+
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
@@ -91,36 +93,11 @@ export interface DouyinDetail {
   cover?: string;
 }
 
-// ===== Upstash REST（沿用 app/api/chat/route.ts 的原生 fetch 风格，不引依赖）=====
-const REDIS_TIMEOUT_MS = 3000;
-
-function redisEnv(): { url: string; token: string } | null {
-  const url = process.env.KV_REST_API_URL;
-  const token = process.env.KV_REST_API_TOKEN;
-  return url && token ? { url, token } : null;
-}
-
-async function redisCmd(commands: string[][]): Promise<{ result?: unknown }[] | null> {
-  const env = redisEnv();
-  if (!env) return null;
-  try {
-    const res = await fetch(`${env.url}/pipeline`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${env.token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(commands),
-      signal: AbortSignal.timeout(REDIS_TIMEOUT_MS),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return (await res.json()) as { result?: unknown }[];
-  } catch (err) {
-    // fail-open：缓存挂了就退回直接解析，不影响主流程
-    console.error('[douyin] 缓存不可用', err instanceof Error ? err.message : err);
-    return null;
-  }
-}
+// ===== 缓存读写（共享的 Upstash 封装，见 lib/upstash.ts）=====
+// fail-open：缓存挂了就退回直接解析，不影响主流程
 
 async function getCached(awemeId: string): Promise<DouyinDetail | null> {
-  const r = await redisCmd([['GET', CACHE_PREFIX + awemeId]]);
+  const r = await redisPipeline([['GET', CACHE_PREFIX + awemeId]]);
   const raw = r?.[0]?.result;
   if (typeof raw !== 'string') return null;
   try {
@@ -131,7 +108,7 @@ async function getCached(awemeId: string): Promise<DouyinDetail | null> {
 }
 
 async function setCached(awemeId: string, detail: DouyinDetail): Promise<void> {
-  await redisCmd([['SET', CACHE_PREFIX + awemeId, JSON.stringify(detail)]]);
+  await redisPipeline([['SET', CACHE_PREFIX + awemeId, JSON.stringify(detail)]]);
 }
 
 // 把 Cookie 头拆成 puppeteer 需要的 cookie 对象。

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveDouyin } from '@/lib/douyin-browser';
+import { checkSharedRateLimit } from '@/lib/upstash';
 
 interface ParseResult {
   success: boolean;
@@ -16,25 +17,14 @@ interface ParseResult {
   warning?: string;
 }
 
-// 简易 IP 速率限制（每 IP 每分钟最多 10 次）
-const rateLimit = new Map<string, { count: number; resetTime: number }>();
-
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const record = rateLimit.get(ip);
-  if (!record || now > record.resetTime) {
-    rateLimit.set(ip, { count: 1, resetTime: now + 60_000 });
-    return true;
-  }
-  if (record.count >= 10) return false;
-  record.count++;
-  return true;
-}
+// 每 IP 每分钟最多 10 次。
+// 走 Upstash 的跨实例共享计数（见 lib/upstash.ts）——
+// 原先是进程内 Map，Serverless 下每个实例各记一份、冷启动即清零，等于没有限流。
+const RATE_LIMIT_PER_MIN = 10;
 
 function detectPlatform(url: string): string | null {
   if (/douyin\.com|iesdouyin\.com/.test(url)) return 'douyin';
   if (/bilibili\.com|b23\.tv/.test(url)) return 'bilibili';
-  if (/ixigua\.com/.test(url)) return 'xigua';
   if (/kuaishou\.com|v\.kuaishou\.com/.test(url)) return 'kuaishou';
   if (/tiktok\.com/.test(url)) return 'tiktok';
   return null;
@@ -246,70 +236,6 @@ async function parseBilibili(url: string): Promise<ParseResult> {
       platform: 'bilibili',
       error: `解析失败: ${err instanceof Error ? err.message : '未知错误'}`,
       fallbackUrl: 'https://www.bilibili.com',
-    };
-  }
-}
-
-// ===== 西瓜视频解析 =====
-async function parseXigua(url: string): Promise<ParseResult> {
-  try {
-    // 西瓜视频的解析逻辑与抖音类似（同属字节跳动）
-    const resp = await fetch(url, {
-      headers: HEADERS,
-      redirect: 'manual',
-      signal: AbortSignal.timeout(10000),
-    });
-
-    let finalUrl = url;
-    if (resp.status >= 300 && resp.status < 400) {
-      finalUrl = resp.headers.get('location') || url;
-    }
-
-    // 尝试提取视频 ID
-    const idMatch = finalUrl.match(/\/video\/(\d+)/);
-    if (!idMatch) {
-      return {
-        success: false,
-        platform: 'xigua',
-        error: '无法解析西瓜视频链接',
-        fallbackUrl: 'https://www.ixigua.com',
-      };
-    }
-
-    const videoId = idMatch[1];
-
-    // 尝试获取页面内容提取视频 URL
-    const pageResp = await fetch(`https://www.ixigua.com/${videoId}`, {
-      headers: HEADERS,
-      signal: AbortSignal.timeout(10000),
-    });
-
-    const html = await pageResp.text();
-    const videoMatch = html.match(/"playUrl"\s*:\s*"([^"]+)"/);
-    const titleMatch = html.match(/"title"\s*:\s*"([^"]+)"/);
-
-    if (videoMatch) {
-      return {
-        success: true,
-        platform: 'xigua',
-        title: titleMatch?.[1] || '西瓜视频',
-        videoUrl: videoMatch[1].replace(/\\u002F/g, '/'),
-        fallbackUrl: 'https://www.ixigua.com',
-      };
-    }
-
-    return {
-      success: false,
-      platform: 'xigua',
-      error: '无法获取西瓜视频下载地址',
-      fallbackUrl: 'https://www.ixigua.com',
-    };
-  } catch (err) {
-    return {
-      success: false,
-      platform: 'xigua',
-      error: `解析失败: ${err instanceof Error ? err.message : '未知错误'}`,
-      fallbackUrl: 'https://www.ixigua.com',
     };
   }
 }
@@ -646,14 +572,15 @@ function extractTiktokFromHtml(html: string, videoId: string): ParseResult {
 const PARSERS: Record<string, (url: string, forceBrowser?: boolean) => Promise<ParseResult> | ParseResult> = {
   douyin: parseDouyin,
   bilibili: parseBilibili,
-  xigua: parseXigua,
   kuaishou: parseKuaishou,
   tiktok: parseTiktok,
 };
 
 export async function POST(request: NextRequest) {
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown';
-  if (!checkRateLimit(ip)) {
+  // fail-open：Redis 不可用时放行（宁可防护弱一点，也不让限流设施成为故障点）
+  const allowed = await checkSharedRateLimit(`video:${ip}`, RATE_LIMIT_PER_MIN);
+  if (allowed === false) {
     return NextResponse.json({ error: '请求过于频繁，请稍后再试' }, { status: 429 });
   }
 
@@ -689,8 +616,8 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         platform: 'unknown',
-        error: '不支持的平台，目前支持：抖音、TikTok、B站、西瓜视频',
-        supportedPlatforms: ['douyin', 'tiktok', 'bilibili', 'xigua', 'kuaishou'],
+        error: '不支持的平台，目前支持：抖音、TikTok、B站',
+        supportedPlatforms: ['douyin', 'tiktok', 'bilibili', 'kuaishou'],
       },
       { status: 400 }
     );

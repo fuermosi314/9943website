@@ -247,7 +247,7 @@ export const tools: Tool[] = [
   {
     id: 'video-unwatermark',
     name: '视频去水印',
-    description: '抖音/B站/西瓜视频无水印下载，支持多平台',
+    description: '抖音/B站/TikTok 无水印下载，支持多平台',
     icon: '🎬',
     category: 'life',
     path: '/tools/video-unwatermark',
