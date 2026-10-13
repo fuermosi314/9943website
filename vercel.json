@@ -8,6 +8,9 @@
     },
     "app/api/pdf-to-md/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/video-parse/route.ts": {
+      "maxDuration": 120
     }
   }
 }

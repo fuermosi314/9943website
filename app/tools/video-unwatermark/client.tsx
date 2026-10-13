@@ -202,6 +202,14 @@ export default function VideoUnwatermarkPage() {
             </button>
           </div>
 
+          {/* 解析中的提示：抖音首次解析要开无头浏览器，明显更慢，
+              不说清楚用户会以为卡死并反复点击（反而加剧并发） */}
+          {loading && (
+            <div className="mt-3 px-3 py-2 bg-[#fb6400]/10 border border-[#fb6400]/20 rounded-lg text-[#fb6400]/80 text-xs animate-fade-in">
+              ⏳ 抖音等平台首次解析需 10~20 秒，请耐心等待，不要重复点击
+            </div>
+          )}
+
           {/* 支持的平台标签 */}
           <div className="flex flex-wrap gap-2 mt-3">
             {Object.entries(PLATFORM_NAMES)

@@ -80,7 +80,7 @@
 │   ├── api/chat/
 │   │   └── route.ts         # AI 客服（注入 tools.ts + faq.ts，公开免登录接口）
 │   ├── api/video-parse/
-│   │   └── route.ts         # 视频去水印解析 API（抖音/B站/西瓜）
+│   │   └── route.ts         # 视频去水印解析 API（抖音/B站/TikTok/西瓜）
 │   ├── api/github-mirrors/
 │   │   └── route.ts         # GitHub 镜像列表 API
 │   ├── api/pdf-to-md/
@@ -161,7 +161,8 @@
 │   ├── consumables-db.ts    # 消耗品 IndexedDB
 │   ├── download-db.ts       # 下载进度 IndexedDB（断点续传）
 │   ├── simple-note-db.ts    # 简单记 IndexedDB
-│   └── tianjige-db.ts       # 天机阁 IndexedDB
+│   ├── tianjige-db.ts       # 天机阁 IndexedDB
+│   └── douyin-browser.ts    # 抖音解析（无头 Chromium + 登录 cookie + Upstash 缓存，见 7.4）
 ├── public/pdfjs/            # pdf.js worker（pdf.worker.min.mjs，本地化避免外部 CDN）
 ├── .env.local               # DeepSeek API 配置
 ├── tailwind.config.ts
@@ -309,7 +310,40 @@ const { isDragging, dropProps } = useFileUpload({
 - **服务端解析**: 抖音、TikTok、B站、西瓜视频（通过各平台 API/页面数据直接解析）
 - **Fallback**: 快手等不支持的平台跳转第三方工具
 - API 路由: `/api/video-parse`，支持 IP 速率限制（每 IP 每分钟 10 次）
-- 抖音解析流程: 多策略并行 → 短链重定向 + 移动端 UA → 提取 aweme_id → 调用详情 API / 分享页解析 → 获取无水印视频 URL
+- **抖音解析流程**（2026-10 重写，原实现已完全失效）:
+  ```
+  分享链接 → aweme_id → 查缓存(Upstash) → 未命中则开无头 Chromium
+    → 浏览器自己跑 secsdk 签名 → detail 接口返回数据 → 提取 play_addr.uri
+  最终直链: aweme/v1/play/?video_id={uri}&ratio=1080p&line=0
+  ```
+  - **实现**: `lib/douyin-browser.ts`（`resolveDouyin`）
+  - **环境变量**: `DY_COOKIES` —— 一个登录态抖音账号的 Cookie 头（单行格式）
+  - **必须用浏览器的原因**: `/aweme/v1/web/aweme/detail/` 受 secsdk 风控保护，
+    需要 `x-secsdk-web-signature` 签名，该签名实现只存在于浏览器运行时，
+    纯 HTTP 复现不了（实测带 a_bogus + 完整 cookie 仍返回 403 `Uifid Not Found`）
+  - **必须登录的原因**: 未登录时该接口返回 **200 空 body**（0 字节），**与 IP 无关**
+    （中国大陆 IP 与美国数据中心 IP 实测表现完全一致）
+  - **缓存**: `aweme_id → {uri, desc, author, cover}` 永久缓存，key 前缀 `douyin:uri:`
+    - 因为 `play` 直链**永久有效**（不带过期 token），一个视频只需解析一次
+    - 热门视频命中缓存后对抖音**零请求**，账号风险与站点访问量脱钩；缓存命中时响应为毫秒级
+    - 缓存不可用时 fail-open，降级为直接开浏览器（只慢，不坏）
+  - **并发闸门**: 单实例同时最多开 **2 个** 浏览器，多的排队（排队上限 30s）
+    - 起因：Vercel Hobby 每实例仅 2GB 内存，而一个 Chromium 占 200~400MB；
+      Fluid Compute 会把并发请求塞进同一实例，同时开多个浏览器会 OOM，
+      导致该实例上的**所有**请求一起失败
+    - 代价：排队请求变慢（实测并发 3 个视频时，第 3 个多等约 9 秒），换来"都能出结果"
+    - 闸门是**进程内**的，只约束单实例；扩容出的新实例各自计数（这反而有助于分摊压力）
+  - **前端提示**: 解析中显示「首次解析需 10~20 秒，请勿重复点击」，
+    避免用户以为卡死而反复点击、反而加剧并发
+  - **`ratio=1080p` 不能省**: 不带该参数只有 886kbps，带上才是 1157kbps 的最高画质
+  - **去水印原理**: 抖音同一响应里返回两个字段 —— `download_addr`（带 `/mps/logo/`，
+    有水印，即 App 里点"保存"拿到的）与 `play_addr`（干净无水印）。读后者即可
+  - **图文作品**: `aweme_type` 为图片时走 `images` 字段，图片地址会过期，**不进缓存**
+  - **历史包袱（已删除，勿回退）**: 原实现走 `iesdouyin.com/web/api/v2/aweme/iteminfo/`，
+    该接口已全球下线（返回 200 空响应）；原分享页 `_ROUTER_DATA.videoInfoRes` 路径也已失效
+    （分享页改为纯前端渲染，HTML 内不再含任何视频数据）
+  - **维护**: 唯一的周期性维护点是 cookie 续期（7～30 天），
+    见 `.claude/skills/douyin-cookie/SKILL.md`；**签名不需要维护**
 - TikTok 解析流程:
   - **模式 1 — 服务端 TikHub API**（默认）: 
     - 并行调用 TikHub V3 API（`fetch_one_video_by_share_url`）→ 优先提取 `download_no_watermark_addr`，降级到 `play_addr`（`need_set_token: false`，无 Referer 校验，不绑定 IP）
@@ -579,6 +613,10 @@ ALIST_TOKEN=
 # AI 客服的共享限流（Upstash for Redis，由 Vercel 集成自动注入）
 KV_REST_API_URL=https://xxx.upstash.io
 KV_REST_API_TOKEN=xxx
+
+# 抖音解析用的登录态 cookie（单行 Cookie 头格式，约 7~30 天过期）
+# 只在 Vercel 端配置，不必写进 .env.local；续期流程见 .claude/skills/douyin-cookie/
+DY_COOKIES=ttwid=...; sessionid=...; UIFID=...
 ```
 
 - **AI 服务商：阿里云百炼（Bailian）**，走它的 **OpenAI 兼容模式**端点
@@ -621,6 +659,7 @@ KV_REST_API_TOKEN=xxx
 | jspdf | 图片型 PDF 合成（md-to-html 工具「图片形式」PDF，运行时动态导入） |
 | pdfjs-dist | PDF 文本提取（md-to-html 的 PDF→MD 功能，运行时动态导入） |
 | react-image-crop | 交互式图片裁剪选区（image-crop 工具） |
+| @sparticuz/chromium + puppeteer-core | 抖音解析用的无头 Chromium（Serverless 专用构建，运行时动态导入，见 7.4） |
 | alist | 网盘解析服务（外部部署，非 npm 包） |
 
 ---

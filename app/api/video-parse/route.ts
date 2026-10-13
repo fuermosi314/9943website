@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveDouyin } from '@/lib/douyin-browser';
 
 interface ParseResult {
   success: boolean;
@@ -45,157 +46,86 @@ const HEADERS = {
   Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
 };
 
-// ===== 抖音解析（多策略并行） =====
-async function parseDouyin(url: string): Promise<ParseResult> {
-  // 两个策略并行执行，谁先成功用谁
-  const [strategy1, strategy2] = await Promise.allSettled([
-    // 策略 1: 移动端 UA 跟随重定向 → 提取 aweme_id → 调详情 API
-    (async (): Promise<ParseResult> => {
-      const resp = await fetch(url, {
-        headers: {
-          ...HEADERS,
-          'User-Agent':
-            'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
-        },
-        redirect: 'follow',
-        signal: AbortSignal.timeout(5000),
-      });
-      const finalUrl = resp.url || url;
-      const idMatch =
-        finalUrl.match(/\/video\/(\d+)/) ||
-        finalUrl.match(/\/note\/(\d+)/) ||
-        finalUrl.match(/aweme_id=(\d+)/) ||
-        finalUrl.match(/\/(\d{15,})/);
-      if (!idMatch) throw new Error('no aweme_id');
-      return fetchDouyinDetail(idMatch[1]);
-    })(),
-    // 策略 2: 手动重定向提取 aweme_id → 分享页解析
-    (async (): Promise<ParseResult> => {
-      const resp = await fetch(url, {
-        headers: HEADERS,
-        redirect: 'manual',
-        signal: AbortSignal.timeout(5000),
-      });
-      let finalUrl = url;
-      if (resp.status >= 300 && resp.status < 400) {
-        finalUrl = resp.headers.get('location') || url;
-      }
-      const idMatch =
-        finalUrl.match(/\/video\/(\d+)/) ||
-        finalUrl.match(/\/note\/(\d+)/) ||
-        finalUrl.match(/aweme_id=(\d+)/);
-      if (!idMatch) throw new Error('no aweme_id');
-      const awemeId = idMatch[1];
-      const shareUrl = `https://www.iesdouyin.com/share/note/${awemeId}/`;
-      const pageResp = await fetch(shareUrl, {
-        headers: {
-          ...HEADERS,
-          'User-Agent':
-            'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
-        },
-        signal: AbortSignal.timeout(5000),
-      });
-      const html = await pageResp.text();
-      const routerMatch = html.match(/window\._ROUTER_DATA\s*=\s*(\{[\s\S]*?\})\s*<\/script>/);
-      if (!routerMatch) throw new Error('no router data');
-      const routerData = JSON.parse(routerMatch[1]);
-      const pageData = routerData?.loaderData?.['note_(id)/page'];
-      const item = pageData?.videoInfoRes?.item_list?.[0];
-      if (!item) throw new Error('no item');
-      return extractDouyinItem(item);
-    })(),
-  ]);
+// ===== 抖音解析 =====
+//
+// 短链 → aweme_id → （缓存 / 无头浏览器）→ uri → 无水印直链
+//
+// 历史：原实现走 `iesdouyin.com/web/api/v2/aweme/iteminfo/`，该接口已下线
+// （全球范围返回 200 空响应）。替代接口需要登录态 + secsdk 签名，只能用
+// 浏览器跑。细节见 lib/douyin-browser.ts 顶部注释。
 
-  // 返回第一个成功的结果
-  for (const r of [strategy1, strategy2]) {
-    if (r.status === 'fulfilled' && r.value.success) return r.value;
-  }
-  // 如果有成功但没数据的，返回那个
-  for (const r of [strategy1, strategy2]) {
-    if (r.status === 'fulfilled') return r.value;
-  }
+const DOUYIN_SHARE_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1';
 
-  return {
-    success: false,
-    platform: 'douyin',
-    error: '服务端解析失败，建议使用第三方工具',
-    fallbackUrl: 'https://douyin.wtf/',
-  };
-}
+// 从分享链接（或整段分享文字）里解析出 aweme_id
+async function resolveDouyinAwemeId(url: string): Promise<string | null> {
+  // 先看链接本身是否已经带 id，省一次请求
+  const direct =
+    url.match(/\/video\/(\d+)/) || url.match(/\/note\/(\d+)/) || url.match(/aweme_id=(\d+)/);
+  if (direct) return direct[1];
 
-// 通过 aweme_id 调用详情 API
-async function fetchDouyinDetail(awemeId: string): Promise<ParseResult> {
   try {
-    const apiUrl = `https://www.iesdouyin.com/web/api/v2/aweme/iteminfo/?item_ids=${awemeId}`;
-    const resp = await fetch(apiUrl, {
-      headers: {
-        ...HEADERS,
-        Referer: 'https://www.douyin.com/',
-      },
-      signal: AbortSignal.timeout(5000),
+    const resp = await fetch(url, {
+      headers: { ...HEADERS, 'User-Agent': DOUYIN_SHARE_UA },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(8000),
     });
-    const data = await resp.json();
-    const item = data?.item_list?.[0];
-    if (item) {
-      return extractDouyinItem(item);
-    }
+    const finalUrl = resp.url || url;
+    const m =
+      finalUrl.match(/\/video\/(\d+)/) ||
+      finalUrl.match(/\/note\/(\d+)/) ||
+      finalUrl.match(/aweme_id=(\d+)/) ||
+      finalUrl.match(/\/(\d{15,})/);
+    return m ? m[1] : null;
   } catch {
-    // API 调用失败
+    return null;
   }
-  return { success: false, platform: 'douyin', error: 'API 解析失败' };
 }
 
-// 从抖音 item 中提取视频/图片信息
-function extractDouyinItem(item: Record<string, unknown>): ParseResult {
-  const desc = (item.desc as string) || '抖音作品';
-  const author = (item.author as Record<string, unknown>)?.nickname as string;
-  const awemeType = item.aweme_type as number;
+// 用视频内部 uri 换取无水印直链。
+// 该地址永久有效（不带过期 token），且不需要任何鉴权。
+function douyinPlayUrl(uri: string): string {
+  return `https://aweme.snssdk.com/aweme/v1/play/?video_id=${encodeURIComponent(uri)}&ratio=1080p&line=0`;
+}
 
-  // type 2 = 图文作品
-  if (awemeType === 2 && (item.images as unknown[])?.length > 0) {
-    const imageUrls = (item.images as Array<{ url_list?: string[] }>)
-      .map((img) => img.url_list?.[0])
-      .filter((u): u is string => !!u);
-    if (imageUrls.length > 0) {
-      return {
-        success: true,
-        platform: 'douyin',
-        type: 'images',
-        title: desc,
-        imageUrls,
-        coverUrl: imageUrls[0],
-        author,
-      };
-    }
+const DOUYIN_FALLBACK = {
+  success: false as const,
+  platform: 'douyin',
+  error: '解析失败，视频可能已删除或账号登录态已过期',
+  fallbackUrl: 'https://douyin.wtf/',
+};
+
+async function parseDouyin(url: string): Promise<ParseResult> {
+  const awemeId = await resolveDouyinAwemeId(url);
+  if (!awemeId) {
+    return { success: false, platform: 'douyin', error: '未能从链接中解析出视频 ID', fallbackUrl: 'https://douyin.wtf/' };
   }
 
-  // 视频作品
-  const video = item.video as Record<string, unknown> | undefined;
-  const playAddr = video?.play_addr as Record<string, unknown> | undefined;
-  const bitRate = video?.bit_rate as Array<{ play_addr?: { url_list?: string[] } }> | undefined;
-  const videoUrl =
-    (playAddr?.url_list as string[] | undefined)?.[0] ||
-    bitRate?.[0]?.play_addr?.url_list?.[0];
+  const detail = await resolveDouyin(awemeId);
+  if (!detail) return { ...DOUYIN_FALLBACK };
 
-  if (videoUrl) {
-    const cover = video?.cover as Record<string, unknown> | undefined;
-    const coverUrl = (cover?.url_list as string[] | undefined)?.[0];
+  if (detail.type === 'images' && detail.images?.length) {
     return {
       success: true,
       platform: 'douyin',
-      type: 'video',
-      title: desc,
-      videoUrl: videoUrl.replace('playwm', 'play'),
-      coverUrl,
-      author,
+      type: 'images',
+      title: detail.desc || '抖音作品',
+      imageUrls: detail.images,
+      coverUrl: detail.images[0],
+      author: detail.author,
     };
   }
 
+  if (!detail.uri) return { ...DOUYIN_FALLBACK };
+
   return {
-    success: false,
+    success: true,
     platform: 'douyin',
-    error: '无法获取下载地址',
-    fallbackUrl: 'https://douyin.wtf/',
+    type: 'video',
+    title: detail.desc || '抖音作品',
+    videoUrl: douyinPlayUrl(detail.uri),
+    coverUrl: detail.cover,
+    author: detail.author,
   };
 }
 
