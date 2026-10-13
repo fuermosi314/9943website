@@ -27,6 +27,11 @@ const DETAIL_TIMEOUT_MS = 30_000;
 // 这两种情况重试一次基本都能成功 —— 实测「第一次 403 超时失败，立刻重试 13s 成功」。
 const MAX_ATTEMPTS = 3;
 
+// 两次尝试之间的间隔。见 resolveDouyin 附近的说明：
+// 「浏览器实例坏掉」与「实例刚冷启动那几十秒未就绪」两种解释证据上分不开，
+// 换新浏览器 + 留间隔同时覆盖两者。
+const ATTEMPT_GAP_MS = 2_000;
+
 // 缓存：aweme_id → 无水印直链所需的 uri。
 // 不过期 —— 因为 aweme/v1/play 生成的直链是永久的（不带 token），
 // 一个视频只需解析一次。热门视频命中后对抖音零请求，账号风险与访问量脱钩。
@@ -184,25 +189,33 @@ async function fetchDetailInBrowser(awemeId: string): Promise<Record<string, unk
   const chromium = (chromiumMod as { default?: unknown }).default ?? chromiumMod;
   const puppeteer = await import('puppeteer-core');
 
-  const browser = await puppeteer.launch({
-    args: [...(chromium as { args: string[] }).args],
-    defaultViewport: { width: 1600, height: 900 },
-    executablePath: await (chromium as { executablePath: () => Promise<string> }).executablePath(),
-    headless: true,
-  });
+  const executablePath = await (chromium as { executablePath: () => Promise<string> }).executablePath();
+  const launchArgs = [...(chromium as { args: string[] }).args];
 
-  try {
-    const page = await browser.newPage();
-    await page.setUserAgent(UA);
-    const cookieList = parseCookies(cookieHeader);
-    await page.setCookie(...cookieList);
+  const cookieList = parseCookies(cookieHeader);
+  const videoUrl = `https://www.douyin.com/video/${awemeId}`;
+  // 诊断用：累计所有尝试里 detail 接口的返回情况
+  const seen: { status: number; size: number }[] = [];
+  // 诊断用：最后一次尝试结束时页面停在哪个 URL（用于识别被重定向的情况）
+  let lastUrl = '';
 
-    const videoUrl = `https://www.douyin.com/video/${awemeId}`;
-    // 诊断用：累计所有尝试里 detail 接口的返回情况
-    const seen: { status: number; size: number }[] = [];
-
-    // 一次尝试：导航到视频页，事件驱动等 detail 响应
-    const attempt = async (): Promise<Record<string, unknown> | null> => {
+  // 一次尝试 = 一个全新的浏览器实例。
+  //
+  // 为什么必须换浏览器而不是复用：实测同一次请求里连续 3 次导航全部返回 403
+  // （secsdk 在这个实例里根本没初始化成功，页面发出的请求全都没签名），
+  // 而紧接着**新的一次请求**立刻成功。也就是说坏掉的是**浏览器实例本身**，
+  // 在原实例里重试多少次都是同一个坏状态 —— 快速重试反而是把错误重复了三遍。
+  const attempt = async (): Promise<Record<string, unknown> | null> => {
+    const browser = await puppeteer.launch({
+      args: launchArgs,
+      defaultViewport: { width: 1600, height: 900 },
+      executablePath,
+      headless: true,
+    });
+    try {
+      const page = await browser.newPage();
+      await page.setUserAgent(UA);
+      await page.setCookie(...cookieList);
       let done = false;
       let settle: (v: Record<string, unknown> | null) => void = () => {};
       const finished = new Promise<Record<string, unknown> | null>((r) => { settle = r; });
@@ -219,8 +232,7 @@ async function fetchDetailInBrowser(awemeId: string): Promise<Record<string, unk
         try {
           const body = await r.text();
           seen.push({ status: r.status(), size: body.length });
-          // 403 = secsdk 签名没生成出来（页面尚未就绪）。
-          // 立刻结束这次尝试去重试，不要傻等到超时 —— 冷启动实测就是这么废掉 40 秒的。
+          // 403 = secsdk 没初始化成功，这次尝试已经没救了，立刻收工去开新浏览器
           if (r.status() >= 400) { done = true; clearTimeout(timer); settle(null); return; }
           // 未登录时返回 200 空 body，同样快速失败
           if (body.length < 1000) { done = true; clearTimeout(timer); settle(null); return; }
@@ -237,42 +249,54 @@ async function fetchDetailInBrowser(awemeId: string): Promise<Record<string, unk
       } catch {
         // 导航超时也交给下面的 finished 兜底
       }
-      const result = await finished;
+      const attemptResult = await finished;
+      lastUrl = page.url().slice(0, 80);
       page.off('response', onResponse);
-      return result;
-    };
-
-    let result: Record<string, unknown> | null = null;
-    let attemptsUsed = 0;
-    for (let i = 0; i < MAX_ATTEMPTS && !result; i++) {
-      attemptsUsed++;
-      result = await attempt();
+      return attemptResult;
+    } finally {
+      await browser.close().catch(() => {});
     }
+  };
 
-    // 只有真发生重试才记一行 —— 用于观察冷启动的实际频率。
-    // 若这行在日志里出现得很频繁，说明实例过冷是常态，该考虑保活方案了。
-    if (result && attemptsUsed > 1) {
-      console.error('[douyin] 重试后成功', JSON.stringify({ awemeId, attemptsUsed, detailCalls: seen }));
-    }
-
-    if (!result) {
-      // 失败的诊断信息：不打印 cookie 内容本身
-      console.error(
-        '[douyin] 未取到 detail',
-        JSON.stringify({
-          awemeId,
-          cookieLen: cookieHeader.length,
-          cookieCount: cookieList.length,
-          attempts: MAX_ATTEMPTS,
-          detailCalls: seen,
-          finalUrl: page.url().slice(0, 80),
-        }),
-      );
-    }
-    return result;
-  } finally {
-    await browser.close().catch(() => {});
+  let result: Record<string, unknown> | null = null;
+  let attemptsUsed = 0;
+  const attemptMs: number[] = [];
+  for (let i = 0; i < MAX_ATTEMPTS && !result; i++) {
+    // 两次尝试之间留一点间隔。
+    // 冷启动失败的两种可能解释（浏览器实例坏掉 / 实例刚起来那几十秒未就绪）
+    // 证据上分不开，所以两个都防：换新浏览器 + 让时间往前走一点。
+    if (i > 0) await new Promise((r) => setTimeout(r, ATTEMPT_GAP_MS));
+    attemptsUsed++;
+    const t = Date.now();
+    result = await attempt();
+    attemptMs.push(Date.now() - t);
   }
+
+  // 只有真发生重试才记一行 —— 用于观察冷启动的实际频率。
+  // 若这行经常出现，说明实例过冷是常态，该考虑保活方案了。
+  if (result && attemptsUsed > 1) {
+    console.error(
+      '[douyin] 重试后成功',
+      JSON.stringify({ awemeId, attemptsUsed, attemptMs, detailCalls: seen }),
+    );
+  }
+
+  if (!result) {
+    // 失败的诊断信息：不打印 cookie 内容本身
+    console.error(
+      '[douyin] 未取到 detail',
+      JSON.stringify({
+        awemeId,
+        cookieLen: cookieHeader.length,
+        cookieCount: cookieList.length,
+        attempts: MAX_ATTEMPTS,
+        attemptMs,
+        detailCalls: seen,
+        finalUrl: lastUrl,
+      }),
+    );
+  }
+  return result;
 }
 
 /**
