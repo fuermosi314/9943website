@@ -17,7 +17,7 @@
 - **技术栈**: Next.js 14 + React 18 + Tailwind CSS 3 + TypeScript
 - **项目路径**: `/home/huang/claude/vs/work/9943小工具大全`
 - **部署计划**: 本地开发 → Git → Vercel 发布
-- **当前工具数量**: 57 个（自动统计自 `lib/tools.ts`）
+- **当前工具数量**: 58 个（自动统计自 `lib/tools.ts`）
 
 ---
 
@@ -91,6 +91,8 @@
 │   │   ├── download/route.ts # 分片下载代理
 │   │   ├── aria2-release/route.ts # aria2 最新版本信息
 │   │   └── idm-release/route.ts # IDM 最新版本信息（抓官网 exe 链接）
+│   ├── api/voidtools-release/
+│   │   └── route.ts         # Everything 最新稳定版版本号（抓官网）
 │   └── tools/
 │       ├── bmi/             # BMI 计算器
 │       ├── calculator/      # 专业计算器
@@ -123,6 +125,7 @@
 │       ├── tianjige/        # 天机阁（3D 家居收纳）
 │       ├── treesize/        # TreeSize 下载
 │       ├── unit-converter/  # 单位换算
+│       ├── uuremote/        # 网易UU远程 下载
 │       ├── video-unwatermark/ # 视频去水印
 │       ├── wheel/           # 大转盘
 │       └── word-count/      # 字数统计
@@ -145,7 +148,7 @@
 │   └── tianjige/            # [天机阁] 3D 相关组件
 ├── lib/
 │   ├── tools.ts             # 工具数据定义 + 分类 + 搜索
-│   ├── faq.ts               # 客服问答知识库（133 条，供 AI 客服的 system prompt 使用）
+│   ├── faq.ts               # 客服问答知识库（134 条，供 AI 客服的 system prompt 使用）
 │   ├── site-features.ts     # 网站工具的功能特点（详情页 + AI 客服知识源）
 │   ├── types.ts             # TypeScript 类型
 │   ├── prompts.ts           # DeepSeek 提示词模板
@@ -185,7 +188,7 @@
 | `dev` | 开发工具 | 🔧 | 在线编译器导航 |
 | `life` | 生活工具 | 🎯 | BMI 计算器、单位换算、专业计算器、视频去水印、简单记、耗知通、高速下载、天机阁 |
 | `entertainment` | 娱乐工具 | 🎮 | 大转盘、二维码生成、随机数生成器、爆款开头生成器、毁灭地球的电磁炮 |
-| `website` | 网站工具 | 🌐 | Excalidraw, Carbon, JSON 格式化, CodeSandbox, Photopea, KMS 激活, PDF24 Tools, S7 资源库, FMHY, 便民查询网, 爱看机器人, Steam 下载, 图吧工具箱, Image Splitter, 柒夜导航, PhWalls, 纸由我 PaperMe, VirusTotal, Learn Git Branching, Watt Toolkit, AI Short, 云游君的厨房, 菜鸟教程, Human Benchmark, Everything 下载, TreeSize 下载, VALORANT 灵敏度生成器, Steam 租号 |
+| `website` | 网站工具 | 🌐 | Excalidraw, Carbon, JSON 格式化, CodeSandbox, Photopea, KMS 激活, PDF24 Tools, S7 资源库, FMHY, 便民查询网, 爱看机器人, Steam 下载, 图吧工具箱, Image Splitter, 柒夜导航, PhWalls, 纸由我 PaperMe, VirusTotal, Learn Git Branching, Watt Toolkit, AI Short, 云游君的厨房, 菜鸟教程, Human Benchmark, Everything 下载, TreeSize 下载, VALORANT 灵敏度生成器, Steam 租号, 网易UU远程 下载 |
 | `software` | 软件工具 | 💿 | AI智能桌面整理大师、智能弹幕 |
 
 ### 收藏和历史功能
@@ -413,8 +416,8 @@ const { isDragging, dropProps } = useFileUpload({
 - **网盘链接支持**: 自动识别夸克/阿里/百度/115/天翼/迅雷网盘分享链接
 - **解析后端**: 使用 alist 开源项目作为网盘解析服务（需自行部署）
 - **API 路由**: `/api/fast-download/parse` — 网盘链接解析为直链
-- **API 路由**: `/api/fast-download/aria2-release` — 获取 aria2 最新版本信息
-- **API 路由**: `/api/fast-download/idm-release` — 获取 IDM 最新版本与下载链接（抓官网 exe 链接）
+- **API 路由**: `/api/fast-download/aria2-release` — 获取 aria2 最新版本信息（`revalidate = 3600`，避免被静态冻结）
+- **API 路由**: `/api/fast-download/idm-release` — 获取 IDM 最新版本与下载链接（抓官网 exe 链接，`revalidate = 3600`）
 - **IDM 通道**: 支持调用本机 IDM 下载（`idm://` 协议），并提供 IDM 安装包的 8 线程分片下载
 - **环境变量**: `ALIST_URL`（alist 服务地址）、`ALIST_TOKEN`（可选认证令牌）
 - 百度网盘、115网盘支持提取码输入
@@ -548,13 +551,13 @@ const { isDragging, dropProps } = useFileUpload({
 
 ### 7.16 AI智能桌面整理大师 (desktop-cleaner)
 - 软件工具分类，Windows 桌面程序（非网页工具）
-- 从 GitHub `fuermosi314/apps` 的 latest release 自动获取版本号（请求失败时兜底 v2.0.0）
+- 从 GitHub `fuermosi314/apps` 的 latest release 自动获取版本号（请求失败 / 403 限流时兜底 v2.0.1 的 `AI-clean-master.2.0.0.exe`）
 - 规格标注：Windows 64位 · 97MB
 - 「⚡ 高速下载」按钮跳转 `/tools/fast-download?url=<release 地址>`，不在本站直接托管安装包
 
 ### 7.17 智能弹幕 (smart-danmu)
 - 软件工具分类，Windows 桌面弹幕助手（非网页工具）
-- 从 GitHub `fuermosi314/apps` 的 latest release 自动获取版本号（请求失败时兜底 v2.0.1）
+- 从 GitHub `fuermosi314/apps` 的 latest release 自动获取版本号（请求失败 / 403 限流时兜底 v2.0.1）
   - 注意：与 desktop-cleaner 读的是**同一个仓库**，所以两个页面正常显示同一个版本号
 - 规格标注：Windows 64位 · 75MB
 - 「⚡ 高速下载」按钮跳转 `/tools/fast-download?url=<release 地址>`
@@ -571,6 +574,31 @@ const { isDragging, dropProps } = useFileUpload({
 - **若将来要补全这个工具**：`pdfjs-dist` 项目里已经有了（`lib/pdf2md.ts` 在用），
   把提取出来的文字按页灌进 docx/xlsx/pptx 即可；补全后要同步改上述两处文案
 - 遗留：`client.tsx` 里的 `pageContents` 和 `header` 两个变量构建后从未被使用，是死代码
+
+### 7.19 网易UU远程 下载 (uuremote)
+- 网站工具，归类于「网站工具」分类，站内下载页（非跳转）
+- 网易 UU 远程客户端下载，官网 https://uuyc.163.com/
+- **平台入口**: Windows / macOS / Android / Android TV 直连网易官方下载接口，iOS 跳转 App Store
+  - Windows: `https://api.nrd.nie.163.com/api/v1/release/dl/1?channel=gwqd`
+  - macOS: `https://api.nrd.nie.163.com/api/v1/release/dl/4?channel=gwqd`
+  - Android: `https://api.nrd.nie.163.com/api/v1/release/dl/2?channel=gwqd`
+  - Android TV: `https://api.nrd.nie.163.com/api/v1/release/dl/5?channel=TV_gwqd`
+  - iOS: App Store（id1642306791）
+- **版本实时性**: 以上接口是官方固定的下载跳转地址，每次请求 302 到当时的最新安装包，
+  不写死版本号；页面不展示版本号（与 Steam 下载页一致）
+- 图标 `public/uuyc.jpg` 取自官网
+
+### 7.20 下载链接实时性
+各下载页的链接策略（2026-10-23 审计）：
+- **实时最新**: Steam（官方 CDN 固定别名，与官网 about 页同文件）、网易UU远程（官方 302 接口）、
+  TreeSize 便携版与安装版（官网无版本号 URL）、IDM（抓官网页面）、aria2（GitHub latest，API 每小时刷新）
+- **自动获取**: Everything（`/api/voidtools-release` 抓官网 1.4.x 稳定版，每小时刷新，兜底 1.4.1.1032）、
+  Watt Toolkit（浏览器直接请求 Gitee latest，兜底 3.1.0）、
+  desktop-cleaner / smart-danmu（GitHub latest，非 2xx 时走内置兜底）
+- **注意**: Everything 两个「便携版」指向 `.zip` 便携包，不是 `.Lite-Setup.exe`（后者是精简安装版）
+- **注意**: TreeSize 安装版必须用 `TreeSizeFreeSetup.exe`（官网当前主安装包）；
+  `TreeSizeFreeSetup_x86.exe` 是 2021 年的 32 位旧版
+- **注意**: 下载类 API 路由默认会在构建时被静态化，必须显式设置 `revalidate` 才能定期刷新
 
 ---
 
@@ -722,7 +750,7 @@ lang: 'zh-CN'
 - [x] **【最高优先级】网站智能客服（AI 问答助手）** —— **已完成并端到端实测**
   - **需求**：网站右下角提供 AI 客服，访客可就"有哪些工具、怎么用、为什么失败"提问，AI 依据站内知识作答
   - **技术方案（已论证，不引入外部平台）**：不使用 Coze / 毕昇等平台，直接在现有项目内实现
-    - [x] `lib/faq.ts` — 问答文档（133 条）
+    - [x] `lib/faq.ts` — 问答文档（134 条）
     - [x] `app/api/chat/route.ts` — 调用 DeepSeek，注入知识
     - [x] `components/ChatWidget.tsx` — 右下角聊天气泡，挂载于 `app/layout.tsx`
   - **知识来源（三份，全部全量注入 system prompt）**：
@@ -742,8 +770,8 @@ lang: 'zh-CN'
     `app/tools/site/[slug]/client.tsx` 里，那是个带 `'use client'` 的模块 ——
     服务端路由 import 它拿到的是客户端引用，读不到实际的值。要同时喂给详情页和客服，
     只能抽到 `lib/site-features.ts`。**新增外部网站时，功能特点加在这个文件里**
-  - **知识体积（2026-09-16 第三轮核查后实测）**：工具目录 5,184 字符 + FAQ 17,679 字符 +
-    外部网站功能特点 2,511 字符 = **25,503 字符**（本轮起点 23,191）。
+  - **知识体积（2026-10-23 新增网易UU远程并修复下载链接后实测）**：工具目录 5,285 字符 + FAQ 17,924 字符 +
+    外部网站功能特点 2,524 字符 = **25,733 字符**（上一轮 2026-09-16 为 25,503）。
     **注意这个数字极易过时**：每次增删 FAQ 条目都要重算，见下方「知识体积维护」
   - **关键结论**：**不需要向量数据库 / RAG**；全量注入 system prompt 反而更准（不会漏召），成本极低
   - **system prompt 的 12 条硬性规则**（`app/api/chat/route.ts`）：只依据资料回答、禁止编造；

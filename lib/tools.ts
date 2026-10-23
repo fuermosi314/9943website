@@ -325,6 +325,16 @@ export const tools: Tool[] = [
     keywords: ['steam加速', 'steam工具', 'steam社区修复', 'steam商店加速', 'watt toolkit', 'steam++', '令牌管理'],
   },
   {
+    id: 'uuremote',
+    name: '网易UU远程 下载',
+    description: '免费远程控制软件，真 4K 高清，支持文件传输和远程开机',
+    icon: '/uuyc.jpg',
+    category: 'website',
+    path: '/tools/uuremote',
+    tags: ['远程控制', '远程桌面', 'uu远程', '网易', '下载', '远程办公'],
+    keywords: ['远程控制', '远程桌面', 'uu远程', '网易uu远程', '远程开机', '文件传输', '无线副屏'],
+  },
+  {
     id: 'tbtool',
     name: '图吧工具箱',
     description: 'DIY 爱好者硬件检测工具合集，开源免费无捆绑',

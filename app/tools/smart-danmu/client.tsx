@@ -6,7 +6,8 @@ import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
 
 const GITHUB_REPO = 'fuermosi314/apps';
-const ASSET_NAME = 'smart-danmu.zip'; // 默认文件名，用于匹配
+const FALLBACK_URL = `https://github.com/${GITHUB_REPO}/releases/download/v2.0.1/smart-danmu.zip`;
+const FALLBACK_VERSION = 'v2.0.1';
 
 const features = [
   { icon: '🤖', title: 'AI 智能生成', desc: '视觉AI分析屏幕内容，自动生成弹幕' },
@@ -18,12 +19,15 @@ const features = [
 export default function SmartDanmuPage() {
   useToolHistory('smart-danmu');
   const router = useRouter();
-  const [downloadUrl, setDownloadUrl] = useState('');
-  const [version, setVersion] = useState('');
+  const [downloadUrl, setDownloadUrl] = useState(FALLBACK_URL);
+  const [version, setVersion] = useState(FALLBACK_VERSION);
 
   useEffect(() => {
     fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error('获取版本失败');
+        return res.json();
+      })
       .then(data => {
         const asset = data.assets?.find((a: any) => a.name.includes('danmu') || a.name.includes('.zip'));
         if (asset) {
@@ -32,9 +36,7 @@ export default function SmartDanmuPage() {
         }
       })
       .catch(() => {
-        // fallback
-        setDownloadUrl(`https://github.com/${GITHUB_REPO}/releases/download/v2.0.1/smart-danmu.zip`);
-        setVersion('v2.0.1');
+        // 保留内置的最新 release 链接兜底
       });
   }, []);
 

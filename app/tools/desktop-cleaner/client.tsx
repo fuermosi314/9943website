@@ -6,7 +6,8 @@ import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
 
 const GITHUB_REPO = 'fuermosi314/apps';
-const ASSET_NAME = 'AI.Setup.2.0.0.exe'; // 默认文件名，用于匹配
+const FALLBACK_URL = `https://github.com/${GITHUB_REPO}/releases/download/v2.0.1/AI-clean-master.2.0.0.exe`;
+const FALLBACK_VERSION = 'v2.0.1';
 
 const features = [
   { icon: '🤖', title: 'AI 智能分析', desc: '神经网络驱动的桌面布局优化算法' },
@@ -18,12 +19,15 @@ const features = [
 export default function DesktopCleanerPage() {
   useToolHistory('desktop-cleaner');
   const router = useRouter();
-  const [downloadUrl, setDownloadUrl] = useState('');
-  const [version, setVersion] = useState('');
+  const [downloadUrl, setDownloadUrl] = useState(FALLBACK_URL);
+  const [version, setVersion] = useState(FALLBACK_VERSION);
 
   useEffect(() => {
     fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error('获取版本失败');
+        return res.json();
+      })
       .then(data => {
         const asset = data.assets?.find((a: any) => a.name.includes('Setup') || a.name.includes('.exe'));
         if (asset) {
@@ -32,9 +36,7 @@ export default function DesktopCleanerPage() {
         }
       })
       .catch(() => {
-        // fallback
-        setDownloadUrl(`https://github.com/${GITHUB_REPO}/releases/download/v2.0.0/AI.Setup.2.0.0.exe`);
-        setVersion('v2.0.0');
+        // 保留内置的最新 release 链接兜底
       });
   }, []);
 
@@ -61,7 +63,7 @@ export default function DesktopCleanerPage() {
             🧹
           </div>
           <h2 className="text-2xl font-bold text-white mb-2">AI智能桌面整理大师</h2>
-          <p className="text-white/40 text-sm">{version || 'v2.0.0'} · Windows 64位 · 97MB</p>
+          <p className="text-white/40 text-sm">{version} · Windows 64位 · 97MB</p>
         </div>
 
         {/* Download Button */}

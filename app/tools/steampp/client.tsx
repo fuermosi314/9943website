@@ -1,10 +1,11 @@
 'use client';
 import { useToolHistory } from '@/lib/useToolHistory';
+import { useEffect, useState } from 'react';
 
 import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
 
-const downloads = [
+const fallbackDownloads = [
   {
     name: 'Windows x64',
     icon: '🪟',
@@ -37,6 +38,31 @@ const downloads = [
 
 export default function SteamppPage() {
   useToolHistory('steampp');
+  const [downloads, setDownloads] = useState(fallbackDownloads);
+
+  useEffect(() => {
+    fetch('https://gitee.com/api/v5/repos/rmbgame/SteamTools/releases/latest')
+      .then((res) => {
+        if (!res.ok) throw new Error('获取版本失败');
+        return res.json();
+      })
+      .then((data) => {
+        const exe = data.assets?.find((a: any) => a.name.includes('win_x64') && a.name.endsWith('.exe'));
+        const zip = data.assets?.find((a: any) => a.name.includes('win_x64') && a.name.endsWith('.7z'));
+        if (!exe && !zip) return;
+        setDownloads((prev) =>
+          prev.map((d) => {
+            if (d.name === 'Windows x64' && exe) return { ...d, url: exe.browser_download_url };
+            if (d.name === 'Windows x64 便携版' && zip) return { ...d, url: zip.browser_download_url };
+            return d;
+          })
+        );
+      })
+      .catch(() => {
+        // 保留内置的当前版本链接兜底
+      });
+  }, []);
+
   return (
     <div className="min-h-screen relative z-10">
       {/* Header */}

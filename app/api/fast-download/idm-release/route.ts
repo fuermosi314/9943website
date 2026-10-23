@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 
+// 每小时重新抓取一次最新版本，避免构建时被静态冻结
+export const revalidate = 3600;
+
 export async function GET() {
   try {
     const resp = await fetch('https://www.internetdownloadmanager.com/download.html', {
@@ -20,9 +23,11 @@ export async function GET() {
     }
 
     const url = match[0];
-    // 从文件名提取版本号
-    const versionMatch = url.match(/idm(\d+)build(\d+)/);
-    const version = versionMatch ? `${versionMatch[1]}.${versionMatch[2]}` : 'latest';
+    // 从文件名提取版本号，如 idman643build16.exe → 6.43
+    const versionMatch = url.match(/idman?(\d+)build(\d+)/i);
+    const version = versionMatch
+      ? `${versionMatch[1][0]}.${versionMatch[1].slice(1)}`
+      : 'latest';
 
     return NextResponse.json({ url, version });
   } catch (err) {

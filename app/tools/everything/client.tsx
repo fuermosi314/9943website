@@ -1,42 +1,65 @@
 'use client';
 import { useToolHistory } from '@/lib/useToolHistory';
+import { useEffect, useState } from 'react';
 
 import BackButton from '@/components/BackButton';
 import FullscreenButton from '@/components/FullscreenButton';
 
-const downloads = [
+const FALLBACK_VERSION = '1.4.1.1032';
+
+const files = [
   {
     name: 'x64 安装版',
     icon: '🖥️',
-    url: 'https://www.voidtools.com/Everything-1.4.1.1032.x64-Setup.exe',
+    file: 'x64-Setup.exe',
     desc: '64 位系统 · 完整功能 · 推荐',
     color: 'from-orange-500 to-orange-600',
   },
   {
     name: 'x86 安装版',
     icon: '💻',
-    url: 'https://www.voidtools.com/Everything-1.4.1.1032.x86-Setup.exe',
+    file: 'x86-Setup.exe',
     desc: '32 位系统',
     color: 'from-blue-500 to-blue-600',
   },
   {
     name: 'x64 便携版',
     icon: '📦',
-    url: 'https://www.voidtools.com/Everything-1.4.1.1032.x64.Lite-Setup.exe',
-    desc: '64 位 · 精简版，体积更小',
+    file: 'x64.zip',
+    desc: '64 位 · zip 解压即用',
     color: 'from-green-500 to-green-600',
   },
   {
     name: 'x86 便携版',
     icon: '📦',
-    url: 'https://www.voidtools.com/Everything-1.4.1.1032.x86.Lite-Setup.exe',
-    desc: '32 位 · 精简版',
+    file: 'x86.zip',
+    desc: '32 位 · zip 解压即用',
     color: 'from-purple-500 to-purple-600',
   },
 ];
 
 export default function EverythingPage() {
   useToolHistory('everything');
+  const [version, setVersion] = useState(FALLBACK_VERSION);
+
+  useEffect(() => {
+    fetch('/api/voidtools-release')
+      .then((res) => {
+        if (!res.ok) throw new Error('获取版本失败');
+        return res.json();
+      })
+      .then((data) => {
+        if (data.version) setVersion(data.version);
+      })
+      .catch(() => {
+        // 使用内置的最新稳定版兜底
+      });
+  }, []);
+
+  const downloads = files.map((f) => ({
+    ...f,
+    url: `https://www.voidtools.com/Everything-${version}.${f.file}`,
+  }));
   return (
     <div className="min-h-screen relative z-10">
       {/* Header */}
@@ -97,7 +120,7 @@ export default function EverythingPage() {
           <h3 className="text-white font-semibold mb-3">📋 安装提示</h3>
           <ul className="space-y-2 text-white/50 text-sm">
             <li>• 安装版：双击运行，按提示完成安装</li>
-            <li>• 便携版（Lite）：精简版本，适合 U 盘携带</li>
+            <li>• 便携版：zip 解压即用，不写注册表</li>
             <li>• 建议选择 <span className="text-[#fb6400]">x64 安装版</span>（主流 64 位系统）</li>
             <li>• 安装后会自动建立索引，首次可能需要几分钟</li>
           </ul>

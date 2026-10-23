@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 
+// 每小时重新获取一次最新 release，避免构建时被静态冻结
+export const revalidate = 3600;
+
 // 解析 GitHub 302 重定向，获取真实 CDN 地址
 async function resolveRedirect(url: string): Promise<string> {
   try {

@@ -8,8 +8,8 @@ const downloads = [
   {
     name: '安装版',
     icon: '💿',
-    url: 'https://downloads.jam-software.de/treesize_free/TreeSizeFreeSetup_x86.exe',
-    desc: 'Windows · exe 安装程序',
+    url: 'https://downloads.jam-software.de/treesize_free/TreeSizeFreeSetup.exe',
+    desc: 'Windows · 最新主安装程序',
     color: 'from-blue-500 to-blue-600',
   },
   {
