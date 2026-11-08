@@ -953,3 +953,49 @@ lang: 'zh-CN'
   - **阻塞问题**：alist 需要 Docker 部署，Vercel 不支持；用户无 VPS
   - **待解决**：找一台免费 VPS（Oracle Cloud 永久免费 ARM）跑 alist，或改用 Cloudflare Worker 直接解析
   - 环境变量：`ALIST_URL`、`ALIST_TOKEN`（已在 .env.local 预留）
+
+---
+
+## 14. 部署与国内访问加速（Cloudflare）
+
+站点链路：用户 → Cloudflare（代理，Free 套餐）→ Vercel（项目 `9943website`）。
+
+### 2026-11-09 已配置
+- **`security_level = low`**：减少手机/共享 IP 被弹人机验证的概率
+- **`0rtt = on`**：重复访问可用 0-RTT 恢复连接
+- **`early_hints = on`**：提前下发资源提示
+- **Cache Rule（HTML 边缘缓存 10 分钟）**，规则 ID `81274917dbb64751a1e6c59882d599f4`，
+  ruleset `c675cdef67574450bdb439bd467ad595`：
+  ```
+  (http.host eq "www.fuermosi.top" or http.host eq "fuermosi.top")
+  and not starts_with(http.request.uri.path, "/api/")
+  and not starts_with(http.request.uri.path, "/cdn-cgi/")
+  and any(http.request.headers["accept"][*] contains "text/html")
+  ```
+  - `edge_ttl = 600s`，`browser_ttl = respect_origin`
+  - **必须排除 `/api/`**：接口带限流、外部抓取，缓存会返回旧数据
+  - **必须只匹配 `Accept: text/html`**：Next.js 的 RSC 请求（站内无刷新跳转）走
+    `Accept: text/x-component`，误缓存会让站内跳转拿到整页 HTML 而坏掉
+  - 实测：RSC 请求与 `/api/*` 均为 `cf-cache-status: DYNAMIC`，未被缓存
+- 页面资源都带 `?dpl=dpl_xxx`，所以边缘缓存旧 HTML 时引用的仍是那次部署的资源，不会 404；
+  但上线新版本后建议手动清一次缓存（`POST /zones/{zone}/purge_cache`，`purge_everything: true`）
+
+### 改动前后（本机直连，不走代理）
+| 指标 | 改前 | 改后 |
+|---|---|---|
+| 首页 TLS 握手 | 约 6.1s | 约 0.62s |
+| 首页首字节 | 8.3s，偶尔 30–60s 超时 | 约 1.05s |
+| 工具页首字节 | 3.4–9s，偶尔 30s 超时 | MISS 1.56s / HIT 1.01s |
+| `cf-cache-status` | DYNAMIC | HIT |
+
+> 注意：TLS 握手的改善不全是配置的功劳，也受当时链路质量影响；缓存规则能稳定消掉的是
+> "回源旧金山"那一跳和大幅波动。**大陆 → 洛杉矶的物理延迟仍然存在**，要根治需香港反代。
+
+### 不要改的设置
+- **Rocket Loader 保持 off**：它和 Next.js 的脚本执行顺序冲突
+- **不要缓存 `/api/*` 和 RSC 请求**
+- Bot Fight Mode 当前无法通过 API Token 读取/修改（缺权限），目前不是白屏原因
+
+### 已知根治选项
+1. 香港轻量云反代（约 ¥30/月，免备案）—— 首屏可进 1s 内
+2. 首页改为服务端渲染（免费）—— 可消灭首屏白屏，但仍有跨洋首字节延迟
