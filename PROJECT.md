@@ -53,8 +53,14 @@
 3. 任何工具页面的背景效果应与此保持一致
 
 ### 字体
-- `Noto Sans SC`（Google Fonts 加载）
-- 备用: `-apple-system, BlinkMacSystemFont, sans-serif`
+- **系统字体栈**（不加载任何网络字体）:
+  `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif`
+- **不要改回 `next/font/google` 的 Noto Sans SC**（2026-11-08 移除）:
+  - 中文体会被切成 101 个 `unicode-range` 切片（共 4.5MB），首页实际触发约 20 片 × 3 个字重 ≈ **3.37MB**
+  - 还会额外生成一个 275KB 的纯 `@font-face` CSS（gzip 93KB）
+  - 首访总传输从约 3.6MB 降到约 0.13MB —— 这是国内手机/网吧"几乎打不开"的主因
+  - 系统字体在 Windows 是微软雅黑、iOS 是苹方、安卓是 Roboto，视觉差异很小
+- 工具内导出的 HTML / PDF 仍可声明 `"Noto Sans SC"` 作为字体名（只是名称，不会触发下载）
 
 ### 动画
 | 类名 | 效果 |

@@ -1,13 +1,6 @@
 import type { Metadata, Viewport } from 'next';
-import { Noto_Sans_SC } from 'next/font/google';
 import ChatWidget from '@/components/ChatWidget';
 import './globals.css';
-
-const notoSansSC = Noto_Sans_SC({
-  subsets: ['latin'],
-  weight: ['400', '500', '700'],
-  display: 'swap',
-});
 
 export const metadata: Metadata = {
   title: '9943小工具大全 - 简单好用的在线工具集',
@@ -30,7 +23,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN" className="scroll-smooth">
-      <body className={`${notoSansSC.className} antialiased`}>
+      <body className="antialiased">
         {children}
         {/* 全站在线客服，右下角气泡 */}
         <ChatWidget />
